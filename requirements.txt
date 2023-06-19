@@ -1,2 +1,3 @@
 videohash
 mgzip
+hydrus-api

@@ -9,7 +9,9 @@ import mgzip
 from videohash import VideoHash
 import hydrus_api
 import hydrus_api.utils
-from tqdm import tqdm
+import tempfile
+from termcolor import colored, cprint
+from numpy import base_repr, binary_repr
 
 from secret import *
 
@@ -73,26 +75,59 @@ if not hydrus_api.utils.verify_permissions(client, REQUIRED_PERMISSIONS):
     print("The API key does not grant all required permissions:", REQUIRED_PERMISSIONS)
     sys.exit(ExitCode.FAILURE)
 
-
-# GET video files and store their SHA256 hash to retrieve later
-all_video_hashes = client.search_files(["system:filetype=video"], return_hashes=True)["hashes"]
-for video_hashes in hydrus_api.utils.yield_chunks(all_video_hashes, 100):
-    for video_hash in video_hashes:
+# calculate the video perceptual hash of a file from the response of a hydrus_api client.get_file() request
+def calc_video_perceptual_hash(video, hc: hydrus_api.Client) -> VideoHash:
+    with tempfile.TemporaryDirectory() as tmp_dir_name:
         # TODO: Do I need to check for valid request here?
+        video_ext = hc.get_file_metadata(hashes=[video_hash])["metadata"][0]["ext"]
+        video_file_name = video_hash + video_ext
+        with tempfile.SpooledTemporaryFile(mode="w+b", suffix=video_ext, prefix=video_hash, dir=tmp_dir_name) as tmp_vid_file:
+            tmp_vid_file.write(video.content)
+            tmp_vid_file.seek(0)
+            vidurl = video.url+"&Hydrus-Client-API-Access-Key="+hc.access_key
+            
+            # TODO: Can I do higher frame_intervals for shorter videos? It should work...
+            video_perceptual_hash = VideoHash(video_file=tmp_vid_file, frame_interval=2)
+    return video_perceptual_hash
+
+local_tag_services = client.get_services()["local_tags"]
+# This won't work if your local tag service is not called my tags. Maybe I should make a new tag service?
+local_tag_service = [service for service in local_tag_services if service["name"] == "my tags"]
+# TODO: Add error message for user if local_tag_service doesn't exist
+assert(len(local_tag_service) > 0)
+local_tag_service = local_tag_service[0]
+
+# GET video files with no perceptual hash tag and store their SHA256 hash to retrieve later
+print(f"Retrieving video file hashes from {HYDRUS_HOST}")
+all_video_hashes = client.search_files(["system:filetype=video", "-phashv1:*"], return_hashes=True)["hashes"]
+i = 1
+for video_hashes in hydrus_api.utils.yield_chunks(all_video_hashes[::-1], 100):
+    for video_hash in video_hashes:
         video = client.get_file(hash_=video_hash)
-        vidurl = video.url+"&Hydrus-Client-API-Access-Key="+client.access_key
-        print(VideoHash(url=vidurl, frame_interval=2))
-    #pprint.pprint(client.get_file_metadata(hashes=video_hashes, only_return_basic_information=True))
+        print(f"Calculating hash {i}/{len(all_video_hashes)}")
+        i+=1
+        try:
+            video_percep_hash = calc_video_perceptual_hash(video, client)
+        except Exception as err:
+            print(err)
+            video_percep_hash = None
+            cprint("Failed to calculate perceptual hash.\n", "red", attrs=["bold"], file=sys.stderr)
+            continue
+        print(video_percep_hash)
+        # Store the perceptual hash in base 36 because it's really long
+        short_video_percep_hash = base_repr(int(video_percep_hash.hash, base=2), base=36)
+        assert(f"0b{binary_repr(int(short_video_percep_hash, base=36), width=len(video_percep_hash.hash)-2)}" == video_percep_hash.hash)
+        percep_hash_tag = f'phashv1:{short_video_percep_hash}'
+        print(percep_hash_tag)
+
+        print("Uploading perceptual hash tag to Hydrus.")
+        d = {}
+        d[local_tag_service["service_key"]] = [percep_hash_tag]
+        client.add_tags(hashes=[video_hash], service_keys_to_tags=d)
+
+print("All perceptual hash tags have been added to video files.")
 
 exit()
-
-def gen_sha_hash(filename: str) -> str:
-    sha256_hash = hashlib.sha256()
-    with open(filename, "rb") as f:
-        # Read and update hash string value in blocks of 4K
-        for byte_block in iter(lambda: f.read(4096),b""):
-            sha256_hash.update(byte_block)
-        return sha256_hash.hexdigest()
 
 vids = {}
 try:
@@ -116,7 +151,7 @@ for vid in glob.iglob(f'{VIDSPATH}/*.mp4'):
     vh["path"] = vid
 
 # Calculate perceptual hash and store in dict
-for i, vidD in enumerate(tqdm(vids)):
+for i, vidD in enumerate(vids):
     vid = vids[vidD]
     if("perceptual_hash" in vid.keys()): continue
     print("Calculating perceptual hash")

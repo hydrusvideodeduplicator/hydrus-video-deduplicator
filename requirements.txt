@@ -1,5 +1,5 @@
 videohash @ git+https://github.com/appleappleapplenanner/videohash@main
-mgzip
 hydrus-api
 termcolor
 numpy
+tqdm

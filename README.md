@@ -50,6 +50,11 @@ There is a lot to fix and cleanup and I'm more experienced in C than Python, so 
 - Linux (?)
     - I haven't tested it on Windows yet, but I can't see a reason why it wouldn't work.
 
+## TODO:
+- CLI
+- Rollback option to remove potential duplicates after they're added
+- Option to remove all perceptual hash tags
+- Option to add phash tag on specific tag service (default is my tags)
 
 ## Credits:
 [Hydrus Network](https://github.com/hydrusnetwork/hydrus) by dev

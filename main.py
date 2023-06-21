@@ -18,7 +18,6 @@ TODO: LIST
 
 - CLI
 - Rollback option to remove potential duplicates after they're added
-- Option to update all videos perceptual hash tags
 - Option to remove all perceptual hash tags
 - Option to add phash tag on specific tag service (default is my tags)
 """
@@ -38,7 +37,7 @@ Overall process:
    other video and if it is mark them as potential duplicates.
 """
 
-DEBUGGING = True
+DEBUGGING = False
 
 loglevel = logging.INFO
 
@@ -171,7 +170,7 @@ def add_perceptual_hash_to_videos(add_missing: bool = True, overwrite: bool = Fa
             client.add_tags(hashes=[video_hash], service_keys_to_tags=d)
     print("All perceptual hash tags have been added to video files.")
 
-add_perceptual_hash_to_videos(add_missing=True)
+add_perceptual_hash_to_videos()
 
 def decode_tag(coded_hash: str):
     decoded_hash = f"0b{binary_repr(int(coded_hash, base=36), width=64)}" 
@@ -250,36 +249,24 @@ video_hash_phash = get_stored_video_perceptual_hashes(video_hashes)
 def find_potential_duplicates(video_hash_phash: list[tuple[str, str]]):
     for i, video in enumerate(video_hash_phash):
         video_hash, video_phash = video[0], video[1]
-        print(video_hash, video_phash)
-        for j, video2 in enumerate(video_hash_phash, i+1):
+        for video2 in islice(video_hash_phash, i+1, None):
             video2_hash, video2_phash = video2[0], video2[1]
-            if video_hash == video2_hash: continue
             if is_similar(video_phash, video2_phash):
-                hydlog.info(f" \x1b[6;30;42m Similar files found. {i},{j} \033[0;0m")
-
+                hydlog.info(f" \x1b[6;30;42m Similar files found. {i+1}/{len(video_hash_phash)+1} \033[0;0m")
                 if DEBUGGING:
                     file_names = get_file_names_hydrus([video_hash, video2_hash])
                     hydlog.info(f"\"{file_names[0]}\" and \"{file_names[1]}\"")
-
                 d = {
-                    "hash_a": video_hash,
-                    "hash_b": video2_hash,
+                    "hash_a": str(video_hash),
+                    "hash_b": str(video2_hash),
                     "relationship": 0,
                     "do_default_content_merge": True,
                 }
-                
                 # TODO: Defer this API call to speed up processing
-                file_names = get_file_names_hydrus([video_hash, video2_hash])
-                hydlog.info(f"\"{file_names[0]}\" and \"{file_names[1]}\"")
-                client.set_file_relationships([d])
-                    
+                try:
+                    client.set_file_relationships([d])
+                except Exception as e:
+                    pass
 
 find_potential_duplicates(video_hash_phash)
-
-def main() -> int:
-    """Echo the input arguments to standard output"""
-    print("hi")
-    return 0
-
-if __name__ == '__main__':
-    sys.exit(main())  # next section explains the use of sys.exit
+print("All files have been processed.")

@@ -26,6 +26,7 @@ dependencies = [
     "termcolor",
     "numpy",
     "tqdm",
+    "python-dotenv",
 ]
 
 [project.urls]

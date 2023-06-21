@@ -1,5 +1,0 @@
-videohash @ git+https://github.com/appleappleapplenanner/videohash@main
-hydrus-api
-termcolor
-numpy
-tqdm

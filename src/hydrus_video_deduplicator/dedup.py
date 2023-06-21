@@ -10,7 +10,7 @@ from numpy import base_repr, binary_repr, bitwise_xor
 from io import IOBase
 from tqdm import tqdm
 import logging
-from .secret import HYDRUS_HOST, HYDRUS_API_KEY
+from .secret import HYDRUS_HOST, HYDRUS_API_KEY, LOCAL_TAG_SERVICE_NAME
 
 DEBUGGING = False
 
@@ -26,7 +26,6 @@ logging.basicConfig(format=' %(asctime)s - %(name)s: %(message)s',
                     level=loglevel)
 
 # Service name of where to store perceptual hash tag for video files
-LOCAL_TAG_SERVICE_NAME = "my tags"
 PHASH_TAG = "phashv1"
 
 NAME = "Basic Test"

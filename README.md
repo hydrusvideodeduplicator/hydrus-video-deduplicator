@@ -1,9 +1,14 @@
-# Hydrus Video Deduplicator
-## WIP
+<div align="center">
+  
+  <img src="https://github.com/appleappleapplenanner/hydrus-video-deduplicator/assets/104981058/968603d3-5a11-4a05-bbb4-7b91b71fb61d">
 
-Hydrus Video Deduplicator marks similar video files as potential duplicates all through the Hydrus API.
+  Hydrus Video Deduplicator finds similar video files and marks them as potential duplicates through the Hydrus API.
+  
+</div>
 
-Currently it works! However, it does add a namespaced tag to all of your video files in the `my tags` service and may not work on large libraries. Please test!
+---
+
+Currently it works! However, it does add a namespaced tag to all of your video files in the `my tags` service and may not work well on large libraries.
 
 The only database modifications are tagging video files and marking them as duplicates. It only interacts through the Hydrus API so it should be harmless.
 
@@ -46,7 +51,7 @@ There is a lot to fix and cleanup and I'm more experienced in C than Python, so 
 
 ## System Dependencies:
 - FFmpeg
-- Python 3.11>=
+- Python >=3.11
 - Linux (?)
     - I haven't tested it on Windows yet, but I can't see a reason why it wouldn't work.
 

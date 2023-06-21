@@ -50,7 +50,6 @@ logging.basicConfig(format=' %(asctime)s - %(name)s: %(message)s',
                     datefmt='%H:%M:%S',
                     level=loglevel)
 
-HYDRUS_HOST="http://localhost:45869"
 # Service name of where to store perceptual hash tag for video files
 LOCAL_TAG_SERVICE_NAME = "my tags"
 PHASH_TAG = "phashv1"

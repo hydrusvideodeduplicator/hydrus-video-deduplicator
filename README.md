@@ -8,10 +8,6 @@ Hydrus Video Deduplicator detects similar video files and marks them as potentia
 
 </div>
  
-See installation instructions below.
-
-Windows and Linux supported. macos needs testing.
-
 ---
 
 ## How It Works:
@@ -56,54 +52,50 @@ pip install .
 ```
 
 4. [Enable the Hydrus Client API](https://hydrusnetwork.github.io/hydrus/client_api.html#enabling_the_api) and create an access key with all permissions.
-5. Set your API key using an environment variable.
 
-Windows (Powershell)
+5. Run and enter your access key as a parameter
+```sh
+python -m hydrus_video_deduplicator --api-key="<your key>"
+```
+
+6. Your video files should now have a perceptual hash tag, and any similar files should be marked as potential duplicates.
+
+7. Optional: Set your API key using an environment variable.
+
+### Windows (Powershell)
 ```Powershell
 $env:HYDRUS_API_KEY="<your key>" 
 ```
 
-Linux
+### Linux
 ```sh
 HYDRUS_API_KEY="<your key>"
 ```
-Optional environment variables:
 
-`HYDRUS_HOST` is your Hydrus Client IP
+Other environment variables:
 
-`LOCAL_TAG_SERVICE_NAME` is the tag service used to add tags
+`HYDRUS_API_URL` is the Hydrus URL e.g. `http://localhost:45869`
 
-You can also set these in a .venv file with each env variable on separate lines.
+`LOCAL_TAG_SERVICE_NAME` is the service used to add tags e.g. `my tags`
 
-6. Run the program:
-
-Windows (Powershell)
-```sh
-py -m hydrus_video_deduplicator
-```
-
-Linux
-```sh
-python -m hydrus_video_deduplicator
-```
-
-7. Your video files should now have a perceptual hash tag and any similar files should be marked as potential duplicates.
+You can also set these in a .env file with each env variable on their own line.
 
 ## System Requirements:
 - FFmpeg
 - Python >=3.11
+- Windows or Linux. macos is untested.
 
 ---
 
 ## TODO:
-- Rollback option to remove potential duplicates after they're added
-- Option to only generate phashes or only search for duplicates
-- Option to remove all perceptual hash tags
-- Option to add phash tag on specific tag service (default is my tags)
-- Option to only work on archived videos
-- Option to overwrite perceptual hashes for specific videos
-- Upload to PyPI
-- Async and multiprocessing
+- [ ] Option to rollback and remove potential duplicates after they're added
+- [ ] Option to only generate phashes or only search for duplicates
+- [ ] Option to remove all perceptual hash tags
+- [x] Option to add phash tag on specific tag service (default is my tags)
+- [ ] Option to enter custom Hydrus tag search parameters
+- [ ] Async and multiprocessing
+- [ ] Automatically generate access key with Hydrus API
+- [ ] Upload to PyPI
 
 Please create an issue on Github if you have any problems or questions! Pull requests also welcome on this or my VideoHash fork. 
 

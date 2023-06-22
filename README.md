@@ -96,11 +96,14 @@ python -m hydrus_video_deduplicator
 ---
 
 ## TODO:
-- CLI
 - Rollback option to remove potential duplicates after they're added
+- Option to only generate phashes or only search for duplicates
 - Option to remove all perceptual hash tags
 - Option to add phash tag on specific tag service (default is my tags)
-- Upload to PyPi
+- Option to only work on archived videos
+- Option to overwrite perceptual hashes for specific videos
+- Upload to PyPI
+- Async and multiprocessing
 
 Please create an issue on Github if you have any problems or questions! Pull requests also welcome on this or my VideoHash fork. 
 

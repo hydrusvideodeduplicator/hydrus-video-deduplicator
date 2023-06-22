@@ -23,10 +23,11 @@ classifiers = [
 dependencies = [
     "videohash @ git+https://github.com/appleappleapplenanner/videohash@main",
     "hydrus-api",
-    "termcolor",
+    "rich",
     "numpy",
     "tqdm",
     "python-dotenv",
+    "typer",
 ]
 
 [project.urls]

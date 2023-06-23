@@ -29,7 +29,7 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
         verbose:  Annotated[Optional[bool], typer.Option(hidden=True)] = False,
         debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
         custom_query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = None,
-        search_distance: Annotated[Optional[int], typer.Option(help="Similarity threshold. 0 is the strictest")] = 4,
+        search_distance: Annotated[Optional[int], typer.Option(help="Similarity threshold. 0 is the strictest")] = 2,
         skip_hashing: Annotated[Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")] = False,
         ):
 

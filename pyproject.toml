@@ -21,13 +21,13 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "videohash @ git+https://github.com/appleappleapplenanner/videohash@main",
     "hydrus-api",
     "rich",
     "numpy",
     "tqdm",
     "python-dotenv",
     "typer",
+    "vpdq",
 ]
 
 [project.urls]

@@ -11,11 +11,15 @@ Hydrus Video Deduplicator detects similar video files and marks them as potentia
 ---
 
 ## How It Works:
-The deduplicator works by using a library, [VideoHash](https://github.com/akamhy/videohash), to create a perceptual hash of a video.
+The deduplicator works by using [vpdq](https://github.com/facebook/ThreatExchange/tree/main/vpdq), to compare videos by computing a perceptual hash.
 
-A perceptual hash is just a binary string for a video based on frames at a regular interval e.g. `0b01010100010100010100101010`
+A perceptual hash is a way to characterize videos in small chunks.
 
-Once all perceptual hashes for all the videos in your database are computed and tagged, they are compared against each other to detect if they're similar. If they are similar, they will be marked as potential duplicates in Hydrus.
+The perceptual hashes are stored in a database file in the running directory to avoid computing them every time.
+
+Once all perceptual hashes for all the videos in your database are computed, they are compared against each other to detect if they're similar. If they are similar, they will be marked as potential duplicates in Hydrus.
+
+The accuracy is extremely good because of vpdq. You can adjust the threshold of similarity using `--threshold`. The default is 75%.
 
 ---
 
@@ -64,20 +68,20 @@ python -m hydrus_video_deduplicator --api-key="<your key>"
 
 Your video files should now have a perceptual hash tag, and any similar files should be marked as potential duplicates.
 
+You can run the program again when you add more files to find more duplicates.
+
 ---
 
 ## TODO:
-- [ ] Option to rollback and remove potential duplicates after they're added
-- [x] Option to only generate phashes or only search for duplicates
-- [ ] Option to remove all perceptual hash tags
+- [ ] Option to rollback and remove potential duplicates
 - [x] Option to enter custom Hydrus tag search parameters
-- [ ] Async and multiprocessing
+- [ ] Parallelize hashing and duplicate search
 - [ ] Automatically generate access key with Hydrus API
 - [ ] Upload to PyPI
 
 Please create an issue on Github if you have any problems or questions! Pull requests also welcome on this or my VideoHash fork. 
 
-There is a lot to fix and cleanup and I'm more experienced in C than Python, so fix stuff please.
+There is a lot to improve and cleanup and I'm more experienced in C than Python, so fix stuff please.
 
 ---
 
@@ -86,8 +90,6 @@ There is a lot to fix and cleanup and I'm more experienced in C than Python, so 
 
 [Hydrus API Library](https://gitlab.com/cryzed/hydrus-api) by Cryzed
 
-[VideoHash](https://github.com/akamhy/videohash) by Akash Mahanty
-
-vpdq by Meta
+[vpdq](https://github.com/facebook/ThreatExchange/tree/main/vpdq) by Meta
 
 various other files from threatexchange by Meta

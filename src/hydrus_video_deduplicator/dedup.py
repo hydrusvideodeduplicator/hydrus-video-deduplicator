@@ -3,22 +3,25 @@ import logging
 import tempfile
 from itertools import islice
 import json
-import hashlib
 import shelve
-from .vpdq import VPDQSignal
 
-from videohash import VideoHash, FFmpegFailedToExtractFrames
 import hydrus_api
 import hydrus_api.utils
 from numpy import base_repr, binary_repr, bitwise_xor
 from tqdm import tqdm
 from rich import print as rprint
 
-from .config import HYDRUS_LOCAL_TAG_SERVICE_NAME, HYDRUS_PHASH_TAG
+from .config import DEDUP_DATABASE_NAME
+from .dedup_util import find_tag_in_tags, get_file_names_hydrus
+from .vpdq import VPDQSignal
+
+from .vpdq_util import (
+    VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
+)
 
 class HydrusVideoDeduplicator():
     hydlog = logging.getLogger("hydlog")
-    search_distance: int = 4
+    threshold: float = 0.8
     _DEBUG = False
 
     REQUIRED_PERMISSIONS = (
@@ -42,7 +45,6 @@ class HydrusVideoDeduplicator():
         # Commonly used things from the database
         # If any of these are large they should probably be lazily loaded
         self.all_services = self.client.get_services()
-        self.local_tag_service = [service for service in self.all_services["local_tags"] if service["name"] == HYDRUS_LOCAL_TAG_SERVICE_NAME][0]
 
     # Verify client connection and permissions
     # Will throw a hydrus_api.APIError if something is wrong
@@ -50,22 +52,10 @@ class HydrusVideoDeduplicator():
         self.hydlog.info(f"Client API version: v{self.client.VERSION} | Endpoint API version: v{self.client.get_api_version()['version']}")
         hydrus_api.utils.verify_permissions(self.client, hydrus_api.utils.Permission)
     
-    # Generate SHA256 and check if key is in DB
-    def vid_in_dict(vid: str, d: dict) -> bool:
-        return get_sha256(vid) in d
-
-    def get_sha256(filepath: str) -> str:
-        file_hash = hashlib.sha256()
-        with open(filepath, "rb") as f:
-            # Read and update hash string value in blocks of 4K
-            for byte_block in iter(lambda: f.read(4096),b""):
-                file_hash.update(byte_block)
-        return file_hash.hexdigest()
-
     # This is the master function of the class
-    def deduplicate(self, add_missing: bool, overwrite: bool, custom_query: list | None = None, skip_hashing: bool | None = False):
+    def deduplicate(self, overwrite: bool = False, custom_query: list | None = None, skip_hashing: bool | None = False):
         # Add perceptual hashes to videos
-        search_tags = ["system:filetype=video", f"{HYDRUS_PHASH_TAG}:*"]
+        search_tags = ["system:filetype=video"]
         if custom_query is not None:
             custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
             if len(custom_query) > 0:
@@ -73,78 +63,32 @@ class HydrusVideoDeduplicator():
                 rprint(f"[yellow] Custom Query: {custom_query}")
 
         if not skip_hashing:
-            self._add_perceptual_hash_to_videos(add_missing=add_missing, overwrite=overwrite, custom_query=custom_query)
+            self._add_perceptual_hash_to_videos(overwrite=overwrite, custom_query=custom_query)
         else:
             rprint("[yellow] Skipping perceptual hashing")
 
-        print("Checking for duplicates among all video files with perceptual hash tags...\n")
-        # SHA256 hashes of videos with perceptual hash tag
-        video_hashes = self.client.search_files(search_tags,
-                                                return_file_ids=False,
-                                                return_hashes=True)["hashes"]
-
-        # Get video files and their perceptual hashes from Hydrus
-        # Stored as [(sha256, phash), ...]
-        # This should probably be chunked because this might be HUGE on large libraries.
-        #video_hash_phash = self._get_stored_video_perceptual_hashes(video_hashes)
-        self._find_potential_duplicates(None, overwrite)
+        self._find_potential_duplicates()
         self.hydlog.info("Deduplication done.")
-
-
-    # Get the perceptual hash of a video.
-    @staticmethod
-    def calc_perceptual_hash(video_file: IOBase):
-        # TODO: Can I do higher frame_intervals for shorter videos? It should work...
-        return VideoHash(video_file=video_file, frame_interval=2)
-
-    # Calculate the video perceptual hash of a file from the response of a hydrus_api client.get_file() request
-    def _calc_perceptual_hash_hydrus(self, video) -> VideoHash:
-        with tempfile.TemporaryDirectory() as tmp_dir_name:
-            # TODO: Do I need to check for valid request here?
-            # spooled file stays in RAM unless it's too big
-            with tempfile.SpooledTemporaryFile(mode="w+b", dir=tmp_dir_name) as tmp_vid_file:
-                tmp_vid_file.write(video.content)
-                tmp_vid_file.seek(0)
-                video_perceptual_hash = HydrusVideoDeduplicator.calc_perceptual_hash(video_file=tmp_vid_file)
-        return video_perceptual_hash
 
     # Update perceptual hash for videos
     # By default only adds missing phashes
-    def _add_perceptual_hash_to_videos(self, add_missing: bool, overwrite: bool, custom_query: list | None = None) -> None:
+    # TODO: Allow batching, where if a video is already in the DB get another until no videos left or count is 0
+    def _add_perceptual_hash_to_videos(self, overwrite: bool, custom_query: list | None = None) -> None:
         search_tags = ["system:filetype=video"]
         if custom_query is not None:
             custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
             search_tags.extend(custom_query)
         
-        # Add phash tag to files without one
-        if add_missing and not overwrite:
-            search_tags.append(f"-{HYDRUS_PHASH_TAG}:*")
-            print("Adding perceptual hash tags to files without one...")
-        # Overwrite existing phash tag but don't add any to files without one
-        elif not add_missing and overwrite:
-            search_tags.append(f"{HYDRUS_PHASH_TAG}:*")
-            print("Updating existing perceptual hash tags...")
-        # Add phash tags to all files and overwrite existing ones
-        elif add_missing and overwrite:
-            if custom_query is not None:
-                print("Updating perceptual hash tags for ALL files from custom query...")
-            else:
-                print("Updating perceptual hash tags for ALL files...")
-        else:
-            print("Both add new and overwrite perceptual tags are false. Skipping add tags...")
-            return None
-
-
         # GET video files SHA256 with no perceptual hash tag and store for later
         print(f"Retrieving video file hashes from {self.client.api_url}")
         percep_tagged_video_hashes = self.client.search_files(search_tags, return_hashes=True)["hashes"]
         
         print("Calculating perceptual hashes:")
-        with shelve.open('thedb') as hashdb:
+        with shelve.open(DEDUP_DATABASE_NAME) as hashdb:
             with tempfile.TemporaryDirectory() as tmp_dir_name:
                 for video_hash in tqdm(percep_tagged_video_hashes):
-                    if video_hash in hashdb:
-                        print('Vid hash already in db')
+                    # don't calc new value unless overwrite is true
+                    if not overwrite and video_hash in hashdb:
                         continue
 
                     # TODO: Check for valid request?
@@ -156,140 +100,52 @@ class HydrusVideoDeduplicator():
                             tmp_vid_file.seek(0)
                             
                             hashdb[video_hash] = VPDQSignal.hash_from_file(tmp_vid_file.name)
-                            #print("new entry")
-                            #video_percep_hash = HydrusVideoDeduplicator.calc_perceptual_hash(video_file=tmp_vid_file)
-                    except FFmpegFailedToExtractFrames as exc:
+                            self.hydlog.debug(f"Perceptual hash calculated and written to DB.")
+                    except KeyboardInterrupt:
+                        rprint("[red] Perceptual hash generation was interrupted!\n")
+                        return None
+                    # TODO: Don't catch everything.
+                    except Exception as exc:
                         rprint("[red] Failed to calculate a perceptual hash.")
                         self.hydlog.error(f"Bad file hash: {video_hash}")
                         self.hydlog.error(exc)
                         continue
 
-                    # Store the perceptual hash in base 36 because it's really long
-                    #short_video_percep_hash = base_repr(int(video_percep_hash.hash, base=2), base=36)
-                    #assert(f"0b{binary_repr(int(short_video_percep_hash, base=36), width=len(video_percep_hash.hash)-2)}" == video_percep_hash.hash)
-                    #percep_hash_tag = f'{HYDRUS_PHASH_TAG}:{short_video_percep_hash}'
-
-                    #self.hydlog.debug(f"Perceptual hash calculated: {percep_hash_tag}")
-
-                    #print("Uploading perceptual hash tag to Hydrus...")
-                    #d = {}
-                    #d[self.local_tag_service["service_key"]] = [percep_hash_tag]
-                    #self.client.add_tags(hashes=[video_hash], service_keys_to_tags=d)
         rprint("[green]All perceptual hash tags have been added to video files.\n")
-
-    @staticmethod
-    # Given a lexicographically SORTED list of tags, find the tag given a namespace
-    # TODO: Do binary search since the tags are sorted
-    def find_tag_in_tags(target_tag_namespace: str, tags: list) -> str:
-        namespace_len = len(target_tag_namespace)
-        for tag in tags:
-            if tag[0:namespace_len] == target_tag_namespace:
-                return tag[namespace_len:]
-        return ""
-
-    # Returns perceptual hashes from Hydrus converted back to hex
-    # Tuple is (sha256, phash) 
-    def _get_stored_video_perceptual_hashes(self, video_hashes: list[str]) -> list[tuple[str, str]]:
-        phashes = []
-        for video_hash in video_hashes:
-            # TODO: batch this api call in batches of 256 (that's what Hydrus Client does)
-            video_metadata = self.client.get_file_metadata(hashes=[video_hash], only_return_basic_information=False)
-            # Why does video_tag_services contain tuples as the values?
-            # The tuple is just the service as the key with value dict...
-            video_tag_services = video_metadata["metadata"][0]["tags"]
-            
-            # tag_services are hex strings
-            all_known_tags = "all known tags".encode("utf-8").hex()
-            video_tags = video_tag_services[all_known_tags]["storage_tags"]["0"]
-            
-            # add : to PHASH_TAG in case it is not the complete namespace value for searching e.g. phasv15:
-            phash = HydrusVideoDeduplicator.find_tag_in_tags(target_tag_namespace=f"{HYDRUS_PHASH_TAG}:", tags=video_tags)
-            # TODO: I think VideoHash works with hex which will probably be faster
-            decoded_tag = f"0b{binary_repr(int(phash, base=36), width=64)}"
-            phashes.append(decoded_tag)
-
-        return list(zip(video_hashes, phashes))
-    
-    # Get the filename from the filename tag if it exists in Hydrus
-    # This is just used for debugging.
-    # TODO: Clean this up it's a mess
-    def get_file_names_hydrus(self, file_hashes: list[str]) -> list[str]:
-        err_msg = "Cannot get file name from Hydrus."
-        result = []
-        files_metadata = self.client.get_file_metadata(hashes=file_hashes, only_return_basic_information=False)
-        all_known_tags = "all known tags".encode("utf-8").hex()
-        for file_metadata in files_metadata["metadata"]:
-            # Try to get file extension
-            try:
-                ext = file_metadata["ext"]
-            except KeyError:
-                ext = ""
-                
-            # Try to get the file name
-            try:
-                tag_services = file_metadata["tags"]
-            except KeyError:
-                self.hydlog.warning(f"{err_msg} Hash: {file_metadata['hash']}")
-            else:
-                tags = tag_services[all_known_tags]["storage_tags"]["0"]
-                tag = HydrusVideoDeduplicator.find_tag_in_tags(target_tag_namespace="filename:", tags=tags)
-                # Don't show extension if filename doesn't exist
-                if tag != "":
-                    tag = f"{tag}{ext}"
-                else:
-                    self.hydlog.warning(f"{err_msg} Hash: {file_metadata['hash']}")
-
-            result.append(tag)
-
-        return result
     
     def get_potential_duplicate_count_hydrus(self) -> int:
         return self.client.get_potentials_count(file_service_keys=[self.all_services["all_local_files"][0]["service_key"]])["potential_duplicates_count"]
     
     # Return similarity of two bitstrings given a threshold
     @staticmethod
-    def is_similar(a: str, b: str, hamming_distance_threshold: int = None) -> bool:
-        res = VPDQSignal.compare_hash(a, b)
-        
-        if res:
-            print(res)
-        
-        #print(res)
-        return res
+    def is_similar(a: str, b: str, min_percent_similarity: float = 0.8) -> bool:
+        return VPDQSignal.compare_hash(a, b, min_percent_similarity, min_percent_similarity)
 
-        #_bitlist_a = list(map(int, a.replace("0b", "")))
-        #_bitlist_b = list(map(int, b.replace("0b", "")))
-        #h_distance = len(bitwise_xor(_bitlist_a,_bitlist_b,).nonzero()[0])
-        #return h_distance <= hamming_distance_threshold
-
-    # Store video_hash in list of tuples for the key phash
-    # tuple is (phash, sha256)
     # Sliding window duplicate comparisons
-    # i = 0
-    # Iterate over list starting at i
-        # if is_similar() then mark as duplicate (TODO: Defer this call to the API for speed)
-        # i++
+    # Alternatively, I could scan duplicates while adding and never do it again. I should do that instead.
+    # Or, since dictionaries are ordered, store the index per hash where it ended its last search. If it's not the end, keep going until the end.
+    def _find_potential_duplicates(self): 
 
-    # TODO: Split this into two functions, one checks and one uploads
-    # Overwrite means if it was a potential duplicate and it's not now then remove that pair
-    def _find_potential_duplicates(self, video_hash_phash: list[tuple[str, str]], overwrite_status: bool): 
+        # TODO: Add support for query where it will get a list of the hashes from
+        # the query and iterate over them instead of the entire hashdb
 
         # Number of potential duplicates before adding more. Just for user info.
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
 
         similar_files_found_count = 0
-        with shelve.open('thedb') as hashdb:
+        with shelve.open(DEDUP_DATABASE_NAME) as hashdb:
+            video_count = len(hashdb)
             for i, video in enumerate(tqdm(hashdb.items(), desc="Finding duplicates")):
                 video_hash, video_phash = video[0], video[1]
                 for video2 in islice(hashdb.items(), i+1, None):
                     video2_hash, video2_phash = video2[0], video2[1]
                     
-                    similar = HydrusVideoDeduplicator.is_similar(video_phash, video2_phash, self.search_distance)
+                    similar = HydrusVideoDeduplicator.is_similar(video_phash, video2_phash, self.threshold)
                     
                     if similar:
                         similar_files_found_count += 1
                         if self._DEBUG:
-                            file_names = self.get_file_names_hydrus([video_hash, video2_hash])
+                            file_names = get_file_names_hydrus(self.client, [video_hash, video2_hash])
                             self.hydlog.info(f"Duplicates filenames: {file_names}")
                             #self.hydlog.info(f"\"Duplicates hashes: {video_hash}\" and \"{video2_hash}\"")
                         
@@ -309,7 +165,7 @@ class HydrusVideoDeduplicator():
                             pass
 
         # Statistics for user
-        video_count = len(hashdb)
+        # if user does duplicates processing while the script is running this count will be wrong.
         if similar_files_found_count > 0:
             rprint(f"[blue] {similar_files_found_count}/{video_count} total similar videos found")
             post_dedupe_count = self.get_potential_duplicate_count_hydrus()

@@ -79,20 +79,8 @@ class VPDQSignal:
                 VPDQ_QUALITY_THRESHOLD,
                 VPDQ_DISTANCE_THRESHOLD,
             )
-            if match_percent.query_match_percent > 0.0:
-                print(match_percent.query_match_percent)
+
+            #if match_percent.compared_match_percent > 0:
+            #     print(match_percent.compared_match_percent, match_percent.query_match_percent)
         
             return match_percent.query_match_percent >= query_match_pct_thresh and match_percent.compared_match_percent >= compare_match_pct_thresh
-            #return signal_base.SignalComparisonResult(
-            #    (
-            #        match_percent.query_match_percent >= query_match_pct_thresh
-            #        and match_percent.compared_match_percent >= compare_match_pct_thresh
-            #    ),
-
-    #@staticmethod
-    #def get_examples() -> t.List[str]:
-    #    from_pdq_sample = [
-    #        VpdqCompactFeature(pdq_hash, 100, float(timestamp))
-    #        for timestamp, pdq_hash in enumerate(PdqSignal.get_examples())
-    #    ]
-    #    return [vpdq_to_json(from_pdq_sample)]

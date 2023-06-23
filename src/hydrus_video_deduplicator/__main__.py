@@ -9,14 +9,15 @@ from .__about__ import __version__
 from .config import HYDRUS_API_KEY, HYDRUS_API_URL
 from .dedup import HydrusVideoDeduplicator
 
+from .vpdq_util import VPDQ_QUERY_MATCH_THRESHOLD_PERCENT
+
 """
 Parameters:
 - api_key will be read from env var $HYDRUS_API_KEY or .env file
 - api_url will be read from env var $HYDRUS_API_URL or .env file
-- overwrite is false, add_missing is true, so only files without phashes will be hashed
-- custom_query is empty. to add custom queries, do
+- to add custom queries, do
   --custom-query="series:twilight" --custom-query="character:edward" ... etc for each query
-- search_distance is the max threshold for a pair to be considered similar. 0 is identical.
+- threshold is the min % matching to be considered similar. 100% is identical.
 - verbose turns on logging
 - debug turns on logging and sets the logging level to debug
 """
@@ -24,14 +25,15 @@ rprint(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
 
 def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] = None,
         api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = None,
-        add_missing:  Annotated[Optional[bool], typer.Option(help="Add perceptual hashes to files without one")] = True,
         overwrite:  Annotated[Optional[bool], typer.Option(help="Overwrite existing perceptual hashes")] = False,
+        query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = None,
+        threshold: Annotated[Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")] = VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
+        skip_hashing: Annotated[Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")] = False,
         verbose:  Annotated[Optional[bool], typer.Option(hidden=True)] = False,
         debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
-        custom_query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = None,
-        search_distance: Annotated[Optional[int], typer.Option(help="Similarity threshold. 0 is the strictest")] = 2,
-        skip_hashing: Annotated[Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")] = False,
         ):
+
+    threshold = threshold/100.
 
     # CLI debug parameter sets log level to info or debug
     loglevel: logging._Level = logging.WARNING
@@ -103,17 +105,14 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
         superdeduper.hydlog.setLevel(logging.DEBUG)
         superdeduper._DEBUG = True
 
-    # This is not a hard limit but you don't want to set it higher than this.
-    MAX_SEARCH_DISTANCE = 15
-    if search_distance < 0 or search_distance > MAX_SEARCH_DISTANCE:
-        rprint(f"[red] ERROR: Invalid search_distance {search_distance}. Must be between 0 and {MAX_SEARCH_DISTANCE} ")
+    if threshold < 0:
+        rprint(f"[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
         raise typer.Exit(code=1)
-    superdeduper.search_distance = search_distance
+    superdeduper.threshold = threshold
 
     # Run all deduplicate functionality
-    superdeduper.deduplicate(add_missing=add_missing,
-                             overwrite=overwrite,
-                             custom_query=custom_query,
+    superdeduper.deduplicate(overwrite=overwrite,
+                             custom_query=query,
                              skip_hashing=skip_hashing)
 
     typer.Exit()

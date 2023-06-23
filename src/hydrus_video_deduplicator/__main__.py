@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Annotated
+from typing import Optional, Annotated, List
 
 import typer
 import hydrus_api
@@ -10,11 +10,15 @@ from .config import HYDRUS_API_KEY, HYDRUS_API_URL
 from .dedup import HydrusVideoDeduplicator
 
 """
-By default:
+Parameters:
 - api_key will be read from env var $HYDRUS_API_KEY or .env file
-- add_missing is True
-- overwrite is False
-so only video files that don't have perceptual hashes will be 
+- api_url will be read from env var $HYDRUS_API_URL or .env file
+- overwrite is false, add_missing is true, so only files without phashes will be hashed
+- custom_query is empty. to add custom queries, do
+  --custom-query="series:twilight" --custom-query="character:edward" ... etc for each query
+
+- verbose turns on logging
+- debug turns on logging and sets the logging level to debug
 """
 def main(api_key: Annotated[Optional[str], typer.Option()] = None,
         api_url: Annotated[Optional[str], typer.Option()] = None,
@@ -22,6 +26,7 @@ def main(api_key: Annotated[Optional[str], typer.Option()] = None,
         overwrite:  Annotated[Optional[bool], typer.Option()] = False,
         verbose:  Annotated[Optional[bool], typer.Option()] = False,
         debug: Annotated[Optional[bool], typer.Option()] = False,
+        custom_query: Annotated[Optional[List[str]], typer.Option()] = None,
         ):
     rprint(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
 
@@ -89,10 +94,10 @@ def main(api_key: Annotated[Optional[str], typer.Option()] = None,
         print(error_connecting_exception_msg)
         raise typer.Exit(code=1)
 
-
     # Run all deduplicate functionality
     superdeduper.deduplicate(add_missing=add_missing,
-                             overwrite=overwrite)
+                             overwrite=overwrite,
+                             custom_query=custom_query)
 
     typer.Exit()
 

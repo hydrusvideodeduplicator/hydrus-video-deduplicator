@@ -3,6 +3,7 @@ from io import IOBase
 import logging
 import tempfile
 from itertools import islice
+import re
 
 from videohash import VideoHash
 import hydrus_api
@@ -13,13 +14,6 @@ from rich import print as rprint
 
 from .config import HYDRUS_LOCAL_TAG_SERVICE_NAME, HYDRUS_PHASH_TAG
 
-REQUIRED_PERMISSIONS = (
-    hydrus_api.Permission.IMPORT_URLS,
-    hydrus_api.Permission.IMPORT_FILES,
-    hydrus_api.Permission.ADD_TAGS,
-    hydrus_api.Permission.SEARCH_FILES,
-    hydrus_api.Permission.MANAGE_PAGES,
-)
 
 """
 Overall process:
@@ -39,6 +33,17 @@ Overall process:
 class HydrusVideoDeduplicator():
     hydlog = logging.getLogger("hydlog")
     
+    REQUIRED_PERMISSIONS = (
+        hydrus_api.Permission.IMPORT_URLS,
+        hydrus_api.Permission.IMPORT_FILES,
+        hydrus_api.Permission.ADD_TAGS,
+        hydrus_api.Permission.SEARCH_FILES,
+        hydrus_api.Permission.MANAGE_PAGES,
+        hydrus_api.Permission.MANAGE_DATABASE,
+        hydrus_api.Permission.ADD_NOTES,
+        hydrus_api.Permission.MANAGE_FILE_RELATIONSHIPS,
+    )
+
     def __init__(self, client: hydrus_api.Client,
                  verify_connection: bool = True):
         self.client = client
@@ -62,16 +67,23 @@ class HydrusVideoDeduplicator():
     # Will throw a hydrus_api.APIError if something is wrong
     def verify_api_connection(self):
         self.hydlog.info(f"Client API version: v{self.client.VERSION} | Endpoint API version: v{self.client.get_api_version()['version']}")
-        hydrus_api.utils.verify_permissions(self.client, REQUIRED_PERMISSIONS)
+        hydrus_api.utils.verify_permissions(self.client, hydrus_api.utils.Permission)
 
     # This is the master function of the class
-    def deduplicate(self, add_missing: bool, overwrite: bool):
-        print("")
-        self._add_perceptual_hash_to_videos(add_missing=add_missing, overwrite=overwrite)
+    def deduplicate(self, add_missing: bool, overwrite: bool, custom_query: list | None = None):
+        # Add perceptual hashes to videos
+        search_tags = ["system:filetype=video", f"{HYDRUS_PHASH_TAG}:*"]
+        if custom_query is not None:
+            custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
+            search_tags.extend(custom_query)
+
+        self._add_perceptual_hash_to_videos(add_missing=add_missing, overwrite=overwrite, custom_query=custom_query)
+
         print("Checking for duplicates among all video files with perceptual hash tags...\n")
-        # SHA256 hashes of videos with perceptual hash tag 
-        video_hashes = self.client.search_files(["system:filetype=video", f"{HYDRUS_PHASH_TAG}:*"],
-                                        return_file_ids=False, return_hashes=True)["hashes"]
+        # SHA256 hashes of videos with perceptual hash tag
+        video_hashes = self.client.search_files(search_tags,
+                                                return_file_ids=False,
+                                                return_hashes=True)["hashes"]
 
         # Get video files and their perceptual hashes from Hydrus
         # Stored as [(sha256, phash), ...]
@@ -116,8 +128,11 @@ class HydrusVideoDeduplicator():
 
     # Update perceptual hash for videos
     # By default only adds missing phashes
-    def _add_perceptual_hash_to_videos(self, add_missing: bool, overwrite: bool) -> None:
+    def _add_perceptual_hash_to_videos(self, add_missing: bool, overwrite: bool, custom_query: list | None = None) -> None:
         search_tags = ["system:filetype=video"]
+        if custom_query is not None:
+            custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
+            search_tags.extend(custom_query)
         
         # Add phash tag to files without one
         if add_missing and not overwrite:
@@ -157,7 +172,7 @@ class HydrusVideoDeduplicator():
                         video_percep_hash = HydrusVideoDeduplicator.calc_perceptual_hash(video_file=tmp_vid_file)
                 # TODO: Don't catch everything
                 except:
-                    rprint("[red]Failed to calculate a perceptual hash.")
+                    rprint("[red] Failed to calculate a perceptual hash.")
                     self.hydlog.error("Failed to calculate a perceptual hash.")
                     continue
                 # Store the perceptual hash in base 36 because it's really long

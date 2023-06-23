@@ -3,7 +3,9 @@ import logging
 import tempfile
 from itertools import islice
 import json
-import sys
+import hashlib
+import shelve
+from .vpdq import VPDQSignal
 
 from videohash import VideoHash, FFmpegFailedToExtractFrames
 import hydrus_api
@@ -47,6 +49,18 @@ class HydrusVideoDeduplicator():
     def verify_api_connection(self):
         self.hydlog.info(f"Client API version: v{self.client.VERSION} | Endpoint API version: v{self.client.get_api_version()['version']}")
         hydrus_api.utils.verify_permissions(self.client, hydrus_api.utils.Permission)
+    
+    # Generate SHA256 and check if key is in DB
+    def vid_in_dict(vid: str, d: dict) -> bool:
+        return get_sha256(vid) in d
+
+    def get_sha256(filepath: str) -> str:
+        file_hash = hashlib.sha256()
+        with open(filepath, "rb") as f:
+            # Read and update hash string value in blocks of 4K
+            for byte_block in iter(lambda: f.read(4096),b""):
+                file_hash.update(byte_block)
+        return file_hash.hexdigest()
 
     # This is the master function of the class
     def deduplicate(self, add_missing: bool, overwrite: bool, custom_query: list | None = None, skip_hashing: bool | None = False):
@@ -72,17 +86,10 @@ class HydrusVideoDeduplicator():
         # Get video files and their perceptual hashes from Hydrus
         # Stored as [(sha256, phash), ...]
         # This should probably be chunked because this might be HUGE on large libraries.
-        video_hash_phash = self._get_stored_video_perceptual_hashes(video_hashes)
-        self._find_potential_duplicates(video_hash_phash, overwrite)
+        #video_hash_phash = self._get_stored_video_perceptual_hashes(video_hashes)
+        self._find_potential_duplicates(None, overwrite)
         self.hydlog.info("Deduplication done.")
 
-    # Return similarity of two bitstrings given a threshold
-    @staticmethod
-    def is_similar(a: str, b: str, hamming_distance_threshold: int) -> bool:
-        _bitlist_a = list(map(int, a.replace("0b", "")))
-        _bitlist_b = list(map(int, b.replace("0b", "")))
-        h_distance = len(bitwise_xor(_bitlist_a,_bitlist_b,).nonzero()[0])
-        return h_distance <= hamming_distance_threshold
 
     # Get the perceptual hash of a video.
     @staticmethod
@@ -126,40 +133,48 @@ class HydrusVideoDeduplicator():
         else:
             print("Both add new and overwrite perceptual tags are false. Skipping add tags...")
             return None
-        
-        
+
+
         # GET video files SHA256 with no perceptual hash tag and store for later
         print(f"Retrieving video file hashes from {self.client.api_url}")
         percep_tagged_video_hashes = self.client.search_files(search_tags, return_hashes=True)["hashes"]
         
         print("Calculating perceptual hashes:")
-        with tempfile.TemporaryDirectory() as tmp_dir_name:
-            for video_hash in tqdm(percep_tagged_video_hashes):
-                # TODO: Check for valid request?
-                video_response = self.client.get_file(hash_=video_hash)
-                try:
-                    # spooled file means it stays in RAM unless it's too big
-                    with tempfile.SpooledTemporaryFile(mode="w+b", dir=tmp_dir_name) as tmp_vid_file:
-                        tmp_vid_file.write(video_response.content)
-                        tmp_vid_file.seek(0)
-                        video_percep_hash = HydrusVideoDeduplicator.calc_perceptual_hash(video_file=tmp_vid_file)
-                except FFmpegFailedToExtractFrames as exc:
-                    rprint("[red] Failed to calculate a perceptual hash.")
-                    self.hydlog.error(f"Bad file hash: {video_hash}")
-                    self.hydlog.error(exc)
-                    continue
+        with shelve.open('thedb') as hashdb:
+            with tempfile.TemporaryDirectory() as tmp_dir_name:
+                for video_hash in tqdm(percep_tagged_video_hashes):
+                    if video_hash in hashdb:
+                        print('Vid hash already in db')
+                        continue
 
-                # Store the perceptual hash in base 36 because it's really long
-                short_video_percep_hash = base_repr(int(video_percep_hash.hash, base=2), base=36)
-                assert(f"0b{binary_repr(int(short_video_percep_hash, base=36), width=len(video_percep_hash.hash)-2)}" == video_percep_hash.hash)
-                percep_hash_tag = f'{HYDRUS_PHASH_TAG}:{short_video_percep_hash}'
+                    # TODO: Check for valid request?
+                    video_response = self.client.get_file(hash_=video_hash)
+                    try:
+                        # spooled file means it stays in RAM unless it's too big
+                        with tempfile.NamedTemporaryFile(mode="w+b", dir=tmp_dir_name) as tmp_vid_file:
+                            tmp_vid_file.write(video_response.content)
+                            tmp_vid_file.seek(0)
+                            
+                            hashdb[video_hash] = VPDQSignal.hash_from_file(tmp_vid_file.name)
+                            #print("new entry")
+                            #video_percep_hash = HydrusVideoDeduplicator.calc_perceptual_hash(video_file=tmp_vid_file)
+                    except FFmpegFailedToExtractFrames as exc:
+                        rprint("[red] Failed to calculate a perceptual hash.")
+                        self.hydlog.error(f"Bad file hash: {video_hash}")
+                        self.hydlog.error(exc)
+                        continue
 
-                self.hydlog.debug(f"Perceptual hash calculated: {percep_hash_tag}")
+                    # Store the perceptual hash in base 36 because it's really long
+                    #short_video_percep_hash = base_repr(int(video_percep_hash.hash, base=2), base=36)
+                    #assert(f"0b{binary_repr(int(short_video_percep_hash, base=36), width=len(video_percep_hash.hash)-2)}" == video_percep_hash.hash)
+                    #percep_hash_tag = f'{HYDRUS_PHASH_TAG}:{short_video_percep_hash}'
 
-                #print("Uploading perceptual hash tag to Hydrus...")
-                d = {}
-                d[self.local_tag_service["service_key"]] = [percep_hash_tag]
-                self.client.add_tags(hashes=[video_hash], service_keys_to_tags=d)
+                    #self.hydlog.debug(f"Perceptual hash calculated: {percep_hash_tag}")
+
+                    #print("Uploading perceptual hash tag to Hydrus...")
+                    #d = {}
+                    #d[self.local_tag_service["service_key"]] = [percep_hash_tag]
+                    #self.client.add_tags(hashes=[video_hash], service_keys_to_tags=d)
         rprint("[green]All perceptual hash tags have been added to video files.\n")
 
     @staticmethod
@@ -231,6 +246,22 @@ class HydrusVideoDeduplicator():
     def get_potential_duplicate_count_hydrus(self) -> int:
         return self.client.get_potentials_count(file_service_keys=[self.all_services["all_local_files"][0]["service_key"]])["potential_duplicates_count"]
     
+    # Return similarity of two bitstrings given a threshold
+    @staticmethod
+    def is_similar(a: str, b: str, hamming_distance_threshold: int = None) -> bool:
+        res = VPDQSignal.compare_hash(a, b)
+        
+        if res:
+            print(res)
+        
+        #print(res)
+        return res
+
+        #_bitlist_a = list(map(int, a.replace("0b", "")))
+        #_bitlist_b = list(map(int, b.replace("0b", "")))
+        #h_distance = len(bitwise_xor(_bitlist_a,_bitlist_b,).nonzero()[0])
+        #return h_distance <= hamming_distance_threshold
+
     # Store video_hash in list of tuples for the key phash
     # tuple is (phash, sha256)
     # Sliding window duplicate comparisons
@@ -247,37 +278,38 @@ class HydrusVideoDeduplicator():
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
 
         similar_files_found_count = 0
-        for i, video in enumerate(tqdm(video_hash_phash, desc="Finding duplicates")):
-            video_hash, video_phash = video[0], video[1]
-            for video2 in islice(video_hash_phash, i+1, None):
-                video2_hash, video2_phash = video2[0], video2[1]
-                
-                similar = HydrusVideoDeduplicator.is_similar(video_phash, video2_phash, self.search_distance)
-                
-                if similar:
-                    similar_files_found_count += 1
-                    if self._DEBUG:
-                        file_names = self.get_file_names_hydrus([video_hash, video2_hash])
-                        self.hydlog.info(f"Duplicates filenames: {file_names}")
-                        #self.hydlog.info(f"\"Duplicates hashes: {video_hash}\" and \"{video2_hash}\"")
+        with shelve.open('thedb') as hashdb:
+            for i, video in enumerate(tqdm(hashdb.items(), desc="Finding duplicates")):
+                video_hash, video_phash = video[0], video[1]
+                for video2 in islice(hashdb.items(), i+1, None):
+                    video2_hash, video2_phash = video2[0], video2[1]
                     
-                    new_relationship = {
-                        "hash_a": str(video_hash),
-                        "hash_b": str(video2_hash),
-                        "relationship": int(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES),
-                        "do_default_content_merge": True,
-                    }
-                
-                    # This throws always because set_file_relationships
-                    # in the Hydrus API doesn't have a response or something.
-                    # TODO: Defer this API call to speed up processing
-                    try:
-                        self.client.set_file_relationships([new_relationship])
-                    except json.decoder.JSONDecodeError:
-                        pass
+                    similar = HydrusVideoDeduplicator.is_similar(video_phash, video2_phash, self.search_distance)
+                    
+                    if similar:
+                        similar_files_found_count += 1
+                        if self._DEBUG:
+                            file_names = self.get_file_names_hydrus([video_hash, video2_hash])
+                            self.hydlog.info(f"Duplicates filenames: {file_names}")
+                            #self.hydlog.info(f"\"Duplicates hashes: {video_hash}\" and \"{video2_hash}\"")
+                        
+                        new_relationship = {
+                            "hash_a": str(video_hash),
+                            "hash_b": str(video2_hash),
+                            "relationship": int(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES),
+                            "do_default_content_merge": True,
+                        }
+                    
+                        # This throws always because set_file_relationships
+                        # in the Hydrus API doesn't have a response or something.
+                        # TODO: Defer this API call to speed up processing
+                        try:
+                            self.client.set_file_relationships([new_relationship])
+                        except json.decoder.JSONDecodeError:
+                            pass
 
         # Statistics for user
-        video_count = len(video_hash_phash)
+        video_count = len(hashdb)
         if similar_files_found_count > 0:
             rprint(f"[blue] {similar_files_found_count}/{video_count} total similar videos found")
             post_dedupe_count = self.get_potential_duplicate_count_hydrus()

@@ -28,6 +28,7 @@ dependencies = [
     "tqdm",
     "python-dotenv",
     "typer",
+    "vpdq",
 ]
 
 [project.urls]

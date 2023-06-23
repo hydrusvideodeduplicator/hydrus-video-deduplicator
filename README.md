@@ -24,7 +24,16 @@ Once all perceptual hashes for all the videos in your database are computed and 
 ### System Requirements:
 - FFmpeg
 - Python >=3.11
+- python-dev for Python.h
 - Windows or Linux. macos is untested.
+
+1. Install python headers for your system.
+
+Ubuntu Linux
+```sh
+sudo apt-get python-dev 
+# or python3.11-dev if needed
+```
 
 1. Clone or download the repository.
 
@@ -78,3 +87,7 @@ There is a lot to fix and cleanup and I'm more experienced in C than Python, so 
 [Hydrus API Library](https://gitlab.com/cryzed/hydrus-api) by Cryzed
 
 [VideoHash](https://github.com/akamhy/videohash) by Akash Mahanty
+
+vpdq by Meta
+
+various other files from threatexchange by Meta

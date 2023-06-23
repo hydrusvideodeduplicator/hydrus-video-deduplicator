@@ -132,9 +132,9 @@ class HydrusVideoDeduplicator():
         print(f"Retrieving video file hashes from {self.client.api_url}")
         percep_tagged_video_hashes = self.client.search_files(search_tags, return_hashes=True)["hashes"]
         
+        print("Calculating perceptual hashes:")
         with tempfile.TemporaryDirectory() as tmp_dir_name:
-            for video_hash in tqdm(percep_tagged_video_hashes,
-                                   desc="Generating perceptual hashes"):
+            for video_hash in tqdm(percep_tagged_video_hashes):
                 # TODO: Check for valid request?
                 video_response = self.client.get_file(hash_=video_hash)
                 try:
@@ -148,22 +148,19 @@ class HydrusVideoDeduplicator():
                     self.hydlog.error(f"Bad file hash: {video_hash}")
                     self.hydlog.error(exc)
                     continue
+
                 # Store the perceptual hash in base 36 because it's really long
                 short_video_percep_hash = base_repr(int(video_percep_hash.hash, base=2), base=36)
                 assert(f"0b{binary_repr(int(short_video_percep_hash, base=36), width=len(video_percep_hash.hash)-2)}" == video_percep_hash.hash)
                 percep_hash_tag = f'{HYDRUS_PHASH_TAG}:{short_video_percep_hash}'
+
                 self.hydlog.debug(f"Perceptual hash calculated: {percep_hash_tag}")
 
                 #print("Uploading perceptual hash tag to Hydrus...")
                 d = {}
                 d[self.local_tag_service["service_key"]] = [percep_hash_tag]
-                # TODO: Batch this call (?)
                 self.client.add_tags(hashes=[video_hash], service_keys_to_tags=d)
         rprint("[green]All perceptual hash tags have been added to video files.\n")
-
-    @staticmethod
-    def decode_tag(coded_hash: str):
-        return f"0b{binary_repr(int(coded_hash, base=36), width=64)}"
 
     @staticmethod
     # Given a lexicographically SORTED list of tags, find the tag given a namespace
@@ -271,7 +268,6 @@ class HydrusVideoDeduplicator():
                         "do_default_content_merge": True,
                     }
                 
-                    print(sys.getsizeof([new_relationship]))
                     # This throws always because set_file_relationships
                     # in the Hydrus API doesn't have a response or something.
                     # TODO: Defer this API call to speed up processing

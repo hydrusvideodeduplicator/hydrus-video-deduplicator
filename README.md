@@ -11,7 +11,7 @@ Hydrus Video Deduplicator detects similar video files and marks them as potentia
 ---
 
 ## How It Works:
-The deduplicator works by using [vpdq](https://github.com/facebook/ThreatExchange/tree/main/vpdq), to compare videos by computing a perceptual hash.
+The deduplicator works by comparing videos by computing a perceptual hash.
 
 A perceptual hash is a way to characterize videos in small chunks.
 
@@ -19,7 +19,7 @@ The perceptual hashes are stored in a database file in the running directory to 
 
 Once all perceptual hashes for all the videos in your database are computed, they are compared against each other to detect if they're similar. If they are similar, they will be marked as potential duplicates in Hydrus.
 
-The accuracy is extremely good because of vpdq. You can adjust the threshold of similarity using `--threshold`. The default is 75%.
+The accuracy is extremely good because of [vpdq](https://github.com/facebook/ThreatExchange/tree/main/vpdq). You can adjust the threshold of similarity using `--threshold`. The default is 75%.
 
 ---
 
@@ -40,7 +40,6 @@ sudo apt-get python-dev
 ```
 
 1. Clone or download the repository.
-
 2. Install with pip
 
 `hydrus-video-deduplicator/`
@@ -66,7 +65,7 @@ python -m hydrus_video_deduplicator --api-key="<your key>"
 
 <br>
 
-Your video files should now have a perceptual hash tag, and any similar files should be marked as potential duplicates.
+Similar video files should now be marked as duplicates in Hyrus.
 
 You can run the program again when you add more files to find more duplicates.
 

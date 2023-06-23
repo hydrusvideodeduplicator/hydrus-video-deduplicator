@@ -84,6 +84,7 @@ class HydrusVideoDeduplicator():
         percep_tagged_video_hashes = self.client.search_files(search_tags, return_hashes=True)["hashes"]
         
         print("Calculating perceptual hashes:")
+        
         with shelve.open(DEDUP_DATABASE_NAME) as hashdb:
             with tempfile.TemporaryDirectory() as tmp_dir_name:
                 for video_hash in tqdm(percep_tagged_video_hashes):
@@ -139,6 +140,7 @@ class HydrusVideoDeduplicator():
                 video_hash, video_phash = video[0], video[1]
                 for video2 in islice(hashdb.items(), i+1, None):
                     video2_hash, video2_phash = video2[0], video2[1]
+                    
                     
                     similar = HydrusVideoDeduplicator.is_similar(video_phash, video2_phash, self.threshold)
                     

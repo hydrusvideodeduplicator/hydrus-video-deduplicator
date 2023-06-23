@@ -92,7 +92,7 @@ You can also set these in a .env file with each env variable on their own line.
 - [ ] Option to only generate phashes or only search for duplicates
 - [ ] Option to remove all perceptual hash tags
 - [x] Option to add phash tag on specific tag service (default is my tags)
-- [ ] Option to enter custom Hydrus tag search parameters
+- [x] Option to enter custom Hydrus tag search parameters
 - [ ] Async and multiprocessing
 - [ ] Automatically generate access key with Hydrus API
 - [ ] Upload to PyPI

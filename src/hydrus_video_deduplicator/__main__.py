@@ -16,6 +16,7 @@ Parameters:
 - overwrite is false, add_missing is true, so only files without phashes will be hashed
 - custom_query is empty. to add custom queries, do
   --custom-query="series:twilight" --custom-query="character:edward" ... etc for each query
+- search_distance is the max threshold for a pair to be considered similar. 0 is identical.
 
 - verbose turns on logging
 - debug turns on logging and sets the logging level to debug
@@ -27,6 +28,7 @@ def main(api_key: Annotated[Optional[str], typer.Option()] = None,
         verbose:  Annotated[Optional[bool], typer.Option()] = False,
         debug: Annotated[Optional[bool], typer.Option()] = False,
         custom_query: Annotated[Optional[List[str]], typer.Option()] = None,
+        search_distance: Annotated[Optional[int], typer.Option()] = 4,
         ):
     rprint(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
 
@@ -91,8 +93,17 @@ def main(api_key: Annotated[Optional[str], typer.Option()] = None,
     if error_connecting:
         logging.fatal("FATAL ERROR HAS OCCURRED")
         logging.fatal(error_connecting_exception)
-        print(error_connecting_exception_msg)
+        rprint(f"[red] {error_connecting_exception_msg} ")
         raise typer.Exit(code=1)
+
+    # Deduplication parameters
+
+    # This is not a hard limit but you don't want to set it higher than this.
+    MAX_SEARCH_DISTANCE = 15
+    if search_distance < 0 or search_distance > MAX_SEARCH_DISTANCE:
+        rprint(f"[red] ERROR: Invalid search_distance {search_distance}. Must be between 0 and {MAX_SEARCH_DISTANCE} ")
+        raise typer.Exit(code=1)
+    superdeduper.search_distance = search_distance
 
     # Run all deduplicate functionality
     superdeduper.deduplicate(add_missing=add_missing,

@@ -1,11 +1,10 @@
-import enum
 from io import IOBase
 import logging
 import tempfile
 from itertools import islice
-import re
+import json
 
-from videohash import VideoHash
+from videohash import VideoHash, FFmpegFailedToExtractFrames
 import hydrus_api
 import hydrus_api.utils
 from numpy import base_repr, binary_repr, bitwise_xor
@@ -32,7 +31,8 @@ Overall process:
 
 class HydrusVideoDeduplicator():
     hydlog = logging.getLogger("hydlog")
-    
+    search_distance: int = 4
+
     REQUIRED_PERMISSIONS = (
         hydrus_api.Permission.IMPORT_URLS,
         hydrus_api.Permission.IMPORT_FILES,
@@ -50,17 +50,19 @@ class HydrusVideoDeduplicator():
         if verify_connection:
             self.verify_api_connection()
         self.hydlog.setLevel(logging.DEBUG)
+        
+        # Commonly used things from the database
+        # If any of these are large they should probably be lazily loaded
+        self.all_services = self.client.get_services()
+        self.local_tag_service = [service for service in self.all_services["local_tags"] if service["name"] == HYDRUS_LOCAL_TAG_SERVICE_NAME][0]
     
 
     # Check if debugging
     @classmethod
     def is_debug(cls) -> bool:
-        try:
-            if logging.root.level <= cls.hydlog.level:
-                return cls.hydlog.level <= logging.DEBUG
-            else:
-                return False
-        except:
+        if logging.root.level <= cls.hydlog.level:
+            return cls.hydlog.level <= logging.DEBUG
+        else:
             return False
     
     # Verify client connection and permissions
@@ -75,7 +77,9 @@ class HydrusVideoDeduplicator():
         search_tags = ["system:filetype=video", f"{HYDRUS_PHASH_TAG}:*"]
         if custom_query is not None:
             custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
-            search_tags.extend(custom_query)
+            if len(custom_query) > 0:
+                search_tags.extend(custom_query)
+                rprint(f"[yellow] Custom Query: {custom_query}")
 
         self._add_perceptual_hash_to_videos(add_missing=add_missing, overwrite=overwrite, custom_query=custom_query)
 
@@ -98,14 +102,11 @@ class HydrusVideoDeduplicator():
     That is way too high!
     """
     @staticmethod
-    def is_similar(a: str, b: str, hamming_distance_threshold: int = 4) -> bool:
+    def is_similar(a: str, b: str, hamming_distance_threshold: int) -> bool:
         _bitlist_a = list(map(int, a.replace("0b", "")))
         _bitlist_b = list(map(int, b.replace("0b", "")))
         h_distance = len(bitwise_xor(_bitlist_a,_bitlist_b,).nonzero()[0])
-        if h_distance <= hamming_distance_threshold:
-            return True
-        else:
-            return False
+        return h_distance <= hamming_distance_threshold
 
     # Get the perceptual hash of a video.
     @staticmethod
@@ -117,8 +118,6 @@ class HydrusVideoDeduplicator():
     def _calc_perceptual_hash_hydrus(self, video) -> VideoHash:
         with tempfile.TemporaryDirectory() as tmp_dir_name:
             # TODO: Do I need to check for valid request here?
-            #video_ext = client.get_file_metadata(hashes=[video_hash])["metadata"][0]["ext"]
-            #video_file_name = video_hash + video_ext
             # spooled file stays in RAM unless it's too big
             with tempfile.SpooledTemporaryFile(mode="w+b", dir=tmp_dir_name) as tmp_vid_file:
                 tmp_vid_file.write(video.content)
@@ -144,16 +143,14 @@ class HydrusVideoDeduplicator():
             print("Updating existing perceptual hash tags...")
         # Add phash tags to all files and overwrite existing ones
         elif add_missing and overwrite:
-            print("Updating perceptual hash tags for ALL files...")
+            if custom_query is not None:
+                print("Updating perceptual hash tags for ALL files from custom query...")
+            else:
+                print("Updating perceptual hash tags for ALL files...")
         else:
             print("Both add new and overwrite perceptual tags are false. Skipping add tags...")
             return None
         
-        local_tag_services = self.client.get_services()["local_tags"]
-        local_tag_service = [service for service in local_tag_services if service["name"] == HYDRUS_LOCAL_TAG_SERVICE_NAME]
-        # TODO: Add error message for user if local_tag_service doesn't exist
-        assert(len(local_tag_service) > 0)
-        local_tag_service = local_tag_service[0]
         
         # GET video files SHA256 with no perceptual hash tag and store for later
         print(f"Retrieving video file hashes from {self.client.api_url}")
@@ -162,18 +159,18 @@ class HydrusVideoDeduplicator():
         with tempfile.TemporaryDirectory() as tmp_dir_name:
             for video_hash in tqdm(percep_tagged_video_hashes,
                                    desc="Generating perceptual hashes"):
+                # TODO: Check for valid request?
+                video_response = self.client.get_file(hash_=video_hash)
                 try:
-                    video = self.client.get_file(hash_=video_hash)
-                    # TODO: Do I need to check for valid request here?
                     # spooled file means it stays in RAM unless it's too big
                     with tempfile.SpooledTemporaryFile(mode="w+b", dir=tmp_dir_name) as tmp_vid_file:
-                        tmp_vid_file.write(video.content)
+                        tmp_vid_file.write(video_response.content)
                         tmp_vid_file.seek(0)
                         video_percep_hash = HydrusVideoDeduplicator.calc_perceptual_hash(video_file=tmp_vid_file)
-                # TODO: Don't catch everything
-                except:
+                except FFmpegFailedToExtractFrames as exc:
                     rprint("[red] Failed to calculate a perceptual hash.")
-                    self.hydlog.error("Failed to calculate a perceptual hash.")
+                    self.hydlog.error(f"Bad file hash: {video_hash}")
+                    self.hydlog.error(exc)
                     continue
                 # Store the perceptual hash in base 36 because it's really long
                 short_video_percep_hash = base_repr(int(video_percep_hash.hash, base=2), base=36)
@@ -183,7 +180,7 @@ class HydrusVideoDeduplicator():
 
                 #print("Uploading perceptual hash tag to Hydrus...")
                 d = {}
-                d[local_tag_service["service_key"]] = [percep_hash_tag]
+                d[self.local_tag_service["service_key"]] = [percep_hash_tag]
                 # TODO: Batch this call (?)
                 self.client.add_tags(hashes=[video_hash], service_keys_to_tags=d)
         rprint("[green]All perceptual hash tags have been added to video files.\n")
@@ -206,10 +203,7 @@ class HydrusVideoDeduplicator():
     # Tuple is (sha256, phash) 
     def _get_stored_video_perceptual_hashes(self, video_hashes: list[str]) -> list[tuple[str, str]]:
         phashes = []
-        i = 0
         for video_hash in video_hashes:
-            #print(f"Checking {i+1}/{len(video_hashes)}")
-            i+=1
             # TODO: batch this api call in batches of 256 (that's what Hydrus Client does)
             video_metadata = self.client.get_file_metadata(hashes=[video_hash], only_return_basic_information=False)
             # Why does video_tag_services contain tuples as the values?
@@ -267,16 +261,24 @@ class HydrusVideoDeduplicator():
     # Iterate over list starting at i
         # if is_similar() then mark as duplicate (TODO: Defer this call to the API for speed)
         # i++
+    
+    def get_potential_duplicate_count_hydrus(self) -> int:
+        return self.client.get_potentials_count(file_service_keys=[self.all_services["all_local_files"][0]["service_key"]])["potential_duplicates_count"]
+
 
     # TODO: Split this into two functions, one checks and one uploads
-    def _find_potential_duplicates(self, video_hash_phash: list[tuple[str, str]]):
-        similar_files_size = 0
+    def _find_potential_duplicates(self, video_hash_phash: list[tuple[str, str]]): 
+
+        # Number of potential duplicates before adding more. Just for user info.
+        pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
+
+        similar_files_found_count = 0
         for i, video in enumerate(tqdm(video_hash_phash, desc="Finding potential duplicates")):
             video_hash, video_phash = video[0], video[1]
             for video2 in islice(video_hash_phash, i+1, None):
                 video2_hash, video2_phash = video2[0], video2[1]
-                if HydrusVideoDeduplicator.is_similar(video_phash, video2_phash):
-                    similar_files_size+=1
+                if HydrusVideoDeduplicator.is_similar(video_phash, video2_phash, self.search_distance):
+                    similar_files_found_count += 1
                     if self.is_debug():
                         file_names = self.get_file_names_hydrus([video_hash, video2_hash])
                         self.hydlog.info(f"Duplicates filenames: {file_names}")
@@ -290,16 +292,22 @@ class HydrusVideoDeduplicator():
                     }
 
                     # This throws always because set_file_relationships
-                    # in the Hydrus API doesn't have a response.
-                    # But, I need to catch it because if there is a different
-                    # issue with uploading it will crash the whole program.
-
+                    # in the Hydrus API doesn't have a response or something.
                     # TODO: Defer this API call to speed up processing
                     try:
                         self.client.set_file_relationships([d])
-                    except:
+                    except json.decoder.JSONDecodeError:
                         pass
-        if similar_files_size > 0:
-            rprint(f"[green] {similar_files_size} potential duplicates marked for processing.")
+        
+        # Statistics for user
+        video_count = len(video_hash_phash)
+        if similar_files_found_count > 0:
+            rprint(f"[blue] {similar_files_found_count}/{video_count} total similar videos found")
+            post_dedupe_count = self.get_potential_duplicate_count_hydrus()
+            new_dedupes_count = post_dedupe_count-pre_dedupe_count
+            if new_dedupes_count > 0:
+                rprint(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
+            else:
+                rprint("[green] No new potential duplicates")
         else:
-            rprint("[yellow] No potential duplicates found.")
+            rprint(f"[yellow] No potential duplicates found out of {video_count} videos")

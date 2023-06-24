@@ -117,16 +117,23 @@ class HydrusVideoDeduplicator():
                             tmp_vid_file.write(video_response.content)
                             tmp_vid_file.seek(0)
                             
-                            hashdb[video_hash] = VPDQSignal.hash_from_file(tmp_vid_file.name)
-                            self.hydlog.debug(f"Perceptual hash calculated and written to DB.")
+                            # Set perceptual_hash column
+                            perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
+                            try:
+                                row = hashdb[video_hash]
+                            except KeyError:
+                                hashdb[video_hash] = {}
+
+                            row = hashdb[video_hash]
+                            row["perceptual_hash"] = perceptual_hash
+                            hashdb[video_hash] = row
+                            self.hydlog.debug(f"Perceptual hash calculated and added to DB.")
                     except KeyboardInterrupt:
                         rprint("[red] Perceptual hash generation was interrupted!\n")
                         break
-                    # TODO: Don't catch everything.
-                    except Exception as exc:
+                    except:
                         rprint("[red] Failed to calculate a perceptual hash.")
-                        self.hydlog.error(f"Bad file hash: {video_hash}")
-                        self.hydlog.error(exc)
+                        self.hydlog.error(f"Errored file hash: {video_hash}")
                     
                     if count_since_last_commit >= commit_interval:
                         hashdb.commit()
@@ -172,11 +179,12 @@ class HydrusVideoDeduplicator():
         video_counter = 0
         with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="r") as hashdb:
             # tqdm progress bar is broken for SqliteDict because len doesn't work
-            for i, video in tqdm(enumerate(hashdb.items()), desc="Finding duplicates"):
+            for i, video_hash in tqdm(enumerate(hashdb), desc="Finding duplicates"):
                 video_counter+=1
-                video_hash, video_phash = video[0], video[1]
-                for video2 in islice(hashdb.items(), i+1, None):
-                    video2_hash, video2_phash = video2[0], video2[1]
+                video_phash = hashdb[video_hash]["perceptual_hash"]
+                # TODO: Are sqlite databases ordered?
+                for video2_hash in islice(hashdb, i+1, None):
+                    video2_phash = hashdb[video2_hash]["perceptual_hash"]
                     
                     similar = HydrusVideoDeduplicator.is_similar(video_phash, video2_phash, self.threshold)
                     
@@ -196,7 +204,7 @@ class HydrusVideoDeduplicator():
                     
                         # This throws always because set_file_relationships
                         # in the Hydrus API doesn't have a response or something.
-                        # There is a pull request for this on GitLab I should fork and merge
+                        # There is a pull request for this on the Hydrus API GitLab I should fork and merge
                         # TODO: Defer this API call to speed up processing
                         try:
                             self.client.set_file_relationships([new_relationship])

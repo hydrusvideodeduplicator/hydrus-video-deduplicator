@@ -8,8 +8,6 @@ Hydrus Video Deduplicator detects similar video files and marks them as potentia
 
 </div>
 
-BUILDING IS BROKEN ON WINDOWS CURRENTLY DUE TO VPDQ. [WORKING ON A FIX](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/issues/5).
- 
 ---
 
 ## How It Works:
@@ -29,21 +27,19 @@ The accuracy is extremely good because of [vpdq](https://github.com/facebook/Thr
 
 ### System Requirements:
 - FFmpeg
-- Python >=3.11
-- Visual Studio (Windows, to compile vpdq)
-- python-dev (Linux)
-- Windows or Linux. macos is untested.
+- Python >=3.10
+- Python Development Headers
+- Linux (or Windows Subsystem for Linux)
 
-0. (Linux) Install python headers for your system if needed. Some distributions like Arch come with them.
+1. Install Python dev headers. Some distros like Arch have them pre-installed.
 
-Ubuntu Linux
+Ubuntu Linux or WSL
 ```sh
 sudo apt-get python-dev 
-# or python3.11-dev if needed
 ```
 
-1. Clone or download the repository.
-2. Install with pip
+2. Clone or download the repository.
+3. Install with pip
 
 `hydrus-video-deduplicator/`
 ```sh
@@ -68,7 +64,7 @@ python -m hydrus_video_deduplicator --api-key="<your key>"
 
 <br>
 
-Similar video files should now be marked as duplicates in Hyrus.
+Similar video files should now be marked as duplicates in Hydrus.
 
 You can run the program again when you add more files to find more duplicates.
 
@@ -80,6 +76,8 @@ You can run the program again when you add more files to find more duplicates.
 - [ ] Parallelize hashing and duplicate search
 - [ ] Automatically generate access key with Hydrus API
 - [ ] Upload to PyPI
+- [ ] Windows compatibility without WSL
+- [ ] Docker container (?)
 
 Please create an issue on Github if you have any problems or questions! Pull requests also welcome on this or my VideoHash fork. 
 

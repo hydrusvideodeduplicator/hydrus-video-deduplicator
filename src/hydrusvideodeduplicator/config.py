@@ -1,12 +1,25 @@
 import os
 from pathlib import Path
+from platform import uname
 
 from dotenv import load_dotenv
 from appdirs import AppDirs
 
 load_dotenv()
 HYDRUS_API_KEY=os.getenv("HYDRUS_API_KEY")
-HYDRUS_API_URL=os.getenv("HYDRUS_API_URL", "http://localhost:45869")
+
+def in_wsl() -> bool:
+    return 'microsoft-standard' in uname().release
+
+_DEFAULT_IP = "localhost"
+_DEFAULT_PORT = "45869"
+# If you're in WSL you probably want to connect to your Windows Hydrus Client by default
+if in_wsl():
+    from socket import gethostname
+    _DEFAULT_IP = f"{gethostname()}.local"
+
+HYDRUS_API_URL=os.getenv("HYDRUS_API_URL", f"http://{_DEFAULT_IP}:{_DEFAULT_PORT}")
+
 # Service name of where to store perceptual hash tag for video files
 HYDRUS_LOCAL_TAG_SERVICE_NAME=os.getenv("HYDRUS_LOCAL_TAG_SERVICE_NAME", "my tags")
 

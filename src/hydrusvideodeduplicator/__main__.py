@@ -24,7 +24,7 @@ Parameters:
 rprint(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
 
 def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] = None,
-        api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = None,
+        api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = HYDRUS_API_URL,
         overwrite:  Annotated[Optional[bool], typer.Option(help="Overwrite existing perceptual hashes")] = False,
         query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = None,
         threshold: Annotated[Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")] = VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
@@ -66,7 +66,9 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
         print("Hydrus URL not set. Exiting...")
         raise typer.Exit(code=1)
 
+    print(f"Connecting to {api_url}")
     # Client connection
+    # TODO: Try to connect with https first and then fallback to http with a strong warning
     _client = hydrus_api.Client(api_url=api_url,
                                 access_key=api_key)
 

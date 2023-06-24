@@ -4,7 +4,7 @@ import logging
 import tempfile
 from itertools import islice
 import json
-import shelve
+from sqlitedict import SqliteDict
 
 import hydrus_api
 import hydrus_api.utils
@@ -42,7 +42,7 @@ class HydrusVideoDeduplicator():
             self.verify_api_connection()
         self.hydlog.setLevel(logging.WARNING)
         
-        # Commonly used things from the database
+        # Commonly used things from the Hydrus database
         # If any of these are large they should probably be lazily loaded
         self.all_services = self.client.get_services()
 
@@ -77,7 +77,7 @@ class HydrusVideoDeduplicator():
 
         # Create database folder if it doesn't already exist
         if os.path.exists(DEDUP_DATABASE_FILE):
-            with shelve.open(str(DEDUP_DATABASE_FILE)) as hashdb:
+            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename = "videos") as hashdb:
                 rprint(f"[green] Database found with {len(hashdb)} videos already hashed.")
                 self.hydlog.info(f"Found existing DB of length {len(hashdb)}, size {os.path.getsize(DEDUP_DATABASE_FILE)}")
         else:
@@ -92,16 +92,22 @@ class HydrusVideoDeduplicator():
         
         # GET video files SHA256 with no perceptual hash tag and store for later
         print(f"Retrieving video file hashes from {self.client.api_url}")
+        # TODO: This could be absolutely massive. Chunk it somehow. Maybe with a query where hashes must not equal previous hashes processed?
         percep_tagged_video_hashes = self.client.search_files(search_tags, return_hashes=True)["hashes"]
         
         print("Calculating perceptual hashes:")
-        
-        with shelve.open(str(DEDUP_DATABASE_FILE)) as hashdb:
+
+        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename = "videos") as hashdb:
             with tempfile.TemporaryDirectory() as tmp_dir_name:
+                # Commit every n videos to avoid excessive writes
+                commit_interval = 8    
+                count_since_last_commit = 0
                 for video_hash in tqdm(percep_tagged_video_hashes):
                     # don't calc new value unless overwrite is true
                     if not overwrite and video_hash in hashdb:
                         continue
+                    
+                    count_since_last_commit+=1
 
                     # TODO: Check for valid request?
                     video_response = self.client.get_file(hash_=video_hash)
@@ -115,14 +121,19 @@ class HydrusVideoDeduplicator():
                             self.hydlog.debug(f"Perceptual hash calculated and written to DB.")
                     except KeyboardInterrupt:
                         rprint("[red] Perceptual hash generation was interrupted!\n")
-                        return None
+                        break
                     # TODO: Don't catch everything.
                     except Exception as exc:
                         rprint("[red] Failed to calculate a perceptual hash.")
                         self.hydlog.error(f"Bad file hash: {video_hash}")
                         self.hydlog.error(exc)
-                        continue
+                    
+                    if count_since_last_commit >= commit_interval:
+                        hashdb.commit()
+                        count_since_last_commit = 0
 
+            hashdb.commit()
+            
         rprint("[green]All perceptual hash tags have been added to video files.\n")
     
     def get_potential_duplicate_count_hydrus(self) -> int:
@@ -137,21 +148,35 @@ class HydrusVideoDeduplicator():
     # Alternatively, I could scan duplicates while adding and never do it again. I should do that instead.
     # Or, since dictionaries are ordered, store the index per hash where it ended its last search. If it's not the end, keep going until the end.
     def _find_potential_duplicates(self): 
+        # Check if table and DB exists before iterating over it since it's in read mode not the "c" r/w create mode
+        try:
+            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="r") as hashdb:
+                pass
+        except OSError:
+            rprint(f"[red] Database does not exist. Cannot search for duplicates.")
+            return None
+        except RuntimeError: # SqliteDict error when trying to create a table for a DB in read-only mode
+            rprint(f"[red] Database does not exist. Cannot search for duplicates.")
+            return None
 
         # TODO: Add support for query where it will get a list of the hashes from
         # the query and iterate over them instead of the entire hashdb
+
+        # TODO: This can be multithreaded
 
         # Number of potential duplicates before adding more. Just for user info.
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
 
         similar_files_found_count = 0
-        with shelve.open(str(DEDUP_DATABASE_FILE)) as hashdb:
-            video_count = len(hashdb)
-            for i, video in enumerate(tqdm(hashdb.items(), desc="Finding duplicates")):
+        
+        video_counter = 0
+        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="r") as hashdb:
+            # tqdm progress bar is broken for SqliteDict because len doesn't work
+            for i, video in tqdm(enumerate(hashdb.items()), desc="Finding duplicates"):
+                video_counter+=1
                 video_hash, video_phash = video[0], video[1]
                 for video2 in islice(hashdb.items(), i+1, None):
                     video2_hash, video2_phash = video2[0], video2[1]
-                    
                     
                     similar = HydrusVideoDeduplicator.is_similar(video_phash, video2_phash, self.threshold)
                     
@@ -171,6 +196,7 @@ class HydrusVideoDeduplicator():
                     
                         # This throws always because set_file_relationships
                         # in the Hydrus API doesn't have a response or something.
+                        # There is a pull request for this on GitLab I should fork and merge
                         # TODO: Defer this API call to speed up processing
                         try:
                             self.client.set_file_relationships([new_relationship])
@@ -180,7 +206,7 @@ class HydrusVideoDeduplicator():
         # Statistics for user
         # if user does duplicates processing while the script is running this count will be wrong.
         if similar_files_found_count > 0:
-            rprint(f"[blue] {similar_files_found_count}/{video_count} total similar videos found")
+            rprint(f"[blue] {similar_files_found_count}/{video_counter} similar videos found")
             post_dedupe_count = self.get_potential_duplicate_count_hydrus()
             new_dedupes_count = post_dedupe_count-pre_dedupe_count
             if new_dedupes_count > 0:
@@ -188,4 +214,4 @@ class HydrusVideoDeduplicator():
             else:
                 rprint("[green] No new potential duplicates")
         else:
-            rprint(f"[yellow] No potential duplicates found out of {video_count} videos")
+            rprint(f"[yellow] No potential duplicates found out of {video_counter} videos")

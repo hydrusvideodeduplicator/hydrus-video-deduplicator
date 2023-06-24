@@ -7,6 +7,8 @@
 Hydrus Video Deduplicator detects similar video files and marks them as potential duplicates through the Hydrus API
 
 </div>
+
+BUILDING IS BROKEN ON WINDOWS CURRENTLY DUE TO VPDQ. [WORKING ON A FIX](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/issues/5).
  
 ---
 

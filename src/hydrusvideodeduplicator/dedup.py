@@ -1,3 +1,4 @@
+import os
 from io import IOBase
 import logging
 import tempfile
@@ -7,11 +8,10 @@ import shelve
 
 import hydrus_api
 import hydrus_api.utils
-from numpy import base_repr, binary_repr, bitwise_xor
 from tqdm import tqdm
 from rich import print as rprint
 
-from .config import DEDUP_DATABASE_NAME
+from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
 from .dedup_util import find_tag_in_tags, get_file_names_hydrus
 from .vpdq import VPDQSignal
 
@@ -74,6 +74,17 @@ class HydrusVideoDeduplicator():
     # By default only adds missing phashes
     # TODO: Allow batching, where if a video is already in the DB get another until no videos left or count is 0
     def _add_perceptual_hash_to_videos(self, overwrite: bool, custom_query: list | None = None) -> None:
+
+        # Create database folder if it doesn't already exist
+        if os.path.exists(DEDUP_DATABASE_FILE):
+            with shelve.open(str(DEDUP_DATABASE_FILE)) as hashdb:
+                rprint(f"[green] Database found with {len(hashdb)} videos already hashed.")
+                self.hydlog.info(f"Found existing DB of length {len(hashdb)}, size {os.path.getsize(DEDUP_DATABASE_FILE)}")
+        else:
+            rprint(f"[yellow] Database not found. Creating one at {DEDUP_DATABASE_FILE}")
+            os.makedirs(DEDUP_DATABASE_DIR, exist_ok=True)
+            self.hydlog.info(f"Created DB dir {DEDUP_DATABASE_DIR}")
+
         search_tags = ["system:filetype=video"]
         if custom_query is not None:
             custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
@@ -85,7 +96,7 @@ class HydrusVideoDeduplicator():
         
         print("Calculating perceptual hashes:")
         
-        with shelve.open(DEDUP_DATABASE_NAME) as hashdb:
+        with shelve.open(str(DEDUP_DATABASE_FILE)) as hashdb:
             with tempfile.TemporaryDirectory() as tmp_dir_name:
                 for video_hash in tqdm(percep_tagged_video_hashes):
                     # don't calc new value unless overwrite is true
@@ -134,7 +145,7 @@ class HydrusVideoDeduplicator():
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
 
         similar_files_found_count = 0
-        with shelve.open(DEDUP_DATABASE_NAME) as hashdb:
+        with shelve.open(str(DEDUP_DATABASE_FILE)) as hashdb:
             video_count = len(hashdb)
             for i, video in enumerate(tqdm(hashdb.items(), desc="Finding duplicates")):
                 video_hash, video_phash = video[0], video[1]

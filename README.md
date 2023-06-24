@@ -28,10 +28,11 @@ The accuracy is extremely good because of [vpdq](https://github.com/facebook/Thr
 ### System Requirements:
 - FFmpeg
 - Python >=3.11
-- python-dev for Python.h
+- Visual Studio (Windows, to compile vpdq)
+- python-dev (Linux)
 - Windows or Linux. macos is untested.
 
-1. Install python headers for your system.
+0. (Linux) Install python headers for your system if needed. Some distributions like Arch come with them.
 
 Ubuntu Linux
 ```sh

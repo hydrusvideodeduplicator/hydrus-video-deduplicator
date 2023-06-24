@@ -25,26 +25,7 @@ The accuracy is extremely good because of [vpdq](https://github.com/facebook/Thr
 
 ## Installation:
 
-### System Requirements:
-- FFmpeg
-- Python >=3.10
-- Python Development Headers
-- Linux (or Windows Subsystem for Linux)
-
-1. Install Python dev headers. Some distros like Arch have them pre-installed.
-
-Ubuntu Linux or WSL
-```sh
-sudo apt-get python-dev 
-```
-
-2. Clone or download the repository.
-3. Install with pip
-
-`hydrus-video-deduplicator/`
-```sh
-pip install -U .
-```
+[Install with pip](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/wiki/Installation)
 
 ---
 
@@ -57,7 +38,7 @@ pip install -U .
 2. Run and enter your access key as a parameter
 
 ```sh
-python -m hydrus_video_deduplicator --api-key="<your key>"
+python3 -m hydrus_video_deduplicator --api-key="<your key>"
 ```
 
 ##### See full list of options with `--help`

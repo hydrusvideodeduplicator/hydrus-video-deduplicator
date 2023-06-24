@@ -21,7 +21,7 @@ import typing as t
 #from threatexchange.content_type.video import VideoContent
 #from threatexchange.signal_type import signal_base
 #from threatexchange.signal_type.pdq.signal import PdqSignal
-from .vpdq_index import VPDQSimilarityInfo, VPDQIndex
+#from .vpdq_index import VPDQSimilarityInfo, VPDQIndex
 
 
 class VPDQSignal:
@@ -46,10 +46,6 @@ class VPDQSignal:
     }
     Read about VPDQ at https://github.com/facebook/ThreatExchange/tree/main/vpdq
     """
-
-    @classmethod
-    def get_index_cls(cls):
-        return VPDQIndex
 
     @classmethod
     def validate_signal_str(cls, signal_str: str) -> str:

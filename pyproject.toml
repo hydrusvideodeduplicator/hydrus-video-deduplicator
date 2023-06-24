@@ -29,6 +29,7 @@ dependencies = [
     "python-dotenv",
     "typer",
     "vpdq",
+    "sqlitedict",
 ]
 
 [project.urls]

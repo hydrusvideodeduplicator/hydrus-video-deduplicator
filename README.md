@@ -25,29 +25,24 @@ The accuracy is extremely good because of [vpdq](https://github.com/facebook/Thr
 
 ## Installation:
 
-[Install with pip](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/wiki/Installation)
+[Windows requires WSL](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/wiki/Installation#Windows)
+
+### Linux:
+[Install dependencies](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/wiki/Installation#Linux)
+
+Then install with pip:
+
+```sh
+pip install hydrusvideodeduplicator
+```
 
 ---
 
-## Usage:
-
-0. Backup your database and files unless you trust a stranger on an anonymous Github alternate account to not ruin your hard work. 
-
-1. [Enable the Hydrus Client API](https://hydrusnetwork.github.io/hydrus/client_api.html#enabling_the_api) and create an access key with all permissions.
-
-2. Run and enter your access key as a parameter
+## [Usage:](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/wiki/Usage)
 
 ```sh
-python3 -m hydrus_video_deduplicator --api-key="<your key>"
+python3 -m hydrusvideodeduplicator --api-key="<your key>"
 ```
-
-##### See full list of options with `--help`
-
-<br>
-
-Similar video files should now be marked as duplicates in Hydrus.
-
-You can run the program again when you add more files to find more duplicates.
 
 ---
 
@@ -56,7 +51,7 @@ You can run the program again when you add more files to find more duplicates.
 - [x] Option to enter custom Hydrus tag search parameters
 - [ ] Parallelize hashing and duplicate search
 - [ ] Automatically generate access key with Hydrus API
-- [ ] Upload to PyPI
+- [x] Upload to PyPI
 - [ ] Windows compatibility without WSL
 - [ ] Docker container (?)
 

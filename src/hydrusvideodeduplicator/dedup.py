@@ -5,6 +5,7 @@ import tempfile
 from itertools import islice
 import json
 from pathlib import Path
+import subprocess
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
@@ -79,8 +80,58 @@ class HydrusVideoDeduplicator():
             tmp_vid_file.write(video)
             tmp_vid_file.seek(0)
 
-            # Set perceptual_hash column
-            perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
+            ffprobe_cmd = [
+                        'ffprobe',
+                        '-v',
+                        'error',
+                        '-select_streams',
+                        'v:0',
+                        '-show_entries',
+                        'stream=codec_name',
+                        '-of',
+                        'default=noprint_wrappers=1:nokey=1',
+                        tmp_vid_file.name
+                        ]
+
+            # Execute the ffprobe command and capture the output
+            video_codec = subprocess.check_output(ffprobe_cmd).decode('utf-8').strip()
+
+            # These are found by trial and error. If you find an unsupported codec, create an issue on GitHub please.
+            # Unsupported codecs appear to be an OpenCV issue more than an FFmpeg issue but I can't solve it at the moment.
+            # For now, just transcode the video to avc1
+            unsupported_codecs = ["av1"]
+
+            if video_codec in unsupported_codecs:
+                rprint(f"[yellow] Video file has unsupported codec: {video_codec}")
+                rprint("[yellow] Falling back to transcoding (this may take a bit)")
+
+                try:
+
+                    with tempfile.NamedTemporaryFile(mode="w+b", dir=video_dir, suffix=".mp4") as tmp_vid_file_transcoded:
+                        ffmpeg_cmd = [
+                            'ffmpeg',
+                            '-y',
+                            '-i',
+                            tmp_vid_file.name,
+                            '-c:v',
+                            'libx264',
+                            '-preset',
+                            'veryfast',
+                            '-crf',
+                            '28',
+                            tmp_vid_file_transcoded.name,
+                        ]
+
+                        # Execute the ffmpeg command
+                        with open(os.devnull, "w") as devnull: subprocess.call(ffmpeg_cmd, stdout=devnull, stderr=devnull)
+
+                        perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file_transcoded.name)
+
+                        print("[yellow] Fallback to transcode successful.")
+                except:
+                    print("[red] Transcode and/or hashing the transcode failed.")
+            else:
+                perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
 
             row = db.get(video_hash, {})
             row["perceptual_hash"] = perceptual_hash

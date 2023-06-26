@@ -170,7 +170,7 @@ class HydrusVideoDeduplicator():
         # TODO: Add support for query where it will get a list of the hashes from
         # the query and iterate over them instead of the entire hashdb
 
-        # TODO: This can be multithreaded
+        # TODO: This can be multiprocessed
 
         # Number of potential duplicates before adding more. Just for user info.
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
@@ -204,14 +204,8 @@ class HydrusVideoDeduplicator():
                                 "do_default_content_merge": True,
                             }
                         
-                            # This throws always because set_file_relationships
-                            # in the Hydrus API doesn't have a response or something.
-                            # There is a pull request for this on the Hydrus API GitLab I should fork and merge
                             # TODO: Defer this API call to speed up processing
-                            try:
-                                self.client.set_file_relationships([new_relationship])
-                            except json.decoder.JSONDecodeError:
-                                pass
+                            self.client.set_file_relationships([new_relationship])
 
         # Statistics for user
         # if user does duplicates processing while the script is running this count will be wrong.

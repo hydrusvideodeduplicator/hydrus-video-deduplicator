@@ -838,10 +838,10 @@ class Client:
         response = self._api_request("GET", self._GET_RANDOM_POTENTIALS_PATH, params=params)
         return response.json()
 
-    def set_file_relationships(self, relationships: abc.Iterable[abc.Mapping[str, T.Any]]) -> dict[str, T.Any]:
+    def set_file_relationships(self, relationships: abc.Iterable[abc.Mapping[str, T.Any]]) -> requests.Response:
         payload = {"relationships": relationships}
         response = self._api_request("POST", self._SET_FILE_RELATIONSHIPS_PATH, json=payload)
-        return response.json()
+        return response
 
     def set_kings(
         self, file_ids: T.Optional[abc.Iterable[int]] = None, hashes: T.Optional[abc.Iterable[str]] = None

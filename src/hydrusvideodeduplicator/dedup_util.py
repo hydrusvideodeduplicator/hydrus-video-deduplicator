@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 import time
 
-from hydrus_api import Client
+from hydrusvideodeduplicator.hydrus_api import Client
  
 # Given a lexicographically SORTED list of tags, find the tag given a namespace
 # TODO: Do binary search since the tags are sorted

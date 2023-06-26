@@ -2,7 +2,7 @@ import logging
 from typing import Optional, Annotated, List
 
 import typer
-import hydrus_api
+import hydrusvideodeduplicator.hydrus_api as hydrus_api
 from rich import print as rprint
 
 from .__about__ import __version__

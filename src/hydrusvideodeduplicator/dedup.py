@@ -6,8 +6,8 @@ from itertools import islice
 import json
 from pathlib import Path
 
-import hydrus_api
-import hydrus_api.utils
+import hydrusvideodeduplicator.hydrus_api as hydrus_api
+import hydrusvideodeduplicator.hydrus_api.utils
 from tqdm import tqdm
 from rich import print as rprint
 from sqlitedict import SqliteDict

@@ -22,7 +22,6 @@ classifiers = [
 ]
 dependencies = [
     "appdirs",
-    "hydrus-api",
     "rich",
     "numpy",
     "tqdm",
@@ -30,12 +29,16 @@ dependencies = [
     "typer",
     "vpdq",
     "sqlitedict",
+    "requests",
 ]
 
 [project.urls]
 Documentation = "https://github.com/appleappleapplenanner/hydrus-video-deduplicator#readme"
 Issues = "https://github.com/appleappleapplenanner/hydrus-video-deduplicator/issues"
 Source = "https://github.com/appleappleapplenanner/hydrus-video-deduplicator"
+
+[tool.hatch.dependencies]
+local_dependency = {path = "src/hydrusvideodeduplicator/hydrus_api"}
 
 [tool.hatch.metadata]
 allow-direct-references = true

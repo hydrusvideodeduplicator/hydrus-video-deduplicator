@@ -4,12 +4,13 @@ import logging
 import tempfile
 from itertools import islice
 import json
-from sqlitedict import SqliteDict
+from pathlib import Path
 
 import hydrus_api
 import hydrus_api.utils
 from tqdm import tqdm
 from rich import print as rprint
+from sqlitedict import SqliteDict
 
 from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
 from .dedup_util import find_tag_in_tags, get_file_names_hydrus
@@ -63,17 +64,31 @@ class HydrusVideoDeduplicator():
                 rprint(f"[yellow] Custom Query: {custom_query}")
 
         if not skip_hashing:
-            self._add_perceptual_hash_to_videos(overwrite=overwrite, custom_query=custom_query)
+            self._add_perceptual_hashes_to_db(overwrite=overwrite, custom_query=custom_query)
         else:
             rprint("[yellow] Skipping perceptual hashing")
 
         self._find_potential_duplicates()
         self.hydlog.info("Deduplication done.")
+    
+    @classmethod
+    # dir is where you're writing the video file
+    def _add_perceptual_hash_to_db(cls, video_hash: str, video: str | bytes, video_dir: Path | str, db) -> None:
+        with tempfile.NamedTemporaryFile(mode="w+b", dir=video_dir) as tmp_vid_file:
+            # Write video to file to be able to calculate hash
+            tmp_vid_file.write(video)
+            tmp_vid_file.seek(0)
 
-    # Update perceptual hash for videos
-    # By default only adds missing phashes
-    # TODO: Allow batching, where if a video is already in the DB get another until no videos left or count is 0
-    def _add_perceptual_hash_to_videos(self, overwrite: bool, custom_query: list | None = None) -> None:
+            # Set perceptual_hash column
+            perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
+
+            row = db.get(video_hash, {})
+            row["perceptual_hash"] = perceptual_hash
+            db[video_hash] = row
+            cls.hydlog.debug(f"Perceptual hash calculated and added to DB.")
+    
+    # Add perceptual hash for videos to the database
+    def _add_perceptual_hashes_to_db(self, overwrite: bool, custom_query: list | None = None) -> None:
 
         # Create database folder if it doesn't already exist
         if os.path.exists(DEDUP_DATABASE_FILE):
@@ -90,58 +105,44 @@ class HydrusVideoDeduplicator():
             custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
             search_tags.extend(custom_query)
         
-        # GET video files SHA256 with no perceptual hash tag and store for later
-        print(f"Retrieving video file hashes from {self.client.api_url}")
-        # TODO: This could be absolutely massive. Chunk it somehow. Maybe with a query where hashes must not equal previous hashes processed?
-        percep_tagged_video_hashes = self.client.search_files(search_tags, return_hashes=True)["hashes"]
-        
-        print("Calculating perceptual hashes:")
-
         with SqliteDict(str(DEDUP_DATABASE_FILE), tablename = "videos") as hashdb:
-            with tempfile.TemporaryDirectory() as tmp_dir_name:
-                # Commit every n videos to avoid excessive writes
-                commit_interval = 8    
-                count_since_last_commit = 0
-                for video_hash in tqdm(percep_tagged_video_hashes):
-                    # don't calc new value unless overwrite is true
-                    if not overwrite and video_hash in hashdb:
-                        continue
-                    
-                    count_since_last_commit+=1
-
-                    # TODO: Check for valid request?
-                    video_response = self.client.get_file(hash_=video_hash)
-                    try:
-                        # spooled file means it stays in RAM unless it's too big
-                        with tempfile.NamedTemporaryFile(mode="w+b", dir=tmp_dir_name) as tmp_vid_file:
-                            tmp_vid_file.write(video_response.content)
-                            tmp_vid_file.seek(0)
+            print(f"Retrieving video file hashes...")
+            all_video_hashes = self.client.search_files(search_tags, file_sort_type=hydrus_api.FileSortType.FILE_SIZE, return_hashes=True, file_sort_asc=True, return_file_ids=False)["hashes"]
+            print("Calculating perceptual hashes:")
+            with tqdm(dynamic_ncols=True, total=len(all_video_hashes), unit="video", colour="BLUE") as pbar:
+                with tempfile.TemporaryDirectory() as tmp_dir_name:
+                    for chunk_video_hashes in hydrus_api.utils.yield_chunks(all_video_hashes, chunk_size=16):
+                        for video_hash in chunk_video_hashes:
+                            pbar.update(1)
+                            # Only calculate new hash if it's missing or if overwrite is true
+                            if not overwrite and video_hash in hashdb and hashdb[video_hash].get("perceptual_hash", None) is not None:
+                                continue
                             
-                            # Set perceptual_hash column
-                            perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
                             try:
-                                row = hashdb[video_hash]
-                            except KeyError:
-                                hashdb[video_hash] = {}
+                                video_response = self.client.get_file(hash_=video_hash)
+                                if video_response.content is None:
+                                    continue
+                            except hydrus_api.HydrusAPIException:
+                                rprint("[red] Error getting file from database.")
+                                continue
 
-                            row = hashdb[video_hash]
-                            row["perceptual_hash"] = perceptual_hash
-                            hashdb[video_hash] = row
-                            self.hydlog.debug(f"Perceptual hash calculated and added to DB.")
-                    except KeyboardInterrupt:
-                        rprint("[red] Perceptual hash generation was interrupted!\n")
-                        break
-                    except:
-                        rprint("[red] Failed to calculate a perceptual hash.")
-                        self.hydlog.error(f"Errored file hash: {video_hash}")
-                    
-                    if count_since_last_commit >= commit_interval:
+                            try:
+                                self._add_perceptual_hash_to_db(video_hash=video_hash, video=video_response.content, video_dir=tmp_dir_name, db=hashdb)
+                            except KeyboardInterrupt:
+                                rprint("[red] Perceptual hash generation was interrupted!\n")
+                                hashdb.commit()
+                                return None
+                            except:
+                                rprint("[red] Failed to calculate a perceptual hash.")
+                                self.hydlog.error(f"Errored file hash: {video_hash}")
+                            
+                        # Commit at the end of a chunk
                         hashdb.commit()
-                        count_since_last_commit = 0
 
+            # Commit at the end of all processing
             hashdb.commit()
             
-        rprint("[green]All perceptual hash tags have been added to video files.\n")
+        rprint("[green] Finished perceptual hash processing.\n")
     
     def get_potential_duplicate_count_hydrus(self) -> int:
         return self.client.get_potentials_count(file_service_keys=[self.all_services["all_local_files"][0]["service_key"]])["potential_duplicates_count"]
@@ -178,38 +179,39 @@ class HydrusVideoDeduplicator():
         
         video_counter = 0
         with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="r") as hashdb:
-            # tqdm progress bar is broken for SqliteDict because len doesn't work
-            for i, video_hash in tqdm(enumerate(hashdb), desc="Finding duplicates"):
-                video_counter+=1
-                video_phash = hashdb[video_hash]["perceptual_hash"]
-                # TODO: Are sqlite databases ordered?
-                for video2_hash in islice(hashdb, i+1, None):
-                    video2_phash = hashdb[video2_hash]["perceptual_hash"]
-                    
-                    similar = HydrusVideoDeduplicator.is_similar(video_phash, video2_phash, self.threshold)
-                    
-                    if similar:
-                        similar_files_found_count += 1
-                        if self._DEBUG:
-                            file_names = get_file_names_hydrus(self.client, [video_hash, video2_hash])
-                            self.hydlog.info(f"Duplicates filenames: {file_names}")
-                            #self.hydlog.info(f"\"Duplicates hashes: {video_hash}\" and \"{video2_hash}\"")
+            with tqdm(dynamic_ncols=True, total=len(hashdb), desc="Finding duplicates", unit="video", colour="BLUE") as pbar:
+                for i, video_hash in enumerate(hashdb):
+                    pbar.update(1)
+                    video_counter+=1
+                    video_phash = hashdb[video_hash]["perceptual_hash"]
+                    # TODO: Are sqlite databases ordered?
+                    for video2_hash in islice(hashdb, i+1, None):
+                        video2_phash = hashdb[video2_hash]["perceptual_hash"]
                         
-                        new_relationship = {
-                            "hash_a": str(video_hash),
-                            "hash_b": str(video2_hash),
-                            "relationship": int(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES),
-                            "do_default_content_merge": True,
-                        }
-                    
-                        # This throws always because set_file_relationships
-                        # in the Hydrus API doesn't have a response or something.
-                        # There is a pull request for this on the Hydrus API GitLab I should fork and merge
-                        # TODO: Defer this API call to speed up processing
-                        try:
-                            self.client.set_file_relationships([new_relationship])
-                        except json.decoder.JSONDecodeError:
-                            pass
+                        similar = HydrusVideoDeduplicator.is_similar(video_phash, video2_phash, self.threshold)
+                        
+                        if similar:
+                            similar_files_found_count += 1
+                            if self._DEBUG:
+                                file_names = get_file_names_hydrus(self.client, [video_hash, video2_hash])
+                                self.hydlog.info(f"Duplicates filenames: {file_names}")
+                                #self.hydlog.info(f"\"Duplicates hashes: {video_hash}\" and \"{video2_hash}\"")
+                            
+                            new_relationship = {
+                                "hash_a": str(video_hash),
+                                "hash_b": str(video2_hash),
+                                "relationship": int(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES),
+                                "do_default_content_merge": True,
+                            }
+                        
+                            # This throws always because set_file_relationships
+                            # in the Hydrus API doesn't have a response or something.
+                            # There is a pull request for this on the Hydrus API GitLab I should fork and merge
+                            # TODO: Defer this API call to speed up processing
+                            try:
+                                self.client.set_file_relationships([new_relationship])
+                            except json.decoder.JSONDecodeError:
+                                pass
 
         # Statistics for user
         # if user does duplicates processing while the script is running this count will be wrong.

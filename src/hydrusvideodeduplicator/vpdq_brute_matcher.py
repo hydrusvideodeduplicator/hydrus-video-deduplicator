@@ -61,6 +61,11 @@ def match_VPDQ_hash_brute(
     compared_match_cnt = match_VPDQ_in_another(
         filtered_compared, filtered_query, distance_tolerance
     )
+
+    # TODO: Why does this sometimes happen?
+    if len(filtered_query) == 0 or len(filtered_compared) == 0:
+        return VPDQMatchResult(0, 0)
+
     return VPDQMatchResult(
         query_match_cnt * 100 / len(filtered_query),
         compared_match_cnt * 100 / len(filtered_compared),

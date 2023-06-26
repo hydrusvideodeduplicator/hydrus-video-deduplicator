@@ -244,9 +244,9 @@ class HydrusVideoDeduplicator():
                         if similar:
                             similar_files_found_count += 1
                             if self._DEBUG:
-                                file_names = get_file_names_hydrus(self.client, [video_hash, video2_hash])
-                                self.hydlog.info(f"Duplicates filenames: {file_names}")
-                                #self.hydlog.info(f"\"Duplicates hashes: {video_hash}\" and \"{video2_hash}\"")
+                                #file_names = get_file_names_hydrus(self.client, [video_hash, video2_hash])
+                                #self.hydlog.info(f"Duplicates filenames: {file_names}")
+                                self.hydlog.info(f"\"Duplicates hashes: {video_hash}\" and \"{video2_hash}\"")
                             
                             new_relationship = {
                                 "hash_a": str(video_hash),

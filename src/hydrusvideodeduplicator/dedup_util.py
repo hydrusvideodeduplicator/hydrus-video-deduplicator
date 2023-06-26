@@ -21,7 +21,7 @@ def get_file_names_hydrus(client: Client, file_hashes: list[str]) -> list[str]:
     result = []
     files_metadata = client.get_file_metadata(hashes=file_hashes, only_return_basic_information=False)
     all_known_tags = "all known tags".encode("utf-8").hex()
-    for file_metadata in files_metadata["metadata"]:
+    for file_metadata in files_metadata.get("metadata", []):
         # Try to get file extension
         try:
             ext = file_metadata["ext"]
@@ -29,18 +29,16 @@ def get_file_names_hydrus(client: Client, file_hashes: list[str]) -> list[str]:
             ext = ""
             
         # Try to get the file name
+        tag = ""
         try:
             tag_services = file_metadata["tags"]
-        except KeyError:
-            logging.warning(f"{err_msg} Hash: {file_metadata['hash']}")
-        else:
             tags = tag_services[all_known_tags]["storage_tags"]["0"]
             tag = find_tag_in_tags(target_tag_namespace="filename:", tags=tags)
             # Don't show extension if filename doesn't exist
             if tag != "":
                 tag = f"{tag}{ext}"
-            else:
-                logging.warning(f"{err_msg} Hash: {file_metadata['hash']}")
+        except:
+            logging.warning(f"{err_msg} Hash: {file_metadata['hash']}")
 
         result.append(tag)
 

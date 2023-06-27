@@ -93,7 +93,11 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
         error_connecting_exception_msg = "API Error"
         error_connecting_exception = exc
     except hydrus_api.ConnectionError as exc:
-        error_connecting_exception_msg = "Failed to connect to Hydrus. Is your Hydrus instance running?"
+        # Probably SSL error
+        if "SSL" in str(exc):
+            error_connecting_exception_msg = "Failed to connect to Hydrus. SSL certificate verification failed."
+        else:
+            error_connecting_exception_msg = "Failed to connect to Hydrus. Is your Hydrus instance running?"
         error_connecting_exception = exc
     else:
         error_connecting = False

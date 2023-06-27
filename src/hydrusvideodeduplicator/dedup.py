@@ -14,7 +14,7 @@ from rich import print as rprint
 from sqlitedict import SqliteDict
 
 from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
-from .dedup_util import find_tag_in_tags, get_file_names_hydrus, cleanup_defunct_processes
+from .dedup_util import find_tag_in_tags, get_file_names_hydrus, cleanup_defunct_processes, get_open_fds
 from .vpdq import VPDQSignal
 
 from .vpdq_util import (
@@ -74,11 +74,11 @@ class HydrusVideoDeduplicator():
 
     @classmethod
     # dir is where you're writing the video file
-    def _add_perceptual_hash_to_db(cls, video_hash: str, video: str | bytes, video_dir: Path | str, db) -> None:
-        with tempfile.NamedTemporaryFile(mode="w+b", dir=video_dir) as tmp_vid_file:
+    def _add_perceptual_hash_to_db(cls, video_hash: str, video: str | bytes, db) -> None:
+        with tempfile.NamedTemporaryFile(mode="w+b") as tmp_vid_file:
             # Write video to file to be able to calculate hash
             tmp_vid_file.write(video)
-            tmp_vid_file.seek(0)
+            tmp_vid_file.flush()
 
             ffprobe_cmd = [
                         'ffprobe',
@@ -107,7 +107,7 @@ class HydrusVideoDeduplicator():
 
                 try:
 
-                    with tempfile.NamedTemporaryFile(mode="w+b", dir=video_dir, suffix=".mp4") as tmp_vid_file_transcoded:
+                    with tempfile.NamedTemporaryFile(mode="w+b", suffix=".mp4") as tmp_vid_file_transcoded:
                         ffmpeg_cmd = [
                             'ffmpeg',
                             '-y',
@@ -128,8 +128,11 @@ class HydrusVideoDeduplicator():
                         perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file_transcoded.name)
 
                         rprint("[yellow] Fallback to transcode successful.")
-                except:
+                except Exception as exc:
                     rprint("[red] Transcode and/or hashing the transcode failed.")
+                    cls.hydlog.error(f"Error transcode video hash: {video_hash}")
+                    cls.hydlog.error(exc)
+                    return None
             else:
                 perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
 
@@ -162,38 +165,40 @@ class HydrusVideoDeduplicator():
             all_video_hashes = self.client.search_files(search_tags, file_sort_type=hydrus_api.FileSortType.FILE_SIZE, return_hashes=True, file_sort_asc=True, return_file_ids=False)["hashes"]
             print("Calculating perceptual hashes:")
             with tqdm(dynamic_ncols=True, total=len(all_video_hashes), unit="video", colour="BLUE") as pbar:
-                with tempfile.TemporaryDirectory() as tmp_dir_name:
-                    for chunk_video_hashes in hydrus_api.utils.yield_chunks(all_video_hashes, chunk_size=16):
-                        for video_hash in chunk_video_hashes:
-                            pbar.update(1)
-                            # Only calculate new hash if it's missing or if overwrite is true
-                            if not overwrite and video_hash in hashdb and hashdb[video_hash].get("perceptual_hash", None) is not None:
-                                continue
-                            
-                            try:
-                                video_response = self.client.get_file(hash_=video_hash)
-                                if video_response.content is None:
-                                    continue
-                            except hydrus_api.HydrusAPIException:
-                                rprint("[red] Error getting file from database.")
-                                continue
-
-                            try:
-                                self._add_perceptual_hash_to_db(video_hash=video_hash, video=video_response.content, video_dir=tmp_dir_name, db=hashdb)
-                            except KeyboardInterrupt:
-                                rprint("[red] Perceptual hash generation was interrupted!\n")
-                                hashdb.commit()
-                                return None
-                            except:
-                                rprint("[red] Failed to calculate a perceptual hash.")
-                                self.hydlog.error(f"Errored file hash: {video_hash}")
-                            
-                        # Commit at the end of a chunk
-                        hashdb.commit()
+                for chunk_video_hashes in hydrus_api.utils.yield_chunks(all_video_hashes, chunk_size=16):
+                    for video_hash in chunk_video_hashes:
+                        pbar.update(1)
+                        # Only calculate new hash if it's missing or if overwrite is true
+                        if not overwrite and video_hash in hashdb and hashdb[video_hash].get("perceptual_hash", None) is not None:
+                            continue
                         
-                        # Each call to vpdq causes a defunct process because they didn't clean up the FFmpeg command in C++
-                        # Otherwise, the program will fill with zombie processes
-                        cleanup_defunct_processes()
+                        try:
+                            video_response = self.client.get_file(hash_=video_hash)
+                            if video_response.content is None:
+                                continue
+                        except hydrus_api.HydrusAPIException:
+                            rprint("[red] Error getting file from database.")
+                            continue
+
+                        try:
+                            self._add_perceptual_hash_to_db(video_hash=video_hash,
+                                                            video=video_response.content,
+                                                            db=hashdb)
+                        except KeyboardInterrupt:
+                            rprint("[red] Perceptual hash generation was interrupted!\n")
+                            hashdb.commit()
+                            return None
+                        except Exception as exc:
+                            rprint("[red] Failed to calculate a perceptual hash.")
+                            self.hydlog.error(exc)
+                            self.hydlog.error(f"Errored file hash: {video_hash}")
+                            
+                    # Commit at the end of a chunk
+                    hashdb.commit()
+                        
+                    # Each call to vpdq causes a defunct process because they didn't clean up the FFmpeg command in C++
+                    # Otherwise, the program will fill with zombie processes
+                    cleanup_defunct_processes()
 
             # Commit at the end of all processing
             hashdb.commit()

@@ -157,7 +157,7 @@ class HydrusVideoDeduplicator():
             custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
             search_tags.extend(custom_query)
         
-        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename = "videos",autocommit=True) as hashdb:
+        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename = "videos") as hashdb:
             print(f"Retrieving video file hashes...")
             all_video_hashes = self.client.search_files(search_tags, file_sort_type=hydrus_api.FileSortType.FILE_SIZE, return_hashes=True, file_sort_asc=True, return_file_ids=False)["hashes"]
             print("Calculating perceptual hashes:")

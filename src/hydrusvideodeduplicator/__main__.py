@@ -6,7 +6,7 @@ import hydrusvideodeduplicator.hydrus_api as hydrus_api
 from rich import print as rprint
 
 from .__about__ import __version__
-from .config import HYDRUS_API_KEY, HYDRUS_API_URL
+from .config import HYDRUS_API_KEY, HYDRUS_API_URL, REQUESTS_CA_BUNDLE
 from .dedup import HydrusVideoDeduplicator
 
 from .vpdq_util import VPDQ_QUERY_MATCH_THRESHOLD_PERCENT
@@ -29,7 +29,8 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
         query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = None,
         threshold: Annotated[Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")] = VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
         skip_hashing: Annotated[Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")] = False,
-        verbose:  Annotated[Optional[bool], typer.Option(hidden=True)] = False,
+        verify_cert: Annotated[Optional[str], typer.Option(help="Path to TLS cert. This forces verification.")] = REQUESTS_CA_BUNDLE,
+        verbose:  Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
         debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
         ):
 
@@ -70,7 +71,9 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
     # Client connection
     # TODO: Try to connect with https first and then fallback to http with a strong warning
     _client = hydrus_api.Client(api_url=api_url,
-                                access_key=api_key)
+                                access_key=api_key,
+                                verify_cert=verify_cert,
+                                )
 
     error_connecting = True
     error_connecting_exception_msg = ""
@@ -90,7 +93,14 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
         error_connecting_exception_msg = "API Error"
         error_connecting_exception = exc
     except hydrus_api.ConnectionError as exc:
-        error_connecting_exception_msg = "Failed to connect to Hydrus. Is your Hydrus instance running?"
+        # Probably SSL error
+        if "SSL" in str(exc):
+            error_connecting_exception_msg = "Failed to connect to Hydrus. SSL certificate verification failed."
+        # Probably tried using http instead of https when client is https
+        elif "Connection aborted" in str(exc):
+            error_connecting_exception_msg = "Failed to connect to Hydrus. Does your Hydrus Client API http/https setting match your --api-url?"
+        else:
+            error_connecting_exception_msg = "Failed to connect to Hydrus. Is your Hydrus instance running?"
         error_connecting_exception = exc
     else:
         error_connecting = False

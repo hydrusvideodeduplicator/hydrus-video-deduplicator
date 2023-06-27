@@ -18,7 +18,7 @@ if in_wsl():
     from socket import gethostname
     _DEFAULT_IP = f"{gethostname()}.local"
 
-HYDRUS_API_URL=os.getenv("HYDRUS_API_URL", f"http://{_DEFAULT_IP}:{_DEFAULT_PORT}")
+HYDRUS_API_URL=os.getenv("HYDRUS_API_URL", f"https://{_DEFAULT_IP}:{_DEFAULT_PORT}")
 
 # Service name of where to store perceptual hash tag for video files
 HYDRUS_LOCAL_TAG_SERVICE_NAME=os.getenv("HYDRUS_LOCAL_TAG_SERVICE_NAME", "my tags")
@@ -30,3 +30,5 @@ DEDUP_DATABASE_DIR=Path(DEDUP_DATABASE_DIR)
 
 DEDUP_DATABASE_NAME=os.getenv("DEDUP_DATABASE_NAME", "videohashes")
 DEDUP_DATABASE_FILE=Path(DEDUP_DATABASE_DIR, f"{DEDUP_DATABASE_NAME}.sqlite")
+
+REQUESTS_CA_BUNDLE=os.getenv("REQUESTS_CA_BUNDLE")

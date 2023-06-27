@@ -27,7 +27,7 @@ dependencies = [
     "tqdm",
     "python-dotenv",
     "typer",
-    "vpdq",
+    "hvdvpdq",
     "sqlitedict",
     "requests",
 ]

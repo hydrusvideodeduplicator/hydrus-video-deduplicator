@@ -14,7 +14,7 @@ from rich import print as rprint
 from sqlitedict import SqliteDict
 
 from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
-from .dedup_util import find_tag_in_tags, get_file_names_hydrus, cleanup_defunct_processes, get_open_fds
+from .dedup_util import find_tag_in_tags, get_file_names_hydrus
 from .vpdq import VPDQSignal
 
 from .vpdq_util import (
@@ -195,10 +195,6 @@ class HydrusVideoDeduplicator():
                             
                     # Commit at the end of a chunk
                     hashdb.commit()
-                        
-                    # Each call to vpdq causes a defunct process because they didn't clean up the FFmpeg command in C++
-                    # Otherwise, the program will fill with zombie processes
-                    cleanup_defunct_processes()
 
             # Commit at the end of all processing
             hashdb.commit()

@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 import time
+import os
 
 from hydrusvideodeduplicator.hydrus_api import Client
  
@@ -110,3 +111,12 @@ def getDuration(then, now = datetime.now(), interval = "default"):
         'seconds': int(seconds()),
         'default': totalDuration()
     }[interval]        
+
+def cleanup_defunct_processes():
+    while True:
+        try:
+            pid, status = os.waitpid(-1, os.WNOHANG)
+            if pid == 0:  # No more defunct processes
+                break
+        except ChildProcessError:
+            break  # No more child processes

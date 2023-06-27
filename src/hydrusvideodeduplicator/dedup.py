@@ -14,7 +14,7 @@ from rich import print as rprint
 from sqlitedict import SqliteDict
 
 from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
-from .dedup_util import find_tag_in_tags, get_file_names_hydrus
+from .dedup_util import find_tag_in_tags, get_file_names_hydrus, cleanup_defunct_processes
 from .vpdq import VPDQSignal
 
 from .vpdq_util import (
@@ -71,7 +71,7 @@ class HydrusVideoDeduplicator():
 
         self._find_potential_duplicates()
         self.hydlog.info("Deduplication done.")
-    
+
     @classmethod
     # dir is where you're writing the video file
     def _add_perceptual_hash_to_db(cls, video_hash: str, video: str | bytes, video_dir: Path | str, db) -> None:
@@ -127,12 +127,13 @@ class HydrusVideoDeduplicator():
 
                         perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file_transcoded.name)
 
-                        print("[yellow] Fallback to transcode successful.")
+                        rprint("[yellow] Fallback to transcode successful.")
                 except:
-                    print("[red] Transcode and/or hashing the transcode failed.")
+                    rprint("[red] Transcode and/or hashing the transcode failed.")
             else:
                 perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
 
+            
             row = db.get(video_hash, {})
             row["perceptual_hash"] = perceptual_hash
             db[video_hash] = row
@@ -156,7 +157,7 @@ class HydrusVideoDeduplicator():
             custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
             search_tags.extend(custom_query)
         
-        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename = "videos") as hashdb:
+        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename = "videos",autocommit=True) as hashdb:
             print(f"Retrieving video file hashes...")
             all_video_hashes = self.client.search_files(search_tags, file_sort_type=hydrus_api.FileSortType.FILE_SIZE, return_hashes=True, file_sort_asc=True, return_file_ids=False)["hashes"]
             print("Calculating perceptual hashes:")
@@ -189,6 +190,10 @@ class HydrusVideoDeduplicator():
                             
                         # Commit at the end of a chunk
                         hashdb.commit()
+                        
+                        # Each call to vpdq causes a defunct process because they didn't clean up the FFmpeg command in C++
+                        # Otherwise, the program will fill with zombie processes
+                        cleanup_defunct_processes()
 
             # Commit at the end of all processing
             hashdb.commit()

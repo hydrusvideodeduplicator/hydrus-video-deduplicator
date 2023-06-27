@@ -29,6 +29,7 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
         query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = None,
         threshold: Annotated[Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")] = VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
         skip_hashing: Annotated[Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")] = False,
+        verify_cert: Annotated[Optional[bool], typer.Option(help="Require TLS cert to be verified for https")] = False,
         verbose:  Annotated[Optional[bool], typer.Option(hidden=True)] = False,
         debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
         ):
@@ -70,7 +71,9 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
     # Client connection
     # TODO: Try to connect with https first and then fallback to http with a strong warning
     _client = hydrus_api.Client(api_url=api_url,
-                                access_key=api_key)
+                                access_key=api_key,
+                                verify_cert=verify_cert,
+                                )
 
     error_connecting = True
     error_connecting_exception_msg = ""

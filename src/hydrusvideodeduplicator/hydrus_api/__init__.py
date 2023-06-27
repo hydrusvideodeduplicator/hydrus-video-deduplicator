@@ -282,8 +282,7 @@ class Client:
         access_key: T.Optional[str] = None,
         api_url: str = DEFAULT_API_URL,
         session: T.Optional[requests.Session] = None,
-        verify_cert: T.Optional[bool] = False,
-        cert: T.Optional[str | tuple] = None,
+        verify_cert: T.Optional[str] = None, # Path to cert
     ) -> None:
         """
         See https://hydrusnetwork.github.io/hydrus/client_api.html for documentation.
@@ -292,7 +291,6 @@ class Client:
         self.access_key = access_key
         self.api_url = api_url.rstrip("/")
         self._verify_cert = verify_cert
-        self._cert = cert
         self.session = session or requests.Session()
 
     def _api_request(self, method: str, path: str, **kwargs: T.Any) -> requests.Response:
@@ -307,13 +305,12 @@ class Client:
             # Since we aren't using the json keyword-argument, we have to set the Content-Type manually
             kwargs["headers"]["Content-Type"] = "application/json"
 
-        if self._verify_cert == False:
+        if self._verify_cert == None:
             kwargs["verify"] = False
             requests.packages.urllib3.disable_warnings() 
+        else:
+            kwargs["verify"] = self._verify_cert
         
-        if self._cert != None:
-            kwargs["cert"] = self._cert
-
         try:
             response = self.session.request(method, self.api_url + path, **kwargs)
         except requests.RequestException as error:

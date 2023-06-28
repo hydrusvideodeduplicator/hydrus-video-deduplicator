@@ -30,7 +30,7 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
         threshold: Annotated[Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")] = VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
         skip_hashing: Annotated[Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")] = False,
         verify_cert: Annotated[Optional[str], typer.Option(help="Path to TLS cert. This forces verification.")] = REQUESTS_CA_BUNDLE,
-        clear_search_cache: Annotated[Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared. Does not clear perceptual hashes.")] = False,
+        clear_search_cache: Annotated[Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared")] = False,
         verbose:  Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
         debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
         ):

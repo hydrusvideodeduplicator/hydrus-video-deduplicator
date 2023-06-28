@@ -230,6 +230,7 @@ class HydrusVideoDeduplicator():
             # TODO: Defer this API call to speed up processing
             self.client.set_file_relationships([new_relationship])
     
+    # Delete cache row in database
     @staticmethod
     def clear_search_cache():
         try:
@@ -281,10 +282,11 @@ class HydrusVideoDeduplicator():
                             row["farthest_search_index"] = len(hashdb)-1
                             hashdb[video1_hash] = row
 
+                            count_since_last_commit+=1
+
                             if count_since_last_commit >= commit_interval:
                                 hashdb.commit()
                                 count_since_last_commit = 0
-                            count_since_last_commit+=1
 
             except KeyboardInterrupt:
                 pass

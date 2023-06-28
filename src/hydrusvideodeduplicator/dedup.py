@@ -6,14 +6,15 @@ from itertools import islice
 import json
 from pathlib import Path
 import subprocess
+from pathlib import Path
+
+from tqdm import tqdm
+from rich import print as rprint
+from sqlitedict import SqliteDict
 from joblib import Parallel, delayed
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
-from tqdm import tqdm
-from rich import print as rprint
-from sqlitedict import SqliteDict
-
 from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
 from .dedup_util import database_accessible, find_tag_in_tags, get_file_names_hydrus, ThreadSafeCounter
 from .vpdq import VPDQSignal
@@ -73,9 +74,8 @@ class HydrusVideoDeduplicator():
         self._find_potential_duplicates()
         self.hydlog.info("Deduplication done.")
 
-    @classmethod
-    # dir is where you're writing the video file
-    def _add_perceptual_hash_to_db(cls, video_hash: str, video: str | bytes, db) -> None:
+    @staticmethod
+    def _calculate_perceptual_hash(video: str | bytes) -> str:
         with tempfile.NamedTemporaryFile(mode="w+b") as tmp_vid_file:
             # Write video to file to be able to calculate hash
             tmp_vid_file.write(video)
@@ -129,78 +129,77 @@ class HydrusVideoDeduplicator():
                         perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file_transcoded.name)
 
                         rprint("[yellow] Fallback to transcode successful.")
+                # TODO: Change this exception to custom exception (?)
                 except Exception as exc:
                     rprint("[red] Transcode and/or hashing the transcode failed.")
-                    cls.hydlog.error(f"Error transcode video hash: {video_hash}")
-                    cls.hydlog.error(exc)
-                    return None
+                    logging.error(exc)
+                    raise Exception
             else:
                 perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
 
-            
-            row = db.get(video_hash, {})
-            row["perceptual_hash"] = perceptual_hash
-            db[video_hash] = row
-            cls.hydlog.debug(f"Perceptual hash calculated and added to DB.")
-    
-    # Add perceptual hash for videos to the database
+            return perceptual_hash
+
+    def _retrieve_video_hashes(self, client, search_tags) -> list:
+        all_video_hashes = client.search_files(
+            search_tags,
+            file_sort_type=hydrus_api.FileSortType.FILE_SIZE,
+            return_hashes=True,
+            file_sort_asc=True,
+            return_file_ids=False
+            )["hashes"]
+        return all_video_hashes
+
     def _add_perceptual_hashes_to_db(self, overwrite: bool, custom_query: list | None = None) -> None:
-
-        # Create database folder if it doesn't already exist
-        if os.path.exists(DEDUP_DATABASE_FILE):
-            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename = "videos") as hashdb:
-                rprint(f"[green] Database found with {len(hashdb)} videos already hashed.")
-                self.hydlog.info(f"Found existing DB of length {len(hashdb)}, size {os.path.getsize(DEDUP_DATABASE_FILE)}")
-        else:
-            rprint(f"[yellow] Database not found. Creating one at {DEDUP_DATABASE_FILE}")
-            os.makedirs(DEDUP_DATABASE_DIR, exist_ok=True)
-            self.hydlog.info(f"Created DB dir {DEDUP_DATABASE_DIR}")
-
         search_tags = ["system:filetype=video"]
         if custom_query is not None:
-            custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
+            custom_query = [x for x in custom_query if x.strip()]  # Remove whitespace and empty strings
             search_tags.extend(custom_query)
-        
-        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename = "videos") as hashdb:
-            print(f"Retrieving video file hashes...")
-            all_video_hashes = self.client.search_files(search_tags, file_sort_type=hydrus_api.FileSortType.FILE_SIZE, return_hashes=True, file_sort_asc=True, return_file_ids=False)["hashes"]
-            print("Calculating perceptual hashes:")
-            with tqdm(dynamic_ncols=True, total=len(all_video_hashes), unit="video", colour="BLUE") as pbar:
-                for chunk_video_hashes in hydrus_api.utils.yield_chunks(all_video_hashes, chunk_size=16):
-                    for video_hash in chunk_video_hashes:
+
+        DEDUP_DATABASE_DIR.mkdir(parents=True, exist_ok=True)
+        self.hydlog.info(f"Created DB dir {DEDUP_DATABASE_DIR}")
+
+        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos") as hashdb:
+            if len(hashdb) > 0:
+                rprint(f"[blue] Database found with {len(hashdb)} videos already hashed.")
+                self.hydlog.info(f"Database found of length {len(hashdb)}, size {os.path.getsize(DEDUP_DATABASE_FILE)} bytes")
+            else:
+                self.hydlog.info(f"Database not found. Creating one at {DEDUP_DATABASE_FILE}")
+
+            try:
+                with tqdm(dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
+                    for video_hash in self._retrieve_video_hashes(self.client, search_tags):
                         pbar.update(1)
                         # Only calculate new hash if it's missing or if overwrite is true
-                        if not overwrite and video_hash in hashdb and hashdb[video_hash].get("perceptual_hash", None) is not None:
+                        if not overwrite and video_hash in hashdb and "perceptual_hash" in hashdb[video_hash]:
                             continue
-                        
+
+                        # Get video file from Hydrus
                         try:
                             video_response = self.client.get_file(hash_=video_hash)
-                            if video_response.content is None:
-                                continue
                         except hydrus_api.HydrusAPIException:
-                            rprint("[red] Error getting file from database.")
+                            self.hydlog.error("Error getting video from Hydrus.")
                             continue
 
+                        # Calculate perceptual_hash
                         try:
-                            self._add_perceptual_hash_to_db(video_hash=video_hash,
-                                                            video=video_response.content,
-                                                            db=hashdb)
-                        except KeyboardInterrupt:
-                            rprint("[red] Perceptual hash generation was interrupted!\n")
-                            hashdb.commit()
-                            return None
+                            perceptual_hash = self._calculate_perceptual_hash(video_response.content)
                         except Exception as exc:
-                            rprint("[red] Failed to calculate a perceptual hash.")
-                            self.hydlog.error(exc)
+                            self.hydlog.error("Failed to calculate a perceptual hash.")
+                            self.hydlog.exception(exc)
                             self.hydlog.error(f"Errored file hash: {video_hash}")
-                            
-                    # Commit at the end of a chunk
-                    hashdb.commit()
+                            continue
 
-            # Commit at the end of all processing
+                        # Write perceptual hash to db
+                        row = hashdb.get(video_hash, {})
+                        row["perceptual_hash"] = perceptual_hash
+                        hashdb[video_hash] = row
+                        self.hydlog.debug(f"Perceptual hash calculated and added to DB.")
+            except KeyboardInterrupt:
+                self.hydlog.error("Perceptual hash generation was interrupted!")
+
             hashdb.commit()
-            
-        rprint("[green] Finished perceptual hash processing.\n")
+
+        self.hydlog.info("[green] Finished perceptual hash processing.\n")
     
     def get_potential_duplicate_count_hydrus(self) -> int:
         return self.client.get_potentials_count(file_service_keys=[self.all_services["all_local_files"][0]["service_key"]])["potential_duplicates_count"]

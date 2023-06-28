@@ -20,7 +20,7 @@ Once all perceptual hashes for all the videos in your database are computed, the
 
 The accuracy is extremely good because of [vpdq](https://github.com/facebook/ThreatExchange/tree/main/vpdq). You can adjust the threshold of similarity using `--threshold`. The default is 75%.
 
-For more information check out the [FAQ](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/wiki/faq)
+For more information check out the [wiki](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/wiki) and the [FAQ](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/wiki/faq)
 
 ---
 

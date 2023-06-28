@@ -15,7 +15,7 @@ from rich import print as rprint
 from sqlitedict import SqliteDict
 
 from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
-from .dedup_util import find_tag_in_tags, get_file_names_hydrus, ThreadSafeCounter
+from .dedup_util import database_accessible, find_tag_in_tags, get_file_names_hydrus, ThreadSafeCounter
 from .vpdq import VPDQSignal
 
 from .vpdq_util import (
@@ -26,7 +26,6 @@ class HydrusVideoDeduplicator():
     hydlog = logging.getLogger("hydlog")
     threshold: float = 0.8
     _DEBUG = False
-    similar_files_found_count = ThreadSafeCounter()
 
     REQUIRED_PERMISSIONS = (
         hydrus_api.Permission.IMPORT_URLS,
@@ -214,7 +213,7 @@ class HydrusVideoDeduplicator():
 
     def compare_videos(self, video1_hash, video2_hash, video1_phash, video2_phash):
         similar = HydrusVideoDeduplicator.is_similar(video1_phash, video2_phash, self.threshold)
-        
+
         if similar:
             if self._DEBUG:
                 #file_names = get_file_names_hydrus(self.client, [video_hash, video2_hash])
@@ -230,53 +229,72 @@ class HydrusVideoDeduplicator():
         
             # TODO: Defer this API call to speed up processing
             self.client.set_file_relationships([new_relationship])
-            self.similar_files_found_count.increment()
+    
+    @staticmethod
+    def clear_search_cache():
+        try:
+            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+                for key in hashdb:
+                    row = hashdb[key]
+                    if "farthest_search_index" in row:
+                        del row["farthest_search_index"]
+                    hashdb[key] = row
+                hashdb.commit()
+        except OSError:
+            rprint(f"[red] Database does not exist. Cannot clear search cache.")
 
     # Sliding window duplicate comparisons
     # Alternatively, I could scan duplicates while adding and never do it again. I should do that instead.
     # Or, since dictionaries are ordered, store the index per hash where it ended its last search. If it's not the end, keep going until the end.
+    # TODO: Add support for query where it will get a list of the hashes from
+    # the query and iterate over them instead of the entire hashdb
     def _find_potential_duplicates(self): 
-        # Check if table and DB exists before iterating over it since it's in read mode not the "c" r/w create mode
-        try:
-            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="r") as hashdb:
-                pass
-        except OSError:
-            rprint(f"[red] Database does not exist. Cannot search for duplicates.")
-            return None
-        except RuntimeError: # SqliteDict error when trying to create a table for a DB in read-only mode
-            rprint(f"[red] Database does not exist. Cannot search for duplicates.")
-            return None
 
-        # TODO: Add support for query where it will get a list of the hashes from
-        # the query and iterate over them instead of the entire hashdb
-
-        # TODO: This can be multiprocessed
+        if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
+            rprint(f"[red] Could not search for duplicates.")
+            return None
 
         # Number of potential duplicates before adding more. Just for user info.
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
-
         
-        try:
-            video_counter = 0
-            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="r") as hashdb:
+        count_since_last_commit = 0
+        commit_interval = 8
+            
+        video_counter = 0
+        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+            try:
                 with tqdm(dynamic_ncols=True, total=len(hashdb), desc="Finding duplicates", unit="video", colour="BLUE") as pbar:
+                    # -1 is all cores, -2 is all cores but one
                     with Parallel(n_jobs=-2) as parallel:
                         for i, video1_hash in enumerate(hashdb):
                             pbar.update(1)
                             video_counter+=1
-                            parallel(delayed(self.compare_videos)(video1_hash, video2_hash, hashdb[video1_hash]["perceptual_hash"], hashdb[video2_hash]["perceptual_hash"]) for video2_hash in islice(hashdb, i+1, None))
-        except KeyboardInterrupt:
-            pass
+
+                            # Store last furthest searched position in the database for each element
+                            # This way you only have to start searching at that place instead of at i+1 if it exists
+                            row = hashdb[video1_hash]
+                            row.setdefault("farthest_search_index", i+1)
+
+                            parallel(delayed(self.compare_videos)(video1_hash, video2_hash, hashdb[video1_hash]["perceptual_hash"], hashdb[video2_hash]["perceptual_hash"]) for video2_hash in islice(hashdb, row["farthest_search_index"], None))
+
+                            # Update furthest search position to the current length of the table
+                            row["farthest_search_index"] = len(hashdb)-1
+                            hashdb[video1_hash] = row
+
+                            if count_since_last_commit >= commit_interval:
+                                hashdb.commit()
+                                count_since_last_commit = 0
+                            count_since_last_commit+=1
+
+            except KeyboardInterrupt:
+                pass
+            finally:
+                hashdb.commit()
 
         # Statistics for user
-        # if user does duplicates processing while the script is running this count will be wrong.
-        if self.similar_files_found_count.value() > 0:
-            rprint(f"[blue] {self.similar_files_found_count.value()}/{video_counter} similar videos found")
-            post_dedupe_count = self.get_potential_duplicate_count_hydrus()
-            new_dedupes_count = post_dedupe_count-pre_dedupe_count
-            if new_dedupes_count > 0:
-                rprint(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
-            else:
-                rprint("[green] No new potential duplicates")
+        post_dedupe_count = self.get_potential_duplicate_count_hydrus()
+        new_dedupes_count = post_dedupe_count-pre_dedupe_count
+        if new_dedupes_count > 0:
+            rprint(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
         else:
-            rprint(f"[yellow] No potential duplicates found out of {video_counter} videos")
+            rprint("[green] No new potential duplicates found.")

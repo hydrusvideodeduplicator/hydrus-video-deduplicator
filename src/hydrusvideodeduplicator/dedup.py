@@ -227,7 +227,6 @@ class HydrusVideoDeduplicator():
                 "do_default_content_merge": True,
             }
         
-            # TODO: Defer this API call to speed up processing
             self.client.set_file_relationships([new_relationship])
     
     # Delete cache row in database

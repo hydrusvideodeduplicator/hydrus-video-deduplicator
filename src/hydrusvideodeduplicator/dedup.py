@@ -26,6 +26,7 @@ class HydrusVideoDeduplicator():
     hydlog = logging.getLogger("hydlog")
     threshold: float = 0.8
     _DEBUG = False
+    similar_files_found_count = ThreadSafeCounter()
 
     REQUIRED_PERMISSIONS = (
         hydrus_api.Permission.IMPORT_URLS,
@@ -229,6 +230,7 @@ class HydrusVideoDeduplicator():
         
             # TODO: Defer this API call to speed up processing
             self.client.set_file_relationships([new_relationship])
+            self.similar_files_found_count.increment()
 
     # Sliding window duplicate comparisons
     # Alternatively, I could scan duplicates while adding and never do it again. I should do that instead.
@@ -253,7 +255,6 @@ class HydrusVideoDeduplicator():
         # Number of potential duplicates before adding more. Just for user info.
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
 
-        similar_files_found_count = ThreadSafeCounter()
         
         try:
             video_counter = 0
@@ -269,8 +270,8 @@ class HydrusVideoDeduplicator():
 
         # Statistics for user
         # if user does duplicates processing while the script is running this count will be wrong.
-        if similar_files_found_count.value() > 0:
-            rprint(f"[blue] {similar_files_found_count.value()}/{video_counter} similar videos found")
+        if self.similar_files_found_count.value() > 0:
+            rprint(f"[blue] {self.similar_files_found_count.value()}/{video_counter} similar videos found")
             post_dedupe_count = self.get_potential_duplicate_count_hydrus()
             new_dedupes_count = post_dedupe_count-pre_dedupe_count
             if new_dedupes_count > 0:

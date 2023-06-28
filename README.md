@@ -1,8 +1,7 @@
 <div align="center">
   
  # Hydrus Video Deduplicator
-  <img src="https://github.com/appleappleapplenanner/hydrus-video-deduplicator/assets/104981058/968603d3-5a11-4a05-bbb4-7b91b71fb61d">
-
+  <img src="https://github.com/appleappleapplenanner/hydrus-video-deduplicator/assets/104981058/e65383e8-1978-46aa-88b6-6fdda9767367">
   
 Hydrus Video Deduplicator detects similar video files and marks them as potential duplicates through the Hydrus API
 

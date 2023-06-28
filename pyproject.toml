@@ -30,6 +30,8 @@ dependencies = [
     "hvdvpdq",
     "sqlitedict",
     "requests",
+    "psutil",
+    "joblib",
 ]
 
 [project.urls]

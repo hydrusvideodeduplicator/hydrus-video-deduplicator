@@ -6,6 +6,7 @@ from itertools import islice
 import json
 from pathlib import Path
 import subprocess
+from joblib import Parallel, delayed
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
@@ -14,7 +15,7 @@ from rich import print as rprint
 from sqlitedict import SqliteDict
 
 from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
-from .dedup_util import find_tag_in_tags, get_file_names_hydrus
+from .dedup_util import database_accessible, find_tag_in_tags, get_file_names_hydrus, ThreadSafeCounter
 from .vpdq import VPDQSignal
 
 from .vpdq_util import (
@@ -208,71 +209,97 @@ class HydrusVideoDeduplicator():
     @staticmethod
     def is_similar(a: str, b: str, min_percent_similarity: float = 0.8) -> bool:
         return VPDQSignal.compare_hash(a, b, min_percent_similarity, min_percent_similarity)
+    
+
+    def compare_videos(self, video1_hash, video2_hash, video1_phash, video2_phash):
+        similar = HydrusVideoDeduplicator.is_similar(video1_phash, video2_phash, self.threshold)
+
+        if similar:
+            if self._DEBUG:
+                #file_names = get_file_names_hydrus(self.client, [video_hash, video2_hash])
+                #self.hydlog.info(f"Duplicates filenames: {file_names}")
+                self.hydlog.info(f"\"Duplicates hashes: {video1_hash}\" and \"{video2_hash}\"")
+            
+            new_relationship = {
+                "hash_a": str(video1_hash),
+                "hash_b": str(video2_hash),
+                "relationship": int(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES),
+                "do_default_content_merge": True,
+            }
+        
+            self.client.set_file_relationships([new_relationship])
+    
+    # Delete cache row in database
+    @staticmethod
+    def clear_search_cache():
+        try:
+            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+                for key in hashdb:
+                    row = hashdb[key]
+                    if "farthest_search_index" in row:
+                        del row["farthest_search_index"]
+                    hashdb[key] = row
+                hashdb.commit()
+        except OSError:
+            rprint(f"[red] Database does not exist. Cannot clear search cache.")
 
     # Sliding window duplicate comparisons
     # Alternatively, I could scan duplicates while adding and never do it again. I should do that instead.
     # Or, since dictionaries are ordered, store the index per hash where it ended its last search. If it's not the end, keep going until the end.
+    # TODO: Add support for query where it will get a list of the hashes from
+    # the query and iterate over them instead of the entire hashdb
     def _find_potential_duplicates(self): 
-        # Check if table and DB exists before iterating over it since it's in read mode not the "c" r/w create mode
-        try:
-            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="r") as hashdb:
-                pass
-        except OSError:
-            rprint(f"[red] Database does not exist. Cannot search for duplicates.")
-            return None
-        except RuntimeError: # SqliteDict error when trying to create a table for a DB in read-only mode
-            rprint(f"[red] Database does not exist. Cannot search for duplicates.")
-            return None
 
-        # TODO: Add support for query where it will get a list of the hashes from
-        # the query and iterate over them instead of the entire hashdb
-
-        # TODO: This can be multiprocessed
+        if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
+            rprint(f"[red] Could not search for duplicates.")
+            return None
 
         # Number of potential duplicates before adding more. Just for user info.
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
-
-        similar_files_found_count = 0
         
+        count_since_last_commit = 0
+        commit_interval = 8
+            
         video_counter = 0
-        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="r") as hashdb:
-            with tqdm(dynamic_ncols=True, total=len(hashdb), desc="Finding duplicates", unit="video", colour="BLUE") as pbar:
-                for i, video_hash in enumerate(hashdb):
-                    pbar.update(1)
-                    video_counter+=1
-                    video_phash = hashdb[video_hash]["perceptual_hash"]
-                    # TODO: Are sqlite databases ordered?
-                    for video2_hash in islice(hashdb, i+1, None):
-                        video2_phash = hashdb[video2_hash]["perceptual_hash"]
-                        
-                        similar = HydrusVideoDeduplicator.is_similar(video_phash, video2_phash, self.threshold)
-                        
-                        if similar:
-                            similar_files_found_count += 1
-                            if self._DEBUG:
-                                #file_names = get_file_names_hydrus(self.client, [video_hash, video2_hash])
-                                #self.hydlog.info(f"Duplicates filenames: {file_names}")
-                                self.hydlog.info(f"\"Duplicates hashes: {video_hash}\" and \"{video2_hash}\"")
-                            
-                            new_relationship = {
-                                "hash_a": str(video_hash),
-                                "hash_b": str(video2_hash),
-                                "relationship": int(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES),
-                                "do_default_content_merge": True,
-                            }
-                        
-                            # TODO: Defer this API call to speed up processing
-                            self.client.set_file_relationships([new_relationship])
+        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+            try:
+                with tqdm(dynamic_ncols=True, total=len(hashdb), desc="Finding duplicates", unit="video", colour="BLUE") as pbar:
+                    # -1 is all cores, -2 is all cores but one
+                    with Parallel(n_jobs=-2) as parallel:
+                        for i, video1_hash in enumerate(hashdb):
+                            pbar.update(1)
+                            video_counter+=1
+
+                            # Store last furthest searched position in the database for each element
+                            # This way you only have to start searching at that place instead of at i+1 if it exists
+                            row = hashdb[video1_hash]
+                            row.setdefault("farthest_search_index", i+1)
+
+                            # This is not necessary but may increase speed by avoiding any of the code below
+                            if row["farthest_search_index"] >= len(hashdb)-1:
+                                continue
+
+                            parallel(delayed(self.compare_videos)(video1_hash, video2_hash, hashdb[video1_hash]["perceptual_hash"], hashdb[video2_hash]["perceptual_hash"]) for video2_hash in islice(hashdb, row["farthest_search_index"], None))
+
+                            # Update furthest search position to the current length of the table
+                            row["farthest_search_index"] = len(hashdb)-1
+                            hashdb[video1_hash] = row
+
+                            count_since_last_commit+=1
+
+                            if count_since_last_commit >= commit_interval:
+                                hashdb.commit()
+                                count_since_last_commit = 0
+
+            except KeyboardInterrupt:
+                pass
+            finally:
+                hashdb.commit()
 
         # Statistics for user
-        # if user does duplicates processing while the script is running this count will be wrong.
-        if similar_files_found_count > 0:
-            rprint(f"[blue] {similar_files_found_count}/{video_counter} similar videos found")
-            post_dedupe_count = self.get_potential_duplicate_count_hydrus()
-            new_dedupes_count = post_dedupe_count-pre_dedupe_count
-            if new_dedupes_count > 0:
-                rprint(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
-            else:
-                rprint("[green] No new potential duplicates")
+        post_dedupe_count = self.get_potential_duplicate_count_hydrus()
+        new_dedupes_count = post_dedupe_count-pre_dedupe_count
+        if new_dedupes_count > 0:
+            rprint(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
         else:
-            rprint(f"[yellow] No potential duplicates found out of {video_counter} videos")
+            rprint("[green] No new potential duplicates found.")

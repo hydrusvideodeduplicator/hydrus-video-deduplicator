@@ -3,6 +3,9 @@ from datetime import datetime
 import time
 import os
 import contextlib
+from pathlib import Path
+from sqlitedict import SqliteDict
+from rich import print as rprint
 
 from hydrusvideodeduplicator.hydrus_api import Client
  
@@ -112,3 +115,38 @@ def getDuration(then, now = datetime.now(), interval = "default"):
         'seconds': int(seconds()),
         'default': totalDuration()
     }[interval]        
+
+from threading import Thread
+from threading import Lock
+ 
+# thread safe counter class
+class ThreadSafeCounter():
+    # constructor
+    def __init__(self):
+        # initialize counter
+        self._counter = 0
+        # initialize lock
+        self._lock = Lock()
+ 
+    # increment the counter
+    def increment(self):
+        with self._lock:
+            self._counter += 1
+ 
+    # get the counter value
+    def value(self):
+        with self._lock:
+            return self._counter
+
+def database_accessible(db_file: Path | str, tablename: str):
+    try:
+        with SqliteDict(str(db_file), tablename=tablename, flag="r"):
+            return True
+    except OSError:
+        rprint(f"[red] Database does not exist. Cannot search for duplicates.")
+    except RuntimeError: # SqliteDict error when trying to create a table for a DB in read-only mode
+        rprint(f"[red] Database does not exist. Cannot search for duplicates.")
+    except Exception as exc:
+        rprint(f"[red] Could not access database.")
+        logging.error(str(exc))
+    return False

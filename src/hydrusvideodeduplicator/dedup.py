@@ -275,6 +275,10 @@ class HydrusVideoDeduplicator():
                             row = hashdb[video1_hash]
                             row.setdefault("farthest_search_index", i+1)
 
+                            # This is not necessary but may increase speed by avoiding any of the code below
+                            if row["farthest_search_index"] >= len(hashdb)-1:
+                                continue
+
                             parallel(delayed(self.compare_videos)(video1_hash, video2_hash, hashdb[video1_hash]["perceptual_hash"], hashdb[video2_hash]["perceptual_hash"]) for video2_hash in islice(hashdb, row["farthest_search_index"], None))
 
                             # Update furthest search position to the current length of the table

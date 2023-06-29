@@ -59,7 +59,7 @@ class HydrusVideoDeduplicator():
     # This is the master function of the class
     def deduplicate(self, overwrite: bool = False, custom_query: list | None = None, skip_hashing: bool | None = False):
         # Add perceptual hashes to videos
-        search_tags = ["system:filetype=video"]
+        search_tags = ["system:has duration", "-system:filetype audio"]
         if custom_query is not None:
             custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
             if len(custom_query) > 0:
@@ -67,7 +67,7 @@ class HydrusVideoDeduplicator():
                 rprint(f"[yellow] Custom Query: {custom_query}")
 
         if not skip_hashing:
-            self._add_perceptual_hashes_to_db(overwrite=overwrite, custom_query=custom_query)
+            self._add_perceptual_hashes_to_db(search_tags=search_tags, overwrite=overwrite)
         else:
             rprint("[yellow] Skipping perceptual hashing")
 
@@ -134,7 +134,7 @@ class HydrusVideoDeduplicator():
 
             return perceptual_hash
 
-    def _retrieve_video_hashes(self, client, search_tags) -> list:
+    def _retrieve_video_hashes(self, client: hydrus_api.Client, search_tags) -> list:
         all_video_hashes = client.search_files(
             search_tags,
             file_sort_type=hydrus_api.FileSortType.FILE_SIZE,
@@ -144,13 +144,7 @@ class HydrusVideoDeduplicator():
             )["hashes"]
         return all_video_hashes
 
-    def _add_perceptual_hashes_to_db(self, overwrite: bool, custom_query: list | None = None) -> None:
-
-        # Add tags to query
-        search_tags = ["system:filetype=video"]
-        if custom_query is not None:
-            custom_query = [x for x in custom_query if x.strip()]  # Remove whitespace and empty strings
-            search_tags.extend(custom_query)
+    def _add_perceptual_hashes_to_db(self, overwrite: bool, search_tags: list | None = None) -> None:
 
         # Create database folder
         try:

@@ -255,7 +255,7 @@ class HydrusVideoDeduplicator():
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
         
         count_since_last_commit = 0
-        commit_interval = 8
+        commit_interval = 32
             
         # BUG: If this process is interrupted, the farthest_search_index will not save for ANY entries.
         #      I think it might be because every entry in the column needs an entry for SQlite but I'm not sure.

@@ -60,12 +60,10 @@ class VPDQSignal:
         return vpdq_to_json(hash_file_compact(str(path), seconds_per_hash))
 
     @classmethod
-    def compare_hash(
+    def get_similarity(
         cls,
         hash1: str,
         hash2: str,
-        query_match_pct_thresh: float = VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
-        compare_match_pct_thresh: float = VPDQ_INDEX_MATCH_THRESHOLD_PERCENT,
         ):
             vpdq_hash1 = json_to_vpdq(hash1)
             vpdq_hash2 = json_to_vpdq(hash2)
@@ -76,7 +74,5 @@ class VPDQSignal:
                 VPDQ_DISTANCE_THRESHOLD,
             )
 
-            #if match_percent.compared_match_percent > 0:
-            #     print(match_percent.compared_match_percent, match_percent.query_match_percent)
-        
-            return match_percent.query_match_percent >= query_match_pct_thresh and match_percent.compared_match_percent >= compare_match_pct_thresh
+            assert match_percent.query_match_percent >= 0 and match_percent.compared_match_percent >= 0
+            return match_percent.query_match_percent, match_percent.compared_match_percent

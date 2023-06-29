@@ -204,12 +204,17 @@ class HydrusVideoDeduplicator():
     
     def get_potential_duplicate_count_hydrus(self) -> int:
         return self.client.get_potentials_count(file_service_keys=[self.all_services["all_local_files"][0]["service_key"]])["potential_duplicates_count"]
-    
-    # Return similarity of two bitstrings given a threshold
+
+    # Return similarity of two perceptual hashes given a threshold
     @staticmethod
     def is_similar(video1_phash: str, video2_phash: str, min_percent_similarity: float = 0.8) -> bool:
-        return VPDQSignal.compare_hash(video1_phash, video2_phash, min_percent_similarity, min_percent_similarity)
-    
+        # They videos are compared and check if video1 is in video2 and also if video2 is in video1.
+        # If either is true, then they're similar. It doesn't make sense currently to have one similar to the other and not vice-versa.
+        query_match_percent, compare_match_percent = VPDQSignal.get_similarity(video1_phash, video2_phash)
+        if query_match_percent > 0 or compare_match_percent > 0:
+            # Note: This doesn't log for some reason unless it's set to some level like error.
+            logging.info(f"Similarity above 0: Query {query_match_percent}, Compared {compare_match_percent}")
+        return query_match_percent >= min_percent_similarity or compare_match_percent >= min_percent_similarity
 
     def compare_videos(self, video1_hash, video2_hash, video1_phash, video2_phash):
         similar = HydrusVideoDeduplicator.is_similar(video1_phash, video2_phash, self.threshold)

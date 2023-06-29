@@ -1,12 +1,9 @@
 import os
-from io import IOBase
 import logging
 import tempfile
 from itertools import islice
-import json
 from pathlib import Path
 import subprocess
-from pathlib import Path
 
 from tqdm import tqdm
 from rich import print as rprint
@@ -19,25 +16,10 @@ from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
 from .dedup_util import database_accessible, find_tag_in_tags, get_file_names_hydrus, ThreadSafeCounter
 from .vpdq import VPDQSignal
 
-from .vpdq_util import (
-    VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
-)
-
 class HydrusVideoDeduplicator():
     hydlog = logging.getLogger("hydlog")
     threshold: float = 0.8
     _DEBUG = False
-
-    REQUIRED_PERMISSIONS = (
-        hydrus_api.Permission.IMPORT_URLS,
-        hydrus_api.Permission.IMPORT_FILES,
-        hydrus_api.Permission.ADD_TAGS,
-        hydrus_api.Permission.SEARCH_FILES,
-        hydrus_api.Permission.MANAGE_PAGES,
-        hydrus_api.Permission.MANAGE_DATABASE,
-        hydrus_api.Permission.ADD_NOTES,
-        hydrus_api.Permission.MANAGE_FILE_RELATIONSHIPS,
-    )
 
     def __init__(self, client: hydrus_api.Client,
                  verify_connection: bool = True):

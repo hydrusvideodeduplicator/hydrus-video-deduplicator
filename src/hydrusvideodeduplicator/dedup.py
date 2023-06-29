@@ -268,10 +268,7 @@ class HydrusVideoDeduplicator():
             rprint(f"[red] Database does not exist. Cannot clear search cache.")
 
     # Sliding window duplicate comparisons
-    # Alternatively, I could scan duplicates while adding and never do it again. I should do that instead.
-    # Or, since dictionaries are ordered, store the index per hash where it ended its last search. If it's not the end, keep going until the end.
-    # TODO: Add support for query where it will get a list of the hashes from
-    # the query and iterate over them instead of the entire hashdb
+    # Alternatively, I could scan duplicates when added and never do it again which would be one of the best ways without a VP tree
     def _find_potential_duplicates(self) -> None: 
 
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
@@ -284,6 +281,8 @@ class HydrusVideoDeduplicator():
         count_since_last_commit = 0
         commit_interval = 8
             
+        # BUG: If this process is interrupted, the farthest_search_index will not save for ANY entries.
+        #      I think it might be because every entry in the column needs an entry for SQlite but I'm not sure.
         video_counter = 0
         with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
             try:

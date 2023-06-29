@@ -1,42 +1,25 @@
 import os
-from io import IOBase
 import logging
 import tempfile
 from itertools import islice
-import json
 from pathlib import Path
 import subprocess
+
+from tqdm import tqdm
+from rich import print as rprint
+from sqlitedict import SqliteDict
 from joblib import Parallel, delayed
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
-from tqdm import tqdm
-from rich import print as rprint
-from sqlitedict import SqliteDict
-
 from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
 from .dedup_util import database_accessible, find_tag_in_tags, get_file_names_hydrus, ThreadSafeCounter
 from .vpdq import VPDQSignal
-
-from .vpdq_util import (
-    VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
-)
 
 class HydrusVideoDeduplicator():
     hydlog = logging.getLogger("hydlog")
     threshold: float = 0.8
     _DEBUG = False
-
-    REQUIRED_PERMISSIONS = (
-        hydrus_api.Permission.IMPORT_URLS,
-        hydrus_api.Permission.IMPORT_FILES,
-        hydrus_api.Permission.ADD_TAGS,
-        hydrus_api.Permission.SEARCH_FILES,
-        hydrus_api.Permission.MANAGE_PAGES,
-        hydrus_api.Permission.MANAGE_DATABASE,
-        hydrus_api.Permission.ADD_NOTES,
-        hydrus_api.Permission.MANAGE_FILE_RELATIONSHIPS,
-    )
 
     def __init__(self, client: hydrus_api.Client,
                  verify_connection: bool = True):
@@ -58,7 +41,7 @@ class HydrusVideoDeduplicator():
     # This is the master function of the class
     def deduplicate(self, overwrite: bool = False, custom_query: list | None = None, skip_hashing: bool | None = False):
         # Add perceptual hashes to videos
-        search_tags = ["system:filetype=video"]
+        search_tags = ["system:has duration", "-system:filetype audio"]
         if custom_query is not None:
             custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
             if len(custom_query) > 0:
@@ -66,21 +49,21 @@ class HydrusVideoDeduplicator():
                 rprint(f"[yellow] Custom Query: {custom_query}")
 
         if not skip_hashing:
-            self._add_perceptual_hashes_to_db(overwrite=overwrite, custom_query=custom_query)
+            self._add_perceptual_hashes_to_db(search_tags=search_tags, overwrite=overwrite)
         else:
             rprint("[yellow] Skipping perceptual hashing")
 
         self._find_potential_duplicates()
         self.hydlog.info("Deduplication done.")
 
-    @classmethod
-    # dir is where you're writing the video file
-    def _add_perceptual_hash_to_db(cls, video_hash: str, video: str | bytes, db) -> None:
+    @staticmethod
+    def _calculate_perceptual_hash(video: str | bytes) -> str:
         with tempfile.NamedTemporaryFile(mode="w+b") as tmp_vid_file:
             # Write video to file to be able to calculate hash
             tmp_vid_file.write(video)
             tmp_vid_file.flush()
 
+            # ffprobe command to check video codec
             ffprobe_cmd = [
                         'ffprobe',
                         '-v',
@@ -94,122 +77,144 @@ class HydrusVideoDeduplicator():
                         tmp_vid_file.name
                         ]
 
-            # Execute the ffprobe command and capture the output
-            video_codec = subprocess.check_output(ffprobe_cmd).decode('utf-8').strip()
+            # Get video codec type
+            video_codec: str = subprocess.check_output(ffprobe_cmd).decode('utf-8').strip()
 
             # These are found by trial and error. If you find an unsupported codec, create an issue on GitHub please.
             # Unsupported codecs appear to be an OpenCV issue more than an FFmpeg issue but I can't solve it at the moment.
-            # For now, just transcode the video to avc1
-            unsupported_codecs = ["av1"]
+            # For now, just transcode the video to H.264
+            unsupported_codecs = set(["av1"])
 
             if video_codec in unsupported_codecs:
-                rprint(f"[yellow] Video file has unsupported codec: {video_codec}")
-                rprint("[yellow] Falling back to transcoding (this may take a bit)")
+                logging.warning(f"Video file has unsupported codec: {video_codec}")
+                logging.warning("Falling back to transcoding (this may take a bit)")
 
-                try:
+                # Transcode video
+                with tempfile.NamedTemporaryFile(mode="w+b", suffix=".mp4") as tmp_vid_file_transcoded:
+                    ffmpeg_cmd = [
+                        'ffmpeg',
+                        '-y',
+                        '-i',
+                        tmp_vid_file.name,
+                        '-c:v',
+                        'libx264',
+                        '-preset',
+                        'veryfast',
+                        '-crf',
+                        '28',
+                        tmp_vid_file_transcoded.name,
+                    ]
 
-                    with tempfile.NamedTemporaryFile(mode="w+b", suffix=".mp4") as tmp_vid_file_transcoded:
-                        ffmpeg_cmd = [
-                            'ffmpeg',
-                            '-y',
-                            '-i',
-                            tmp_vid_file.name,
-                            '-c:v',
-                            'libx264',
-                            '-preset',
-                            'veryfast',
-                            '-crf',
-                            '28',
-                            tmp_vid_file_transcoded.name,
-                        ]
+                    # Execute the ffmpeg command
+                    with open(os.devnull, "w") as devnull: subprocess.call(ffmpeg_cmd, stdout=devnull, stderr=devnull)
 
-                        # Execute the ffmpeg command
-                        with open(os.devnull, "w") as devnull: subprocess.call(ffmpeg_cmd, stdout=devnull, stderr=devnull)
+                    perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file_transcoded.name)
 
-                        perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file_transcoded.name)
-
-                        rprint("[yellow] Fallback to transcode successful.")
-                except Exception as exc:
-                    rprint("[red] Transcode and/or hashing the transcode failed.")
-                    cls.hydlog.error(f"Error transcode video hash: {video_hash}")
-                    cls.hydlog.error(exc)
-                    return None
+                    logging.info("Fallback to transcode successful.")
             else:
                 perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
 
-            
-            row = db.get(video_hash, {})
-            row["perceptual_hash"] = perceptual_hash
-            db[video_hash] = row
-            cls.hydlog.debug(f"Perceptual hash calculated and added to DB.")
-    
-    # Add perceptual hash for videos to the database
-    def _add_perceptual_hashes_to_db(self, overwrite: bool, custom_query: list | None = None) -> None:
+            return perceptual_hash
 
-        # Create database folder if it doesn't already exist
-        if os.path.exists(DEDUP_DATABASE_FILE):
-            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename = "videos") as hashdb:
-                rprint(f"[green] Database found with {len(hashdb)} videos already hashed.")
-                self.hydlog.info(f"Found existing DB of length {len(hashdb)}, size {os.path.getsize(DEDUP_DATABASE_FILE)}")
-        else:
-            rprint(f"[yellow] Database not found. Creating one at {DEDUP_DATABASE_FILE}")
-            os.makedirs(DEDUP_DATABASE_DIR, exist_ok=True)
+    def _retrieve_video_hashes(self, client: hydrus_api.Client, search_tags) -> list:
+        all_video_hashes = client.search_files(
+            search_tags,
+            file_sort_type=hydrus_api.FileSortType.FILE_SIZE,
+            return_hashes=True,
+            file_sort_asc=True,
+            return_file_ids=False
+            )["hashes"]
+        return all_video_hashes
+
+    def _add_perceptual_hashes_to_db(self, overwrite: bool, search_tags: list | None = None) -> None:
+
+        # Create database folder
+        try:
+            os.makedirs(DEDUP_DATABASE_DIR, exist_ok=False)
+            # Exception before this log if directory already exists
             self.hydlog.info(f"Created DB dir {DEDUP_DATABASE_DIR}")
+        except OSError:
+            pass
 
-        search_tags = ["system:filetype=video"]
-        if custom_query is not None:
-            custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
-            search_tags.extend(custom_query)
-        
-        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename = "videos") as hashdb:
-            print(f"Retrieving video file hashes...")
-            all_video_hashes = self.client.search_files(search_tags, file_sort_type=hydrus_api.FileSortType.FILE_SIZE, return_hashes=True, file_sort_asc=True, return_file_ids=False)["hashes"]
-            print("Calculating perceptual hashes:")
-            with tqdm(dynamic_ncols=True, total=len(all_video_hashes), unit="video", colour="BLUE") as pbar:
-                for chunk_video_hashes in hydrus_api.utils.yield_chunks(all_video_hashes, chunk_size=16):
-                    for video_hash in chunk_video_hashes:
+        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+
+            dblen = len(hashdb)
+            dbsize = os.path.getsize(DEDUP_DATABASE_FILE)
+
+            if dblen > 0:
+                rprint(f"[blue] Database found with {dblen} videos already hashed.")
+                self.hydlog.info(f"Database found of length {dblen}, size {dbsize} bytes")
+            else:
+                self.hydlog.info(f"Database not found. Creating one at {DEDUP_DATABASE_FILE}")
+
+            try:
+                all_video_hashes = self._retrieve_video_hashes(self.client, search_tags)
+                with tqdm(total=len(all_video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
+
+                    count_since_last_commit = 0
+                    COMMIT_INTERVAL = 16
+
+                    for video_hash in all_video_hashes:
                         pbar.update(1)
                         # Only calculate new hash if it's missing or if overwrite is true
-                        if not overwrite and video_hash in hashdb and hashdb[video_hash].get("perceptual_hash", None) is not None:
+                        if not overwrite and video_hash in hashdb and "perceptual_hash" in hashdb[video_hash]:
                             continue
-                        
+
+                        # Get video file from Hydrus
                         try:
                             video_response = self.client.get_file(hash_=video_hash)
-                            if video_response.content is None:
-                                continue
                         except hydrus_api.HydrusAPIException:
-                            rprint("[red] Error getting file from database.")
+                            rprint("[red] Failed to get video from Hydrus.")
+                            self.hydlog.error("Error getting video from Hydrus.")
                             continue
 
+                        # Calculate perceptual_hash
                         try:
-                            self._add_perceptual_hash_to_db(video_hash=video_hash,
-                                                            video=video_response.content,
-                                                            db=hashdb)
-                        except KeyboardInterrupt:
-                            rprint("[red] Perceptual hash generation was interrupted!\n")
-                            hashdb.commit()
-                            return None
+                            perceptual_hash = self._calculate_perceptual_hash(video_response.content)
                         except Exception as exc:
                             rprint("[red] Failed to calculate a perceptual hash.")
-                            self.hydlog.error(exc)
+                            self.hydlog.exception(exc)
                             self.hydlog.error(f"Errored file hash: {video_hash}")
-                            
-                    # Commit at the end of a chunk
-                    hashdb.commit()
+                        else:
+                            # Write perceptual hash to DB
+                            row = hashdb.get(video_hash, {})
+                            row["perceptual_hash"] = perceptual_hash
+                            hashdb[video_hash] = row
 
-            # Commit at the end of all processing
-            hashdb.commit()
-            
-        rprint("[green] Finished perceptual hash processing.\n")
+                            # Batch DB commits to avoid excessive writes
+                            count_since_last_commit += 1
+                            if count_since_last_commit >= COMMIT_INTERVAL:
+                                hashdb.commit()
+                                count_since_last_commit = 0
+                                self.hydlog.debug("Committed perceptual hashes to database.")
+
+                            self.hydlog.debug("Perceptual hash calculated.")
+
+            except KeyboardInterrupt:
+                interrupt_msg = "Perceptual hash processing was interrupted!"
+                rprint(f"[yellow] {interrupt_msg}")
+                self.hydlog.error(interrupt_msg)
+
+            else:
+                rprint("[green] Finished perceptual hash processing.")
+
+            finally:
+                hashdb.commit()
+                self.hydlog.info("Finished perceptual hash processing.")
     
     def get_potential_duplicate_count_hydrus(self) -> int:
         return self.client.get_potentials_count(file_service_keys=[self.all_services["all_local_files"][0]["service_key"]])["potential_duplicates_count"]
-    
-    # Return similarity of two bitstrings given a threshold
+
+    # Return similarity of two perceptual hashes given a threshold
     @staticmethod
-    def is_similar(a: str, b: str, min_percent_similarity: float = 0.8) -> bool:
-        return VPDQSignal.compare_hash(a, b, min_percent_similarity, min_percent_similarity)
-    
+    def is_similar(video1_phash: str, video2_phash: str, min_percent_similarity: float = 0.8) -> bool:
+        # They videos are compared and check if video1 is in video2 and also if video2 is in video1.
+        # If either is true, then they're similar. It doesn't make sense currently to have one similar to the other and not vice-versa.
+        query_match_percent, compare_match_percent = VPDQSignal.get_similarity(video1_phash, video2_phash)
+        if query_match_percent > 0 or compare_match_percent > 0:
+            # Note: This doesn't log for some reason unless it's set to some level like error.
+            logging.info(f"Similarity above 0: Query {query_match_percent}, Compared {compare_match_percent}")
+        return query_match_percent >= min_percent_similarity or compare_match_percent >= min_percent_similarity
 
     def compare_videos(self, video1_hash, video2_hash, video1_phash, video2_phash):
         similar = HydrusVideoDeduplicator.is_similar(video1_phash, video2_phash, self.threshold)
@@ -244,22 +249,21 @@ class HydrusVideoDeduplicator():
             rprint(f"[red] Database does not exist. Cannot clear search cache.")
 
     # Sliding window duplicate comparisons
-    # Alternatively, I could scan duplicates while adding and never do it again. I should do that instead.
-    # Or, since dictionaries are ordered, store the index per hash where it ended its last search. If it's not the end, keep going until the end.
-    # TODO: Add support for query where it will get a list of the hashes from
-    # the query and iterate over them instead of the entire hashdb
-    def _find_potential_duplicates(self): 
+    # Alternatively, I could scan duplicates when added and never do it again which would be one of the best ways without a VP tree
+    def _find_potential_duplicates(self) -> None: 
 
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
             rprint(f"[red] Could not search for duplicates.")
-            return None
+            return
 
         # Number of potential duplicates before adding more. Just for user info.
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
         
         count_since_last_commit = 0
-        commit_interval = 8
+        commit_interval = 32
             
+        # BUG: If this process is interrupted, the farthest_search_index will not save for ANY entries.
+        #      I think it might be because every entry in the column needs an entry for SQlite but I'm not sure.
         video_counter = 0
         with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
             try:

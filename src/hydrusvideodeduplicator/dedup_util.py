@@ -20,6 +20,8 @@ def find_tag_in_tags(target_tag_namespace: str, tags: list) -> str:
 
 # Get the filename from the filename tag if it exists in Hydrus
 # This is just used for debugging.
+# Note: Hydrus tags and NTFS are case insensitive, but ext4 is not
+#       But, this shouldn't really matter since Hydrus stores files with lower case names
 # TODO: Clean this up it's a mess
 def get_file_names_hydrus(client: Client, file_hashes: list[str]) -> list[str]:
     err_msg = "Cannot get file name from Hydrus."
@@ -43,7 +45,7 @@ def get_file_names_hydrus(client: Client, file_hashes: list[str]) -> list[str]:
             if tag != "":
                 tag = f"{tag}{ext}"
         except:
-            logging.warning(f"{err_msg} Hash: {file_metadata['hash']}")
+            logging.error(f"{err_msg} Hash: {file_metadata['hash']}")
 
         result.append(tag)
 

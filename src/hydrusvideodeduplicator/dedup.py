@@ -21,6 +21,11 @@ class HydrusVideoDeduplicator():
     threshold: float = 0.8
     _DEBUG = False
 
+    # These are found by trial and error. If you find an unsupported codec, create an issue on GitHub please.
+    # Unsupported codecs appear to be an OpenCV issue but I'm working on a solution.
+    # For now, just transcode the video to H.264 if possible
+    UNSUPPORTED_CODECS = set(["av1"])
+
     def __init__(self, client: hydrus_api.Client,
                  verify_connection: bool = True):
         self.client = client
@@ -40,8 +45,10 @@ class HydrusVideoDeduplicator():
     
     # This is the master function of the class
     def deduplicate(self, overwrite: bool = False, custom_query: list | None = None, skip_hashing: bool | None = False):
-        # Add perceptual hashes to videos
-        search_tags = ["system:has duration", "-system:filetype audio"]
+        # Add perceptual hashes to video files
+        # system:filetype tags are really inconsistent
+        search_tags = ['system:filetype=video, gif, apng', 'system:has duration']
+
         if custom_query is not None:
             custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
             if len(custom_query) > 0:
@@ -64,6 +71,7 @@ class HydrusVideoDeduplicator():
             tmp_vid_file.flush()
 
             # ffprobe command to check video codec
+            # ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1
             ffprobe_cmd = [
                         'ffprobe',
                         '-v',
@@ -80,12 +88,7 @@ class HydrusVideoDeduplicator():
             # Get video codec type
             video_codec: str = subprocess.check_output(ffprobe_cmd).decode('utf-8').strip()
 
-            # These are found by trial and error. If you find an unsupported codec, create an issue on GitHub please.
-            # Unsupported codecs appear to be an OpenCV issue more than an FFmpeg issue but I can't solve it at the moment.
-            # For now, just transcode the video to H.264
-            unsupported_codecs = set(["av1"])
-
-            if video_codec in unsupported_codecs:
+            if video_codec in HydrusVideoDeduplicator.UNSUPPORTED_CODECS:
                 logging.warning(f"Video file has unsupported codec: {video_codec}")
                 logging.warning("Falling back to transcoding (this may take a bit)")
 
@@ -116,8 +119,8 @@ class HydrusVideoDeduplicator():
 
             return perceptual_hash
 
-    def _retrieve_video_hashes(self, client: hydrus_api.Client, search_tags) -> list:
-        all_video_hashes = client.search_files(
+    def _retrieve_video_hashes(self, search_tags) -> list:
+        all_video_hashes = self.client.search_files(
             search_tags,
             file_sort_type=hydrus_api.FileSortType.FILE_SIZE,
             return_hashes=True,
@@ -148,7 +151,7 @@ class HydrusVideoDeduplicator():
                 self.hydlog.info(f"Database not found. Creating one at {DEDUP_DATABASE_FILE}")
 
             try:
-                all_video_hashes = self._retrieve_video_hashes(self.client, search_tags)
+                all_video_hashes = self._retrieve_video_hashes(search_tags)
                 with tqdm(total=len(all_video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
 
                     count_since_last_commit = 0
@@ -163,6 +166,8 @@ class HydrusVideoDeduplicator():
                         # Get video file from Hydrus
                         try:
                             video_response = self.client.get_file(hash_=video_hash)
+                            #video_metadata = self.client.get_file_metadata(hashes=[video_hash], only_return_basic_information=False)
+                            #print(video_metadata)
                         except hydrus_api.HydrusAPIException:
                             rprint("[red] Failed to get video from Hydrus.")
                             self.hydlog.error("Error getting video from Hydrus.")

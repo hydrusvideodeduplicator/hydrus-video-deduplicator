@@ -221,7 +221,8 @@ class HydrusVideoDeduplicator():
 
         if similar:
             if self._DEBUG:
-                #file_names = get_file_names_hydrus(self.client, [video_hash, video2_hash])
+                # Getting the file names will be VERY slow because of the API call
+                #file_names = get_file_names_hydrus(self.client, [video1_hash, video2_hash])
                 #self.hydlog.info(f"Duplicates filenames: {file_names}")
                 self.hydlog.info(f"\"Duplicates hashes: {video1_hash}\" and \"{video2_hash}\"")
             

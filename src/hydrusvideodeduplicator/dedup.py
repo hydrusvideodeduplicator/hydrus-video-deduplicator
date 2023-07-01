@@ -89,11 +89,6 @@ class HydrusVideoDeduplicator():
             video_codec: str = subprocess.check_output(ffprobe_cmd).decode('utf-8').strip()
 
             if video_codec in HydrusVideoDeduplicator.UNSUPPORTED_CODECS:
-            # These are found by trial and error. If you find an unsupported codec, create an issue on GitHub please.
-            # Unsupported codecs appear to be an OpenCV issue more than an FFmpeg issue but I can't solve it at the moment.
-            # For now, just transcode the video to H.264
-            unsupported_codecs = set(["av1"])
-
                 logging.warning(f"Video file has unsupported codec: {video_codec}")
                 logging.warning("Falling back to transcoding (this may take a bit)")
 

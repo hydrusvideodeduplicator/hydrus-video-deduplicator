@@ -128,6 +128,8 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
         raise typer.Exit(code=1)
     superdeduper.threshold = threshold
 
+    superdeduper.clear_trashed_files_from_db()
+
     # Run all deduplicate functionality
     superdeduper.deduplicate(overwrite=overwrite,
                              custom_query=query,

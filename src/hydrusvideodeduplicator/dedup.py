@@ -313,3 +313,46 @@ class HydrusVideoDeduplicator():
             rprint(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
         else:
             rprint("[green] No new potential duplicates found.")
+
+    @staticmethod
+    def batched(iterable, n):
+        "Batch data into tuples of length n. The last batch may be shorter."
+        # batched('ABCDEFG', 3) --> ABC DEF G
+        if n < 1:
+            raise ValueError('n must be at least one')
+        it = iter(iterable)
+        while batch := tuple(islice(it, n)):
+            yield batch
+    
+    # Check if files are trashed
+    # Returns a dictionary of hash : trashed_or_not
+    def is_files_trashed_hydrus(self, file_hashes: list[str]) -> dict:
+        videos_metadata = self.client.get_file_metadata(hashes=file_hashes, only_return_basic_information=False)["metadata"]
+
+        result = {}
+        for video_metadata in videos_metadata:
+            video_hash = video_metadata['hash']
+            is_trashed = video_metadata['is_trashed']
+            is_deleted = video_metadata['is_deleted']
+            result[video_hash] = is_trashed or is_deleted
+        return result
+
+    # Delete trashed and deleted files from Hydrus from the database
+    def clear_trashed_files_from_db(self):
+        if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
+            return
+
+        try:
+            CHUNK_SIZE = 32
+            delete_count = 0
+            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+                for batched_keys in self.batched(hashdb, CHUNK_SIZE):
+                    is_trashed_result = self.is_files_trashed_hydrus(batched_keys)
+                    for result in is_trashed_result.items():
+                        if result[1] is True:
+                            del hashdb[result[0]]
+                            delete_count+=1
+                    hashdb.commit()
+            self.hydlog.info(f"[green] Cleared {delete_count} trashed files from the database.")
+        except OSError:
+            rprint("[red] Database does not exist. Cannot clear trashed files cache.")

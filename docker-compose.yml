@@ -1,0 +1,10 @@
+version: "3.8"
+services:
+  hydrus-video-deduplicator:
+    build: .
+    volumes:
+      - "./db:/usr/src/app/db"
+#      - "<cert>:/usr/src/app/cert"
+    environment:
+      API_KEY: <key>
+      QUERY: system:limit is 64

@@ -355,4 +355,4 @@ class HydrusVideoDeduplicator():
                     hashdb.commit()
             self.hydlog.info(f"[green] Cleared {delete_count} trashed files from the database.")
         except OSError:
-            rprint("[red] Database does not exist. Cannot clear trashed files cache.")
+            rprint("[red] Error while clearing trashed files cache.")

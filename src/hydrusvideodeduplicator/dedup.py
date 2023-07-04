@@ -22,9 +22,8 @@ class HydrusVideoDeduplicator():
     _DEBUG = False
 
     # These are found by trial and error. If you find an unsupported codec, create an issue on GitHub please.
-    # Unsupported codecs appear to be an OpenCV issue but I'm working on a solution.
-    # For now, just transcode the video to H.264 if possible
-    UNSUPPORTED_CODECS = set(["av1"])
+    # For now, videos are transcoded to H.264 if possible
+    UNSUPPORTED_CODECS = set([""])
 
     def __init__(self, client: hydrus_api.Client,
                  verify_connection: bool = True):

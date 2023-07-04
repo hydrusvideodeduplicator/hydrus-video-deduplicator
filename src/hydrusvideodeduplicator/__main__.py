@@ -6,7 +6,7 @@ import hydrusvideodeduplicator.hydrus_api as hydrus_api
 from rich import print as rprint
 
 from .__about__ import __version__
-from .config import HYDRUS_API_KEY, HYDRUS_API_URL, REQUESTS_CA_BUNDLE
+from .config import HYDRUS_API_KEY, HYDRUS_API_URL, REQUESTS_CA_BUNDLE, HYDRUS_QUERY
 from .dedup import HydrusVideoDeduplicator
 
 from .vpdq_util import VPDQ_QUERY_MATCH_THRESHOLD_PERCENT
@@ -26,7 +26,7 @@ rprint(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
 def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] = None,
         api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = HYDRUS_API_URL,
         overwrite:  Annotated[Optional[bool], typer.Option(help="Overwrite existing perceptual hashes")] = False,
-        query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = None,
+        query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = HYDRUS_QUERY,
         threshold: Annotated[Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")] = VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
         skip_hashing: Annotated[Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")] = False,
         verify_cert: Annotated[Optional[str], typer.Option(help="Path to TLS cert. This forces verification.")] = REQUESTS_CA_BUNDLE,

@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from platform import uname
+import json
 
 from dotenv import load_dotenv
 from appdirs import AppDirs
@@ -32,3 +33,12 @@ DEDUP_DATABASE_NAME=os.getenv("DEDUP_DATABASE_NAME", "videohashes")
 DEDUP_DATABASE_FILE=Path(DEDUP_DATABASE_DIR, f"{DEDUP_DATABASE_NAME}.sqlite")
 
 REQUESTS_CA_BUNDLE=os.getenv("REQUESTS_CA_BUNDLE")
+
+HYDRUS_QUERY=os.getenv("HYDRUS_QUERY")
+if HYDRUS_QUERY is not None:
+    try:
+        HYDRUS_QUERY=json.loads(HYDRUS_QUERY)
+    except json.decoder.JSONDecodeError as exc:
+        print("ERROR:", exc)
+        print("Invalid query passed as environment variable.")
+        exit(-1)

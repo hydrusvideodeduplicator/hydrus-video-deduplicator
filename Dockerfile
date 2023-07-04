@@ -1,9 +1,20 @@
 FROM ubuntu:latest
 WORKDIR /usr/src/app
-RUN apt-get update
-RUN apt-get install -y python3-dev python3-pip git make sqlite3 ffmpeg libavcodec-dev libavfilter-dev
-RUN pip install hydrusvideodeduplicator
-COPY ./start.sh ./start.sh
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
+    git \
+    make \
+    sqlite3 \
+    ffmpeg \
+    libavcodec-dev \
+    libavfilter-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN python3.11 -m pip install hydrusvideodeduplicator
+COPY ./docker-entrypoint.sh ./entrypoint.sh
 
 ENV DEDUP_DATABASE_DIR=/usr/src/app/db
-CMD ["./start.sh"]
+ENV API_URL=https://host.docker.internal:45869
+CMD ["./entrypoint.sh"]
+

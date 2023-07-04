@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
-Command="python3 -m hydrusvideodeduplicator"
+Command="python3.11 -m hydrusvideodeduplicator"
 [[ -n "${API_KEY}" ]] && Command="${Command} --api-key='${API_KEY}'"
 [[ -n "${API_URL}" ]] && Command="${Command} --api-url='${API_URL}'"
-[[ -n "${QUERY}" ]] && Command="${Command} --query='${QUERY}'"
 [[ -n "${THRESHOLD}" ]] && Command="${Command} --threshold=${THRESHOLD}"
 
 [[ ${CERT} = "true" ]] && Command="${Command} --verify-cert=cert"

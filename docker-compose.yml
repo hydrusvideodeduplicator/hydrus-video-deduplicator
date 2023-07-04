@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  hydrusvideodeduplicator:
+    build: .
+    container_name: hydrusvideodeduplicator
+    volumes:
+      - ./db:/usr/src/app/db # Database directory
+    # - <cert file>:/usr/src/app/cert # Optional, SSL cert
+    environment:
+      API_KEY: <your key>
+    # API_URL: https://localhost:45869 # Optional, default is Docker host
+    # HYDRUS_QUERY: '["system:limit is 2", "character:edward"]' # Optional, JSON array of search parameters
+    # VERBOSE: 'true'
+    # See full list of options on the wiki
+
+    # If default API_URL does not connect to Hydrus on Docker host,
+    # try using host network mode and set API_URL to https://localhost:45869
+    #network_mode: host
+

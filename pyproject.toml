@@ -27,7 +27,7 @@ dependencies = [
     "tqdm",
     "python-dotenv",
     "typer",
-    "hvdvpdq",
+    "hvdvpdq>=0.0.11",
     "sqlitedict",
     "requests",
     "psutil",

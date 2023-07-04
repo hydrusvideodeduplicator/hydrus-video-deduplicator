@@ -267,7 +267,7 @@ class HydrusVideoDeduplicator():
     # Alternatively, I could scan duplicates when added and never do it again which would be one of the best ways without a VP tree
     def _find_potential_duplicates(self, limited_video_hashes: list | set | None = None) -> None:
 
-        if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
+        if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos", verbose=True):
             rprint(f"[red] Could not search for duplicates.")
             return
 

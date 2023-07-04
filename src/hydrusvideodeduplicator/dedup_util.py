@@ -140,15 +140,18 @@ class ThreadSafeCounter():
         with self._lock:
             return self._counter
 
-def database_accessible(db_file: Path | str, tablename: str):
+def database_accessible(db_file: Path | str, tablename: str, verbose: bool = False):
     try:
         with SqliteDict(str(db_file), tablename=tablename, flag="r"):
             return True
     except OSError:
-        rprint(f"[red] Database does not exist. Cannot search for duplicates.")
+        if verbose:
+            rprint(f"[red] Database does not exist.")
     except RuntimeError: # SqliteDict error when trying to create a table for a DB in read-only mode
-        rprint(f"[red] Database does not exist. Cannot search for duplicates.")
+        if verbose:
+            rprint(f"[red] Database does not exist.")
     except Exception as exc:
-        rprint(f"[red] Could not access database.")
+        if verbose:
+            rprint(f"[red] Could not access database.")
         logging.error(str(exc))
     return False

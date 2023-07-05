@@ -73,8 +73,8 @@ class Vpdq:
         stdout, stderr = ffprobe_process.communicate(input=file)
 
         # Decode the output stream as json
-        output = json.loads(stdout.decode("utf-8"))
-        error = stderr.decode("utf-8")
+        output = json.loads(stdout.decode("utf-8", errors="replace"))
+        error = stderr.decode("utf-8", errors="replace")
         if "streams" not in output:
             print(output)
             print(error)

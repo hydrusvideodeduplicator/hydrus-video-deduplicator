@@ -76,6 +76,7 @@ class HydrusVideoDeduplicator:
     def _calculate_perceptual_hash(video: str | bytes) -> str:
         perceptual_hash = Vpdq.vpdq_to_json(Vpdq.computeHash(video))
         rprint("[blue] NEW HASH METHOD:", perceptual_hash)
+        assert perceptual_hash != "[]"
         return perceptual_hash
 
     def _retrieve_video_hashes(self, search_tags) -> list:

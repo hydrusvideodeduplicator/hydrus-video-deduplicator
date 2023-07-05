@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import ffmpeg
-#import vpdq  # VPDQ CPP IMPLEMENTATION
+
+# import vpdq  # VPDQ CPP IMPLEMENTATION
 from PIL import Image
 
 from pdqhashing.hasher.pdq_hasher import PDQHasher
@@ -52,8 +53,7 @@ class VpdqFeature:
             raise ValueError(f"invalid {Vpdq.__name__} serialization: {serialized}")
 
     def __str__(self) -> str:
-            return f"{self.pdq_hash},{self.quality},{self.frame_number}"
-        
+        return f"{self.pdq_hash},{self.quality},{self.frame_number}"
 
 
 class Vpdq:
@@ -154,6 +154,14 @@ class Vpdq:
         result = Vpdq.feature_match_count(query_filtered, target_filtered, distance_tolerance)
         return result * 100 / len(query_filtered)
 
+    # TODO: move this to util class
+    @staticmethod
+    def convert_seconds_to_seek_time(seconds):
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+
+        return f'{hours:02d}:{minutes:02d}:{seconds:02d}'
+
     # Perceptually hash video from a file path or the bytes
     @staticmethod
     def computeHash(
@@ -172,7 +180,6 @@ class Vpdq:
             video_info = Vpdq.get_vid_info(video)
             width = int(video_info["width"])
             height = int(video_info["height"])
-            codec_name = str(video_info["codec_name"])
         except KeyError as exc:
             raise ValueError from exc
 
@@ -182,14 +189,13 @@ class Vpdq:
         second = 0
         while True:
             out, _ = (
-                ffmpeg.input("pipe:")
+                ffmpeg.input(ss=f"{Vpdq.convert_seconds_to_seek_time(second)}", filename="pipe:")
                 .output(
                     "pipe:",
                     loglevel="error",
                     format="rawvideo",
                     pix_fmt="rgb24",
                     avoid_negative_ts=1,
-                    ss=f"{second}",  # Seek second
                     map="0:v",  # Get only first video stream
                     frames=1,  # Extract frame
                 )
@@ -233,4 +239,3 @@ class Vpdq:
     def json_to_vpdq(json_str: str) -> list[VpdqFeature]:
         """Load a str as a json object and convert from json object to VPDQ features"""
         return [VpdqFeature.from_str(s) for s in json.loads(json_str or "[]")]
-

@@ -14,7 +14,6 @@ import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
 from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
 from .dedup_util import database_accessible, find_tag_in_tags, get_file_names_hydrus, ThreadSafeCounter
-from .vpdq import VPDQSignal
 from vpdqpy.vpdqpy import Vpdq
 
 
@@ -68,7 +67,6 @@ class HydrusVideoDeduplicator:
 
         if query and skip_hashing:
             video_hashes = set(self._retrieve_video_hashes(search_tags))
-            self._find_potential_duplicates(limited_video_hashes=video_hashes)
 
         self._find_potential_duplicates(limited_video_hashes=video_hashes)
 
@@ -76,63 +74,9 @@ class HydrusVideoDeduplicator:
 
     @staticmethod
     def _calculate_perceptual_hash(video: str | bytes) -> str:
-        with tempfile.NamedTemporaryFile(mode="w+b") as tmp_vid_file:
-            # Write video to file to be able to calculate hash
-            tmp_vid_file.write(video)
-            tmp_vid_file.flush()
-
-            # ffprobe command to check video codec
-            # ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1
-            ffprobe_cmd = [
-                'ffprobe',
-                '-v',
-                'error',
-                '-select_streams',
-                'v:0',
-                '-show_entries',
-                'stream=codec_name',
-                '-of',
-                'default=noprint_wrappers=1:nokey=1',
-                tmp_vid_file.name,
-            ]
-
-            # Get video codec type
-            video_codec: str = subprocess.check_output(ffprobe_cmd).decode('utf-8').strip()
-
-            if video_codec in HydrusVideoDeduplicator.UNSUPPORTED_CODECS:
-                logging.warning(f"Video file has unsupported codec: {video_codec}")
-                logging.warning("Falling back to transcoding (this may take a bit)")
-
-                # Transcode video
-                with tempfile.NamedTemporaryFile(mode="w+b", suffix=".mp4") as tmp_vid_file_transcoded:
-                    ffmpeg_cmd = [
-                        'ffmpeg',
-                        '-y',
-                        '-i',
-                        tmp_vid_file.name,
-                        '-c:v',
-                        'libx264',
-                        '-preset',
-                        'veryfast',
-                        '-crf',
-                        '28',
-                        tmp_vid_file_transcoded.name,
-                    ]
-
-                    # Execute the ffmpeg command
-                    with open(os.devnull, "w") as devnull:
-                        subprocess.call(ffmpeg_cmd, stdout=devnull, stderr=devnull)
-
-                    perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file_transcoded.name)
-
-                    logging.info("Fallback to transcode successful.")
-            else:
-                perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
-                rprint("[green] OLD HASH METHOD:", perceptual_hash)
-                perceptual_hash_1 = Vpdq.vpdq_to_json(Vpdq.computeHash(str(tmp_vid_file.name)))
-                rprint("[blue] NEW HASH METHOD:", perceptual_hash_1)
-
-            return perceptual_hash_1
+        perceptual_hash = Vpdq.vpdq_to_json(Vpdq.computeHash(video))
+        rprint("[blue] NEW HASH METHOD:", perceptual_hash)
+        return perceptual_hash
 
     def _retrieve_video_hashes(self, search_tags) -> list:
         all_video_hashes = self.client.search_files(
@@ -223,19 +167,10 @@ class HydrusVideoDeduplicator:
             file_service_keys=[self.all_services["all_local_files"][0]["service_key"]]
         )["potential_duplicates_count"]
 
-    # Return similarity of two perceptual hashes given a threshold
-    @staticmethod
-    def is_similar(video1_phash: str, video2_phash: str, min_percent_similarity: float = 0.8) -> bool:
-        # They videos are compared and check if video1 is in video2 and also if video2 is in video1.
-        # If either is true, then they're similar. It doesn't make sense currently to have one similar to the other and not vice-versa.
-        query_match_percent, compare_match_percent = VPDQSignal.get_similarity(video1_phash, video2_phash)
-        if query_match_percent > 0 or compare_match_percent > 0:
-            # Note: This doesn't log for some reason unless it's set to some level like error.
-            logging.info(f"Similarity above 0: Query {query_match_percent}, Compared {compare_match_percent}")
-        return query_match_percent >= min_percent_similarity or compare_match_percent >= min_percent_similarity
-
-    def compare_videos(self, video1_hash, video2_hash, video1_phash, video2_phash):
-        similar = HydrusVideoDeduplicator.is_similar(video1_phash, video2_phash, self.threshold)
+    def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str):
+        vpdq_hash1 = Vpdq.json_to_vpdq(video1_phash)
+        vpdq_hash2 = Vpdq.json_to_vpdq(video2_phash)
+        similar, similarity = Vpdq.is_similar(vpdq_hash1, vpdq_hash2, self.threshold)
 
         if similar:
             if self._DEBUG:

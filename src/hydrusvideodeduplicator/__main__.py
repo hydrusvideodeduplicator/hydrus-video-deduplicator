@@ -9,8 +9,6 @@ from .__about__ import __version__
 from .config import HYDRUS_API_KEY, HYDRUS_API_URL, REQUESTS_CA_BUNDLE, HYDRUS_QUERY
 from .dedup import HydrusVideoDeduplicator
 
-from .vpdq_util import VPDQ_QUERY_MATCH_THRESHOLD_PERCENT
-
 """
 Parameters:
 - api_key will be read from env var $HYDRUS_API_KEY or .env file
@@ -31,7 +29,7 @@ def main(
     query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = HYDRUS_QUERY,
     threshold: Annotated[
         Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")
-    ] = VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
+    ] = 75.0,
     skip_hashing: Annotated[
         Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")
     ] = False,

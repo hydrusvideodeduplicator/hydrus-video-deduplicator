@@ -7,19 +7,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import ffmpeg
+#import vpdq  # VPDQ CPP IMPLEMENTATION
 from PIL import Image
-import vpdq # VPDQ CPP IMPLEMENTATION 
-
 
 from pdqhashing.hasher.pdq_hasher import PDQHasher
-
 
 if TYPE_CHECKING:
     from typing import Annotated
 
+    from .typing_utils import ValueRange
+
     from pdqhashing.types.containers import HashAndQuality
-    from pdqhashing.types.hash256 import Hash256
-    from typing_utils import ValueRange
+
+from pdqhashing.types.hash256 import Hash256
 
 
 @dataclass(slots=True)
@@ -35,9 +35,6 @@ class VpdqFeature:
 
     def assert_valid(self) -> VpdqFeature:
         """Checks the bounds of all the elements, throws ValueError if invalid"""
-        PDQ_HEX_STR_LEN = 64
-        if len(self.pdq_hash.toHexString()) != PDQ_HEX_STR_LEN:
-            raise ValueError("malformed pdq hash")
         if not (0 <= self.quality <= 100):
             raise ValueError("invalid VPDQ quality")
         if self.frame_number < 0:
@@ -50,7 +47,7 @@ class VpdqFeature:
         parts = serialized.split(",")
         try:
             pdq_hex, qual_str, time_str = parts  # Wrong count = ValueError
-            return VpdqFeature(pdq_hex, int(qual_str), float(time_str)).assert_valid()
+            return VpdqFeature(Hash256.fromHexString(pdq_hex), float(qual_str), float(time_str)).assert_valid()
         except ValueError:
             raise ValueError(f"invalid {Vpdq.__name__} serialization: {serialized}")
 

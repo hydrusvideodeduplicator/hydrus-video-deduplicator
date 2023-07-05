@@ -294,17 +294,17 @@ class HydrusVideoDeduplicator:
                                 video_hash for video_hash in limited_video_hashes if video_hash in hashdb
                             ]
 
-                            for video1_hash in clean_all_retrieved_video_hashes:
+                            for i, video1_hash in enumerate(clean_all_retrieved_video_hashes):
                                 video_counter += 1
                                 pbar.update(1)
                                 parallel(
                                     delayed(self.compare_videos)(
                                         video1_hash,
-                                        video2_hash,
+                                        clean_all_retrieved_video_hashes[j],
                                         hashdb[video1_hash]["perceptual_hash"],
-                                        hashdb[video2_hash]["perceptual_hash"],
+                                        hashdb[clean_all_retrieved_video_hashes[j]]["perceptual_hash"],
                                     )
-                                    for video2_hash in clean_all_retrieved_video_hashes
+                                    for j in range(i + 1, len(clean_all_retrieved_video_hashes))
                                 )
 
                         else:

@@ -110,44 +110,6 @@ def quality_filter(features: t.List[VpdqCompactFeature], quality_tolerance: int)
     return [f for f in features if f.quality >= quality_tolerance]
 
 
-def OLD_json_to_vpdq(json_str: str) -> t.List[vpdq.VpdqFeature]:
-    """Load a str as a json object and convert from json object to VPDQ features"""
-    if not json_str:
-        return []
-    features = []
-    # VPDQ feature's timestamp is round to 3 decimals
-    vpdq_json = json.loads(json_str, parse_float=lambda x: round(float(x), VPDQ_TIMESTAMP_PRECISION))
-    for frame_number, feature in vpdq_json.items():
-        features.append(vpdq.VpdqFeature(feature[QUALITY], int(frame_number), feature[HASH], feature[TIMESTAMP]))
-    return features
-
-
-def OLD_read_file_to_hash(input_hash_filename: t.Union[str, pathlib.Path]) -> t.List[VpdqCompactFeature]:
-    """Read hash file and return list of VPDQ features
-
-    Args:
-        Input hash file path
-
-    Returns:
-        VPDQ features from the hash file"""
-
-    with open(input_hash_filename, "r") as file:
-        return OLD_json_to_vpdq(file.read())
-
-
-def OLD_dump_hash_to_file(
-    output_hash_filename: t.Union[str, pathlib.Path],
-    vpdq_features: t.List[VpdqCompactFeature],
-) -> None:
-    """Write list of VPDQ features to output hash file
-
-    Args:
-        Output hash file path
-        VPDQ features write to the output file"""
-    with open(output_hash_filename, "w") as file:
-        file.write(vpdq_to_json(vpdq_features))
-
-
 def prepare_vpdq_feature(signal_str: str, quality_tolerance: int) -> t.List[VpdqCompactFeature]:
     """Convert signal_str to deduped and quality-filtered vdqp features
 

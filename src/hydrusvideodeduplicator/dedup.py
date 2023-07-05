@@ -183,6 +183,7 @@ class HydrusVideoDeduplicator:
                         # Calculate perceptual_hash
                         try:
                             perceptual_hash = self._calculate_perceptual_hash(video_response.content)
+                            print(perceptual_hash.hex)
                         except Exception as exc:
                             rprint("[red] Failed to calculate a perceptual hash.")
                             self.hydlog.exception(exc)

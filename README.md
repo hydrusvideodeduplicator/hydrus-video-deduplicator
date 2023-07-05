@@ -49,11 +49,12 @@ python3 -m hydrusvideodeduplicator --api-key="<your key>"
 
 ## TODO:
 - [ ] Option to rollback and remove potential duplicates
-- [x] Option to enter custom Hydrus tag search parameters
+- [ ] OR predicates for --query
 - [ ] Parallelize hashing and duplicate search
 - [ ] Automatically generate access key with Hydrus API
-- [x] Upload to PyPI
 - [x] Docker container
+- [ ] Upload Docker container to Docker Hub (GitHub Action)
+- [ ] Pure Python port of vpdq
 - [ ] Windows compatibility without WSL or Docker
 
 Please create an issue on Github if you have any problems or questions! Pull requests also welcome on this or my VideoHash fork. 

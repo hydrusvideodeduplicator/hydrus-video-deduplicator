@@ -27,11 +27,17 @@ dependencies = [
     "tqdm",
     "python-dotenv",
     "typer",
-    "hvdvpdq>=0.0.11",
     "sqlitedict",
     "requests",
     "psutil",
     "joblib",
+    
+    # Below is vpdq C++ implem. Linux only
+    "hvdvpdq>=0.0.11",
+
+    # Below is for vpdqpy
+    "Pillow",
+    "ffmpeg-python",
 ]
 
 [project.urls]

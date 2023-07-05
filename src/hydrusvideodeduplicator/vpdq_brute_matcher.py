@@ -1,13 +1,12 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-import typing as t
 
 from .pdq_utils import simple_distance
 from .vpdq_util import VpdqCompactFeature, dedupe, quality_filter, VPDQMatchResult
 
 
 def match_VPDQ_in_another(
-    hash1: t.List[VpdqCompactFeature],
-    hash2: t.List[VpdqCompactFeature],
+    hash1: list[VpdqCompactFeature],
+    hash2: list[VpdqCompactFeature],
     distance_tolerance: int,
 ) -> int:
     """Count matches of hash1 in hash2
@@ -25,8 +24,8 @@ def match_VPDQ_in_another(
 
 
 def match_VPDQ_hash_brute(
-    query_hash: t.List[VpdqCompactFeature],
-    compared_hash: t.List[VpdqCompactFeature],
+    query_hash: list[VpdqCompactFeature],
+    compared_hash: list[VpdqCompactFeature],
     quality_tolerance: int,
     distance_tolerance: int,
 ) -> VPDQMatchResult:

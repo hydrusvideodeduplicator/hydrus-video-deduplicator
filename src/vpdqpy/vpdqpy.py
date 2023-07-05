@@ -1,10 +1,10 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
-import subprocess
 import json
-from pathlib import Path
+import subprocess
 from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import ffmpeg
 from PIL import Image
@@ -12,8 +12,12 @@ from PIL import Image
 from pdqhashing.hasher.pdq_hasher import PDQHasher
 
 if TYPE_CHECKING:
+    from typing import Annotated
+
     from pdqhashing.types.containers import HashAndQuality
     from pdqhashing.types.hash256 import Hash256
+    from typing_utils import ValueRange
+
 
 @dataclass(slots=True)
 class VpdqFeature:
@@ -23,7 +27,6 @@ class VpdqFeature:
 
 
 class Vpdq:
-
     @staticmethod
     def get_vid_info(file: bytes) -> dict:
         # ffprobe command to get info. ffmpeg-python requires a file name, this does not.
@@ -39,7 +42,7 @@ class Vpdq:
 
         # Decode the output stream as json
         output = json.loads(stdout.decode("utf-8"))
-        error = stderr.decode("utf-8")
+        # error = stderr.decode("utf-8")
 
         video_info = next(
             (stream for stream in output["streams"] if stream["codec_type"] == "video"),
@@ -49,7 +52,6 @@ class Vpdq:
         if not video_info:
             raise ValueError("No video stream found in the input file.")
         return video_info
-
 
     # Get the bytes of a video
     @staticmethod
@@ -68,7 +70,6 @@ class Vpdq:
 
         return video
 
-
     # Filter out the VPDQ feature with exact same hash
     @staticmethod
     def dedupe_features(features: list[VpdqFeature]) -> list[VpdqFeature]:
@@ -80,12 +81,10 @@ class Vpdq:
                 unique_features.add(str(feature.pdq_hash))
         return ret
 
-
     # quality tolerance from [0,100]
     @staticmethod
     def filter_features(vpdq_features: list[VpdqFeature], quality_tolerance: float) -> list[VpdqFeature]:
         return [feature for feature in vpdq_features if feature.quality >= quality_tolerance]
-
 
     # Get number of matching features for query and target
     @staticmethod
@@ -106,19 +105,18 @@ class Vpdq:
     def match_hash(
         query_features: list[VpdqFeature],
         target_features: list[VpdqFeature],
-        quality_tolerance: float = 50,
-        distance_tolerance: float = 31,
+        quality_tolerance: float = 50.0,
+        distance_tolerance: float = 31.0,
     ):
         query_filtered = Vpdq.filter_features(query_features, quality_tolerance)
         target_filtered = Vpdq.filter_features(target_features, quality_tolerance)
 
         # Avoid divide by zero
         if len(query_filtered) <= 0 or len(target_filtered) <= 0:
-            return 0
+            return 0.0
 
         result = Vpdq.feature_match_count(query_filtered, target_filtered, distance_tolerance)
         return result * 100 / len(query_filtered)
-
 
     # Perceptually hash video from a file path or the bytes
     @staticmethod
@@ -168,14 +166,16 @@ class Vpdq:
             features.append(pdq_frame)
             second += seconds_per_hash
 
-        return Vpdq.dedupe_features(features)
+        deduped_features = Vpdq.dedupe_features(features)
+        return deduped_features
 
-
-    # Check if video is similar by comparing featurelists
-    # Returns similarity percentage
+    # Check if video is similar by comparing their list of VpdqFeature's
+    # Threshold is minimum similarity to be considered similar
     @staticmethod
-    def video_is_similar(
-        vpdq_features1: list[VpdqFeature], vpdq_features2: list[VpdqFeature], threshold: float = 50
+    def is_similar(
+        vpdq_features1: list[VpdqFeature],
+        vpdq_features2: list[VpdqFeature],
+        threshold: Annotated[float, ValueRange(0.0, 100.0)] = 75.0,
     ) -> tuple[bool, float]:
         similarity = Vpdq.match_hash(query_features=vpdq_features1, target_features=vpdq_features2)
         return similarity >= threshold, similarity

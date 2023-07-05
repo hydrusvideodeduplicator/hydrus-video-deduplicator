@@ -1,10 +1,9 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
-import vpdq
 import json
-import typing as t
-import pathlib
 from dataclasses import dataclass
+
+import vpdq
 
 from .pdq_utils import PDQ_HEX_STR_LEN
 
@@ -63,23 +62,23 @@ class VpdqCompactFeature:
         return f"{self.pdq_hex},{self.quality},{self.timestamp:.{VPDQ_TIMESTAMP_PRECISION}}"
 
 
-def hash_file_compact(filepath: str, seconds_per_hash: float = 1.0) -> t.List[VpdqCompactFeature]:
+def hash_file_compact(filepath: str, seconds_per_hash: float = 1.0) -> list[VpdqCompactFeature]:
     """Wrapper around computeHash to instead return compact features"""
     vpdq_hashes = vpdq.computeHash(str(filepath), seconds_per_hash=seconds_per_hash)
     return [VpdqCompactFeature.from_vpdq_feature(f) for f in vpdq_hashes]
 
 
-def vpdq_to_json(vpdq_features: t.List[VpdqCompactFeature], *, indent: t.Optional[int] = None) -> str:
+def vpdq_to_json(vpdq_features: list[VpdqCompactFeature], *, indent: int | None = None) -> str:
     """Convert from VPDQ features to json object and return the json object as a str"""
     return json.dumps([str(f.assert_valid()) for f in vpdq_features], indent=indent)
 
 
-def json_to_vpdq(json_str: str) -> t.List[VpdqCompactFeature]:
+def json_to_vpdq(json_str: str) -> list[VpdqCompactFeature]:
     """Load a str as a json object and convert from json object to VPDQ features"""
     return [VpdqCompactFeature.from_str(s) for s in json.loads(json_str or "[]")]
 
 
-def dedupe(features: t.List[VpdqCompactFeature]) -> t.List[VpdqCompactFeature]:
+def dedupe(features: list[VpdqCompactFeature]) -> list[VpdqCompactFeature]:
     """Filter out the VPDQ feature with exact same hash in a list of VPDQ features
 
     Args:
@@ -97,7 +96,7 @@ def dedupe(features: t.List[VpdqCompactFeature]) -> t.List[VpdqCompactFeature]:
     return ret
 
 
-def quality_filter(features: t.List[VpdqCompactFeature], quality_tolerance: int) -> t.List[VpdqCompactFeature]:
+def quality_filter(features: list[VpdqCompactFeature], quality_tolerance: int) -> list[VpdqCompactFeature]:
     """Filter VPDQ feature that has a quality lower than quality_tolerance
 
     Args:
@@ -110,7 +109,7 @@ def quality_filter(features: t.List[VpdqCompactFeature], quality_tolerance: int)
     return [f for f in features if f.quality >= quality_tolerance]
 
 
-def prepare_vpdq_feature(signal_str: str, quality_tolerance: int) -> t.List[VpdqCompactFeature]:
+def prepare_vpdq_feature(signal_str: str, quality_tolerance: int) -> list[VpdqCompactFeature]:
     """Convert signal_str to deduped and quality-filtered vdqp features
 
     Args:

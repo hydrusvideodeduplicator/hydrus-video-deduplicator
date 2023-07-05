@@ -61,13 +61,11 @@ class HydrusVideoDeduplicator:
         video_hashes = None
         if skip_hashing:
             rprint("[yellow] Skipping perceptual hashing")
+            if query:
+                video_hashes = set(self._retrieve_video_hashes(search_tags))
         else:
             video_hashes = self._retrieve_video_hashes(search_tags)
             self._add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=video_hashes)
-
-        if query and skip_hashing:
-            video_hashes = set(self._retrieve_video_hashes(search_tags))
-            self._find_potential_duplicates(limited_video_hashes=video_hashes)
 
         self._find_potential_duplicates(limited_video_hashes=video_hashes)
 
@@ -398,6 +396,6 @@ class HydrusVideoDeduplicator:
                             del hashdb[result[0]]
                             delete_count += 1
                     hashdb.commit()
-            self.hydlog.info(f"[green] Cleared {delete_count} trashed files from the database.")
+            self.hydlog.info(f"Cleared {delete_count} trashed files from the database.")
         except OSError:
             rprint("[red] Error while clearing trashed files cache.")

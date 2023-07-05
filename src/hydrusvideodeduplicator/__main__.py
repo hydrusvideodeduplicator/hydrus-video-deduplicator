@@ -1,14 +1,14 @@
 import logging
-from typing import Optional, Annotated, List
+from typing import Annotated, List, Optional
 
 import typer
-import hydrusvideodeduplicator.hydrus_api as hydrus_api
 from rich import print as rprint
 
-from .__about__ import __version__
-from .config import HYDRUS_API_KEY, HYDRUS_API_URL, REQUESTS_CA_BUNDLE, HYDRUS_QUERY
-from .dedup import HydrusVideoDeduplicator
+import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
+from .__about__ import __version__
+from .config import HYDRUS_API_KEY, HYDRUS_API_URL, HYDRUS_QUERY, REQUESTS_CA_BUNDLE
+from .dedup import HydrusVideoDeduplicator
 from .vpdq_util import VPDQ_QUERY_MATCH_THRESHOLD_PERCENT
 
 """
@@ -47,7 +47,7 @@ def main(
     threshold = threshold / 100.0
 
     # CLI debug parameter sets log level to info or debug
-    loglevel: logging._Level = logging.WARNING
+    loglevel = logging.WARNING
     if debug:
         loglevel = logging.DEBUG
         verbose = True
@@ -134,7 +134,7 @@ def main(
         superdeduper._DEBUG = True
 
     if threshold < 0:
-        rprint(f"[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
+        rprint("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
         raise typer.Exit(code=1)
     superdeduper.threshold = threshold
 
@@ -143,10 +143,10 @@ def main(
     # Run all deduplicate functionality
     superdeduper.deduplicate(overwrite=overwrite, custom_query=query, skip_hashing=skip_hashing)
 
-    typer.Exit()
+    raise typer.Exit()
 
 
 try:
     typer.run(main)
-except KeyboardInterrupt:
-    typer.Exit()
+except KeyboardInterrupt as exc:
+    raise typer.Exit(-1) from exc

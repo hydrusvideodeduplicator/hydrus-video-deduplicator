@@ -16,7 +16,8 @@ from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
 from .dedup_util import database_accessible, find_tag_in_tags, get_file_names_hydrus, ThreadSafeCounter
 from .vpdq import VPDQSignal
 
-class HydrusVideoDeduplicator():
+
+class HydrusVideoDeduplicator:
     hydlog = logging.getLogger("hydlog")
     threshold: float = 0.8
     _DEBUG = False
@@ -25,13 +26,12 @@ class HydrusVideoDeduplicator():
     # For now, videos are transcoded to H.264 if possible
     UNSUPPORTED_CODECS = set([""])
 
-    def __init__(self, client: hydrus_api.Client,
-                 verify_connection: bool = True):
+    def __init__(self, client: hydrus_api.Client, verify_connection: bool = True):
         self.client = client
         if verify_connection:
             self.verify_api_connection()
         self.hydlog.setLevel(logging.WARNING)
-        
+
         # Commonly used things from the Hydrus database
         # If any of these are large they should probably be lazily loaded
         self.all_services = self.client.get_services()
@@ -39,9 +39,11 @@ class HydrusVideoDeduplicator():
     # Verify client connection and permissions
     # Will throw a hydrus_api.APIError if something is wrong
     def verify_api_connection(self):
-        self.hydlog.info(f"Client API version: v{self.client.VERSION} | Endpoint API version: v{self.client.get_api_version()['version']}")
+        self.hydlog.info(
+            f"Client API version: v{self.client.VERSION} | Endpoint API version: v{self.client.get_api_version()['version']}"
+        )
         hydrus_api.utils.verify_permissions(self.client, hydrus_api.utils.Permission)
-    
+
     # This is the master function of the class
     def deduplicate(self, overwrite: bool = False, custom_query: list | None = None, skip_hashing: bool | None = False):
         # Add perceptual hashes to video files
@@ -50,7 +52,7 @@ class HydrusVideoDeduplicator():
 
         query = False
         if custom_query is not None:
-            custom_query = [x for x in custom_query if x.strip()] # Remove whitespace and empty strings
+            custom_query = [x for x in custom_query if x.strip()]  # Remove whitespace and empty strings
             if len(custom_query) > 0:
                 search_tags.extend(custom_query)
                 rprint(f"[yellow] Custom Query: {custom_query}")
@@ -68,7 +70,7 @@ class HydrusVideoDeduplicator():
             self._find_potential_duplicates(limited_video_hashes=video_hashes)
 
         self._find_potential_duplicates(limited_video_hashes=video_hashes)
-        
+
         self.hydlog.info("Deduplication done.")
 
     @staticmethod
@@ -81,17 +83,17 @@ class HydrusVideoDeduplicator():
             # ffprobe command to check video codec
             # ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1
             ffprobe_cmd = [
-                        'ffprobe',
-                        '-v',
-                        'error',
-                        '-select_streams',
-                        'v:0',
-                        '-show_entries',
-                        'stream=codec_name',
-                        '-of',
-                        'default=noprint_wrappers=1:nokey=1',
-                        tmp_vid_file.name
-                        ]
+                'ffprobe',
+                '-v',
+                'error',
+                '-select_streams',
+                'v:0',
+                '-show_entries',
+                'stream=codec_name',
+                '-of',
+                'default=noprint_wrappers=1:nokey=1',
+                tmp_vid_file.name,
+            ]
 
             # Get video codec type
             video_codec: str = subprocess.check_output(ffprobe_cmd).decode('utf-8').strip()
@@ -117,7 +119,8 @@ class HydrusVideoDeduplicator():
                     ]
 
                     # Execute the ffmpeg command
-                    with open(os.devnull, "w") as devnull: subprocess.call(ffmpeg_cmd, stdout=devnull, stderr=devnull)
+                    with open(os.devnull, "w") as devnull:
+                        subprocess.call(ffmpeg_cmd, stdout=devnull, stderr=devnull)
 
                     perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file_transcoded.name)
 
@@ -133,12 +136,11 @@ class HydrusVideoDeduplicator():
             file_sort_type=hydrus_api.FileSortType.FILE_SIZE,
             return_hashes=True,
             file_sort_asc=True,
-            return_file_ids=False
-            )["hashes"]
+            return_file_ids=False,
+        )["hashes"]
         return all_video_hashes
 
-    def _add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes = set | list) -> None:
-
+    def _add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes=set | list) -> None:
         # Create database folder
         try:
             os.makedirs(DEDUP_DATABASE_DIR, exist_ok=False)
@@ -148,7 +150,6 @@ class HydrusVideoDeduplicator():
             pass
 
         with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
-
             dblen = len(hashdb)
             dbsize = os.path.getsize(DEDUP_DATABASE_FILE)
 
@@ -159,9 +160,7 @@ class HydrusVideoDeduplicator():
                 self.hydlog.info(f"Database not found. Creating one at {DEDUP_DATABASE_FILE}")
 
             try:
-                
                 with tqdm(total=len(video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
-
                     count_since_last_commit = 0
                     COMMIT_INTERVAL = 16
 
@@ -174,8 +173,8 @@ class HydrusVideoDeduplicator():
                         # Get video file from Hydrus
                         try:
                             video_response = self.client.get_file(hash_=video_hash)
-                            #video_metadata = self.client.get_file_metadata(hashes=[video_hash], only_return_basic_information=False)
-                            #print(video_metadata)
+                            # video_metadata = self.client.get_file_metadata(hashes=[video_hash], only_return_basic_information=False)
+                            # print(video_metadata)
                         except hydrus_api.HydrusAPIException:
                             rprint("[red] Failed to get video from Hydrus.")
                             self.hydlog.error("Error getting video from Hydrus.")
@@ -214,9 +213,11 @@ class HydrusVideoDeduplicator():
             finally:
                 hashdb.commit()
                 self.hydlog.info("Finished perceptual hash processing.")
-    
+
     def get_potential_duplicate_count_hydrus(self) -> int:
-        return self.client.get_potentials_count(file_service_keys=[self.all_services["all_local_files"][0]["service_key"]])["potential_duplicates_count"]
+        return self.client.get_potentials_count(
+            file_service_keys=[self.all_services["all_local_files"][0]["service_key"]]
+        )["potential_duplicates_count"]
 
     # Return similarity of two perceptual hashes given a threshold
     @staticmethod
@@ -235,19 +236,19 @@ class HydrusVideoDeduplicator():
         if similar:
             if self._DEBUG:
                 # Getting the file names will be VERY slow because of the API call
-                #file_names = get_file_names_hydrus(self.client, [video1_hash, video2_hash])
-                #self.hydlog.info(f"Duplicates filenames: {file_names}")
+                # file_names = get_file_names_hydrus(self.client, [video1_hash, video2_hash])
+                # self.hydlog.info(f"Duplicates filenames: {file_names}")
                 self.hydlog.info(f"\"Duplicates hashes: {video1_hash}\" and \"{video2_hash}\"")
-            
+
             new_relationship = {
                 "hash_a": str(video1_hash),
                 "hash_b": str(video2_hash),
                 "relationship": int(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES),
                 "do_default_content_merge": True,
             }
-        
+
             self.client.set_file_relationships([new_relationship])
-    
+
     # Delete cache row in database
     @staticmethod
     def clear_search_cache():
@@ -265,65 +266,79 @@ class HydrusVideoDeduplicator():
     # Sliding window duplicate comparisons
     # Alternatively, I could scan duplicates when added and never do it again which would be one of the best ways without a VP tree
     def _find_potential_duplicates(self, limited_video_hashes: list | set | None = None) -> None:
-
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos", verbose=True):
             rprint(f"[red] Could not search for duplicates.")
             return
 
         # Number of potential duplicates before adding more. Just for user info.
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
-        
-            
+
         # BUG: If this process is interrupted, the farthest_search_index will not save for ANY entries.
         #      I think it might be because every entry in the column needs an entry for SQlite but I'm not sure.
         video_counter = 0
         with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
             try:
-
                 if limited_video_hashes is not None:
                     total = len(limited_video_hashes)
                 else:
                     total = len(hashdb)
 
-                with tqdm(dynamic_ncols=True, total=total, desc="Finding duplicates", unit="video", colour="BLUE") as pbar:
+                with tqdm(
+                    dynamic_ncols=True, total=total, desc="Finding duplicates", unit="video", colour="BLUE"
+                ) as pbar:
                     # -1 is all cores, -2 is all cores but one
                     with Parallel(n_jobs=-2) as parallel:
-
                         if limited_video_hashes is not None:
-
                             # Avoid checking if in hashdb for each hash. Just do it now.
-                            clean_all_retrieved_video_hashes = [video_hash for video_hash in limited_video_hashes if video_hash in hashdb]
+                            clean_all_retrieved_video_hashes = [
+                                video_hash for video_hash in limited_video_hashes if video_hash in hashdb
+                            ]
 
                             for video1_hash in clean_all_retrieved_video_hashes:
-                                video_counter+=1
+                                video_counter += 1
                                 pbar.update(1)
-                                parallel(delayed(self.compare_videos)(video1_hash, video2_hash, hashdb[video1_hash]["perceptual_hash"], hashdb[video2_hash]["perceptual_hash"]) for video2_hash in clean_all_retrieved_video_hashes)
+                                parallel(
+                                    delayed(self.compare_videos)(
+                                        video1_hash,
+                                        video2_hash,
+                                        hashdb[video1_hash]["perceptual_hash"],
+                                        hashdb[video2_hash]["perceptual_hash"],
+                                    )
+                                    for video2_hash in clean_all_retrieved_video_hashes
+                                )
 
                         else:
-
                             count_since_last_commit = 0
                             commit_interval = 32
 
                             for i, video1_hash in enumerate(hashdb):
-                                video_counter+=1
+                                video_counter += 1
                                 pbar.update(1)
-                                
+
                                 row = hashdb[video1_hash]
 
                                 # Store last furthest searched position in the database for each element
                                 # This way you only have to start searching at that place instead of at i+1 if it exists
-                                row.setdefault("farthest_search_index", i+1)
+                                row.setdefault("farthest_search_index", i + 1)
 
                                 # This is not necessary but may increase speed by avoiding any of the code below
-                                if row["farthest_search_index"] >= len(hashdb)-1:
+                                if row["farthest_search_index"] >= len(hashdb) - 1:
                                     continue
 
-                                parallel(delayed(self.compare_videos)(video1_hash, video2_hash, hashdb[video1_hash]["perceptual_hash"], hashdb[video2_hash]["perceptual_hash"]) for video2_hash in islice(hashdb, row["farthest_search_index"], None))
+                                parallel(
+                                    delayed(self.compare_videos)(
+                                        video1_hash,
+                                        video2_hash,
+                                        hashdb[video1_hash]["perceptual_hash"],
+                                        hashdb[video2_hash]["perceptual_hash"],
+                                    )
+                                    for video2_hash in islice(hashdb, row["farthest_search_index"], None)
+                                )
 
                                 # Update furthest search position to the current length of the table
-                                row["farthest_search_index"] = len(hashdb)-1
+                                row["farthest_search_index"] = len(hashdb) - 1
                                 hashdb[video1_hash] = row
-                                count_since_last_commit+=1
+                                count_since_last_commit += 1
 
                                 if count_since_last_commit >= commit_interval:
                                     hashdb.commit()
@@ -336,7 +351,7 @@ class HydrusVideoDeduplicator():
 
         # Statistics for user
         post_dedupe_count = self.get_potential_duplicate_count_hydrus()
-        new_dedupes_count = post_dedupe_count-pre_dedupe_count
+        new_dedupes_count = post_dedupe_count - pre_dedupe_count
         if new_dedupes_count > 0:
             rprint(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
         else:
@@ -351,11 +366,13 @@ class HydrusVideoDeduplicator():
         it = iter(iterable)
         while batch := tuple(islice(it, n)):
             yield batch
-    
+
     # Check if files are trashed
     # Returns a dictionary of hash : trashed_or_not
     def is_files_trashed_hydrus(self, file_hashes: list[str]) -> dict:
-        videos_metadata = self.client.get_file_metadata(hashes=file_hashes, only_return_basic_information=False)["metadata"]
+        videos_metadata = self.client.get_file_metadata(hashes=file_hashes, only_return_basic_information=False)[
+            "metadata"
+        ]
 
         result = {}
         for video_metadata in videos_metadata:
@@ -379,7 +396,7 @@ class HydrusVideoDeduplicator():
                     for result in is_trashed_result.items():
                         if result[1] is True:
                             del hashdb[result[0]]
-                            delete_count+=1
+                            delete_count += 1
                     hashdb.commit()
             self.hydlog.info(f"[green] Cleared {delete_count} trashed files from the database.")
         except OSError:

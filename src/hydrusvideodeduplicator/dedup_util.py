@@ -8,7 +8,8 @@ from sqlitedict import SqliteDict
 from rich import print as rprint
 
 from hydrusvideodeduplicator.hydrus_api import Client
- 
+
+
 # Given a lexicographically SORTED list of tags, find the tag given a namespace
 # TODO: Do binary search since the tags are sorted
 def find_tag_in_tags(target_tag_namespace: str, tags: list) -> str:
@@ -17,6 +18,7 @@ def find_tag_in_tags(target_tag_namespace: str, tags: list) -> str:
         if tag[0:namespace_len] == target_tag_namespace:
             return tag[namespace_len:]
     return ""
+
 
 # Get the filename from the filename tag if it exists in Hydrus
 # This is just used for debugging.
@@ -34,7 +36,7 @@ def get_file_names_hydrus(client: Client, file_hashes: list[str]) -> list[str]:
             ext = file_metadata["ext"]
         except KeyError:
             ext = ""
-            
+
         # Try to get the file name
         tag = ""
         try:
@@ -51,7 +53,8 @@ def get_file_names_hydrus(client: Client, file_hashes: list[str]) -> list[str]:
 
     return result
 
-# Get the oldest file by import time in list of file_metadata 
+
+# Get the oldest file by import time in list of file_metadata
 def get_oldest_imported_file_time(all_files_metadata: list) -> int:
     file_import_times = []
     for video_metadata in all_files_metadata:
@@ -60,6 +63,7 @@ def get_oldest_imported_file_time(all_files_metadata: list) -> int:
         except KeyError:
             continue
     return min(file_import_times)
+
 
 # Get the import time of a file from file_metadata request from Hydrus
 def get_file_import_time(file_metadata: dict):
@@ -71,38 +75,38 @@ def get_file_import_time(file_metadata: dict):
             continue
     raise KeyError
 
+
 # From Stack Overflow
 # Returns a duration as specified by variable interval
 # Functions, except totalDuration, returns [quotient, remainder]
-def getDuration(then, now = datetime.now(), interval = "default"):
-
+def getDuration(then, now=datetime.now(), interval="default"):
     if now < then:
         duration = now
         duration_in_s = time.mktime(duration.timetuple())
     else:
         duration = now - then
-        duration_in_s = duration.total_seconds() 
-    
+        duration_in_s = duration.total_seconds()
+
     def years():
-        return divmod(duration_in_s, 31536000) # Seconds in a year=31536000.
+        return divmod(duration_in_s, 31536000)  # Seconds in a year=31536000.
 
-    def days(seconds = None):
-        return divmod(seconds if seconds != None else duration_in_s, 86400) # Seconds in a day = 86400
+    def days(seconds=None):
+        return divmod(seconds if seconds != None else duration_in_s, 86400)  # Seconds in a day = 86400
 
-    def hours(seconds = None):
-        return divmod(seconds if seconds != None else duration_in_s, 3600) # Seconds in an hour = 3600
+    def hours(seconds=None):
+        return divmod(seconds if seconds != None else duration_in_s, 3600)  # Seconds in an hour = 3600
 
-    def minutes(seconds = None):
-        return divmod(seconds if seconds != None else duration_in_s, 60) # Seconds in a minute = 60
+    def minutes(seconds=None):
+        return divmod(seconds if seconds != None else duration_in_s, 60)  # Seconds in a minute = 60
 
-    def seconds(seconds = None):
+    def seconds(seconds=None):
         if seconds != None:
-            return divmod(seconds, 1)   
+            return divmod(seconds, 1)
         return duration_in_s
 
     def totalDuration():
         y = years()
-        d = days(y[1]) # Use remainder to calculate next variable
+        d = days(y[1])  # Use remainder to calculate next variable
         h = hours(d[1])
         m = minutes(h[1])
         s = seconds(m[1])
@@ -115,30 +119,33 @@ def getDuration(then, now = datetime.now(), interval = "default"):
         'hours': int(hours()[0]),
         'minutes': int(minutes()[0]),
         'seconds': int(seconds()),
-        'default': totalDuration()
-    }[interval]        
+        'default': totalDuration(),
+    }[interval]
+
 
 from threading import Thread
 from threading import Lock
- 
+
+
 # thread safe counter class
-class ThreadSafeCounter():
+class ThreadSafeCounter:
     # constructor
     def __init__(self):
         # initialize counter
         self._counter = 0
         # initialize lock
         self._lock = Lock()
- 
+
     # increment the counter
     def increment(self):
         with self._lock:
             self._counter += 1
- 
+
     # get the counter value
     def value(self):
         with self._lock:
             return self._counter
+
 
 def database_accessible(db_file: Path | str, tablename: str, verbose: bool = False):
     try:
@@ -147,7 +154,7 @@ def database_accessible(db_file: Path | str, tablename: str, verbose: bool = Fal
     except OSError:
         if verbose:
             rprint(f"[red] Database does not exist.")
-    except RuntimeError: # SqliteDict error when trying to create a table for a DB in read-only mode
+    except RuntimeError:  # SqliteDict error when trying to create a table for a DB in read-only mode
         if verbose:
             rprint(f"[red] Database does not exist.")
     except Exception as exc:

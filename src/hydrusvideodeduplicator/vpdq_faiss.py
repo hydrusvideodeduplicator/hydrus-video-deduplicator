@@ -15,9 +15,7 @@ class VPDQHashIndex:
         """
         If none faiss index is provided, will use "brute-force" faiss search
         """
-        self.faiss_index = (
-            faiss.IndexBinaryFlat(BITS_IN_PDQ) if faiss_index is None else faiss_index
-        )
+        self.faiss_index = faiss.IndexBinaryFlat(BITS_IN_PDQ) if faiss_index is None else faiss_index
 
     def add_single_video(self, hashes: t.List[VpdqCompactFeature]) -> None:
         """
@@ -60,14 +58,9 @@ class VPDQHashIndex:
             }
         """
 
-        query_vectors = [
-            numpy.frombuffer(binascii.unhexlify(q.pdq_hex), dtype=numpy.uint8)
-            for q in queries
-        ]
+        query_vectors = [numpy.frombuffer(binascii.unhexlify(q.pdq_hex), dtype=numpy.uint8) for q in queries]
         qs = numpy.array(query_vectors)
-        limits, similarities, neighbors = self.faiss_index.range_search(
-            qs, distance_tolerance + 1
-        )
+        limits, similarities, neighbors = self.faiss_index.range_search(qs, distance_tolerance + 1)
 
         result = {}
         for i, query in enumerate(queries):

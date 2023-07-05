@@ -21,13 +21,7 @@ def match_VPDQ_in_another(
     Returns:
         int: The count of matches of hash1 in hash2
     """
-    return sum(
-        any(
-            simple_distance(h1.pdq_hex, h2.pdq_hex) <= distance_tolerance
-            for h2 in hash2
-        )
-        for h1 in hash1
-    )
+    return sum(any(simple_distance(h1.pdq_hex, h2.pdq_hex) <= distance_tolerance for h2 in hash2) for h1 in hash1)
 
 
 def match_VPDQ_hash_brute(
@@ -55,12 +49,8 @@ def match_VPDQ_hash_brute(
     compared_match_cnt = 0
     filtered_query = quality_filter(dedupe(query_hash), quality_tolerance)
     filtered_compared = quality_filter(dedupe(compared_hash), quality_tolerance)
-    query_match_cnt = match_VPDQ_in_another(
-        filtered_query, filtered_compared, distance_tolerance
-    )
-    compared_match_cnt = match_VPDQ_in_another(
-        filtered_compared, filtered_query, distance_tolerance
-    )
+    query_match_cnt = match_VPDQ_in_another(filtered_query, filtered_compared, distance_tolerance)
+    compared_match_cnt = match_VPDQ_in_another(filtered_compared, filtered_query, distance_tolerance)
 
     # TODO: Why does this sometimes happen?
     if len(filtered_query) == 0 or len(filtered_compared) == 0:

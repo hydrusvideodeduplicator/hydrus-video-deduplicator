@@ -17,11 +17,12 @@ from .vpdq_util import (
 from .vpdq_brute_matcher import match_VPDQ_hash_brute
 import pathlib
 import typing as t
-#from threatexchange.content_type.content_base import ContentType
-#from threatexchange.content_type.video import VideoContent
-#from threatexchange.signal_type import signal_base
-#from threatexchange.signal_type.pdq.signal import PdqSignal
-#from .vpdq_index import VPDQSimilarityInfo, VPDQIndex
+
+# from threatexchange.content_type.content_base import ContentType
+# from threatexchange.content_type.video import VideoContent
+# from threatexchange.signal_type import signal_base
+# from threatexchange.signal_type.pdq.signal import PdqSignal
+# from .vpdq_index import VPDQSimilarityInfo, VPDQIndex
 
 
 class VPDQSignal:
@@ -64,15 +65,15 @@ class VPDQSignal:
         cls,
         hash1: str,
         hash2: str,
-        ):
-            vpdq_hash1 = json_to_vpdq(hash1)
-            vpdq_hash2 = json_to_vpdq(hash2)
-            match_percent = match_VPDQ_hash_brute(
-                vpdq_hash1,
-                vpdq_hash2,
-                VPDQ_QUALITY_THRESHOLD,
-                VPDQ_DISTANCE_THRESHOLD,
-            )
+    ):
+        vpdq_hash1 = json_to_vpdq(hash1)
+        vpdq_hash2 = json_to_vpdq(hash2)
+        match_percent = match_VPDQ_hash_brute(
+            vpdq_hash1,
+            vpdq_hash2,
+            VPDQ_QUALITY_THRESHOLD,
+            VPDQ_DISTANCE_THRESHOLD,
+        )
 
-            assert match_percent.query_match_percent >= 0 and match_percent.compared_match_percent >= 0
-            return match_percent.query_match_percent, match_percent.compared_match_percent
+        assert match_percent.query_match_percent >= 0 and match_percent.compared_match_percent >= 0
+        return match_percent.query_match_percent, match_percent.compared_match_percent

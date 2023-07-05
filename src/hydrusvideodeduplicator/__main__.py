@@ -23,19 +23,28 @@ Parameters:
 """
 rprint(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
 
-def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] = None,
-        api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = HYDRUS_API_URL,
-        overwrite:  Annotated[Optional[bool], typer.Option(help="Overwrite existing perceptual hashes")] = False,
-        query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = HYDRUS_QUERY,
-        threshold: Annotated[Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")] = VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
-        skip_hashing: Annotated[Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")] = False,
-        verify_cert: Annotated[Optional[str], typer.Option(help="Path to TLS cert. This forces verification.")] = REQUESTS_CA_BUNDLE,
-        clear_search_cache: Annotated[Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared")] = False,
-        verbose:  Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
-        debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
-        ):
 
-    threshold = threshold/100.
+def main(
+    api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] = None,
+    api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = HYDRUS_API_URL,
+    overwrite: Annotated[Optional[bool], typer.Option(help="Overwrite existing perceptual hashes")] = False,
+    query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = HYDRUS_QUERY,
+    threshold: Annotated[
+        Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")
+    ] = VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
+    skip_hashing: Annotated[
+        Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")
+    ] = False,
+    verify_cert: Annotated[
+        Optional[str], typer.Option(help="Path to TLS cert. This forces verification.")
+    ] = REQUESTS_CA_BUNDLE,
+    clear_search_cache: Annotated[
+        Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared")
+    ] = False,
+    verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
+    debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
+):
+    threshold = threshold / 100.0
 
     # CLI debug parameter sets log level to info or debug
     loglevel: logging._Level = logging.WARNING
@@ -43,11 +52,9 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
         loglevel = logging.DEBUG
         verbose = True
 
-    logging.basicConfig(format=' %(asctime)s - %(name)s: %(message)s',
-                        datefmt='%H:%M:%S',
-                        level=loglevel)
+    logging.basicConfig(format=' %(asctime)s - %(name)s: %(message)s', datefmt='%H:%M:%S', level=loglevel)
     logging.info("Starting Hydrus Video Deduplicator")
-    
+
     # Verbose sets whether logs are shown to the user at all.
     # Logs are separate from printing in this program.
     if not verbose:
@@ -76,10 +83,11 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
     print(f"Connecting to {api_url}")
     # Client connection
     # TODO: Try to connect with https first and then fallback to http with a strong warning
-    _client = hydrus_api.Client(api_url=api_url,
-                                access_key=api_key,
-                                verify_cert=verify_cert,
-                                )
+    _client = hydrus_api.Client(
+        api_url=api_url,
+        access_key=api_key,
+        verify_cert=verify_cert,
+    )
 
     error_connecting = True
     error_connecting_exception_msg = ""
@@ -104,13 +112,15 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
             error_connecting_exception_msg = "Failed to connect to Hydrus. SSL certificate verification failed."
         # Probably tried using http instead of https when client is https
         elif "Connection aborted" in str(exc):
-            error_connecting_exception_msg = "Failed to connect to Hydrus. Does your Hydrus Client API http/https setting match your --api-url?"
+            error_connecting_exception_msg = (
+                "Failed to connect to Hydrus. Does your Hydrus Client API http/https setting match your --api-url?"
+            )
         else:
             error_connecting_exception_msg = "Failed to connect to Hydrus. Is your Hydrus instance running?"
         error_connecting_exception = exc
     else:
         error_connecting = False
-    
+
     if error_connecting:
         logging.fatal("FATAL ERROR HAS OCCURRED")
         logging.fatal(error_connecting_exception)
@@ -131,9 +141,7 @@ def main(api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] 
     superdeduper.clear_trashed_files_from_db()
 
     # Run all deduplicate functionality
-    superdeduper.deduplicate(overwrite=overwrite,
-                             custom_query=query,
-                             skip_hashing=skip_hashing)
+    superdeduper.deduplicate(overwrite=overwrite, custom_query=query, skip_hashing=skip_hashing)
 
     typer.Exit()
 

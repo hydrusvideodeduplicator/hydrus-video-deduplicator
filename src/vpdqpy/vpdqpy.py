@@ -36,6 +36,8 @@ class VpdqFeature:
 
     def assert_valid(self) -> VpdqFeature:
         """Checks the bounds of all the elements, throws ValueError if invalid"""
+        if len(str(self.pdq_hash)) < Hash256.HASH256_HEX_NUM_NYBBLES:
+            raise ValueError("invalid PDQ hash")
         if not (0 <= self.quality <= 100):
             raise ValueError("invalid VPDQ quality")
         if self.frame_number < 0:

@@ -8,8 +8,11 @@ from typing import TYPE_CHECKING
 
 import ffmpeg
 from PIL import Image
+import vpdq # VPDQ CPP IMPLEMENTATION 
+
 
 from pdqhashing.hasher.pdq_hasher import PDQHasher
+
 
 if TYPE_CHECKING:
     from typing import Annotated
@@ -24,6 +27,36 @@ class VpdqFeature:
     pdq_hash: Hash256  # 64 char hex string
     quality: float  # 0 to 100
     frame_number: int
+
+    # ONLY FOR VPDQ CPP IMPLEMENTATION
+    @classmethod
+    def from_vpdq_feature(cls, feature: vpdq.VpdqFeature) -> VpdqFeature:
+        return cls(feature.hex, feature.quality, int(feature.frameNumber))
+
+    def assert_valid(self) -> VpdqFeature:
+        """Checks the bounds of all the elements, throws ValueError if invalid"""
+        PDQ_HEX_STR_LEN = 64
+        if len(self.pdq_hash.toHexString()) != PDQ_HEX_STR_LEN:
+            raise ValueError("malformed pdq hash")
+        if not (0 <= self.quality <= 100):
+            raise ValueError("invalid VPDQ quality")
+        if self.frame_number < 0:
+            raise ValueError("invalid frame number")
+        return self
+
+    @staticmethod
+    def from_str(serialized: str) -> VpdqFeature:
+        """Convert from a string back to the class - the inverse of __str__"""
+        parts = serialized.split(",")
+        try:
+            pdq_hex, qual_str, time_str = parts  # Wrong count = ValueError
+            return VpdqFeature(pdq_hex, int(qual_str), float(time_str)).assert_valid()
+        except ValueError:
+            raise ValueError(f"invalid {Vpdq.__name__} serialization: {serialized}")
+
+    def __str__(self) -> str:
+            return f"{self.pdq_hash},{self.quality},{self.frame_number}"
+        
 
 
 class Vpdq:
@@ -42,7 +75,11 @@ class Vpdq:
 
         # Decode the output stream as json
         output = json.loads(stdout.decode("utf-8"))
-        # error = stderr.decode("utf-8")
+        error = stderr.decode("utf-8")
+        if "streams" not in output:
+            print(output)
+            print(error)
+            print(stderr)
 
         video_info = next(
             (stream for stream in output["streams"] if stream["codec_type"] == "video"),
@@ -61,8 +98,8 @@ class Vpdq:
             try:
                 with open(str(video_file), "rb") as file:
                     video = file.read()
-            except OSError:
-                raise ValueError("Failed to get video file bytes. Invalid object type.")
+            except OSError as exc:
+                raise ValueError("Failed to get video file bytes. Invalid object type.") from exc
         elif isinstance(video_file, bytes):
             video = video_file
         else:
@@ -81,10 +118,12 @@ class Vpdq:
                 unique_features.add(str(feature.pdq_hash))
         return ret
 
-    # quality tolerance from [0,100]
+    # Remove features that are below a certain quality threshold
     @staticmethod
-    def filter_features(vpdq_features: list[VpdqFeature], quality_tolerance: float) -> list[VpdqFeature]:
-        return [feature for feature in vpdq_features if feature.quality >= quality_tolerance]
+    def filter_features(
+        vpdq_features: list[VpdqFeature], threshold: Annotated[float, ValueRange(0.0, 100.0)]
+    ) -> list[VpdqFeature]:
+        return [feature for feature in vpdq_features if feature.quality >= threshold]
 
     # Get number of matching features for query and target
     @staticmethod
@@ -120,7 +159,14 @@ class Vpdq:
 
     # Perceptually hash video from a file path or the bytes
     @staticmethod
-    def computeHash(video_file: Path | str | bytes, seconds_per_hash: float = 1) -> list[VpdqFeature]:
+    def computeHash(
+        video_file: Path | str | bytes,
+        ffmpeg_path: str = "ffmpeg",
+        seconds_per_hash: float = 1,
+        verbose: bool = False,
+        downsample_width: int = 0,
+        downsample_height: int = 0,
+    ) -> list[VpdqFeature]:
         video = Vpdq.get_video_bytes(video_file)
         if video is None:
             raise ValueError
@@ -129,6 +175,7 @@ class Vpdq:
             video_info = Vpdq.get_vid_info(video)
             width = int(video_info["width"])
             height = int(video_info["height"])
+            codec_name = str(video_info["codec_name"])
         except KeyError as exc:
             raise ValueError from exc
 
@@ -179,3 +226,14 @@ class Vpdq:
     ) -> tuple[bool, float]:
         similarity = Vpdq.match_hash(query_features=vpdq_features1, target_features=vpdq_features2)
         return similarity >= threshold, similarity
+
+    @staticmethod
+    def vpdq_to_json(vpdq_features: list[VpdqFeature], *, indent: int | None = None) -> str:
+        """Convert from VPDQ features to json object and return the json object as a str"""
+        return json.dumps([str(f.assert_valid()) for f in vpdq_features], indent=indent)
+
+    @staticmethod
+    def json_to_vpdq(json_str: str) -> list[VpdqFeature]:
+        """Load a str as a json object and convert from json object to VPDQ features"""
+        return [VpdqFeature.from_str(s) for s in json.loads(json_str or "[]")]
+

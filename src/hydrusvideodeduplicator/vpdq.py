@@ -4,25 +4,14 @@
 Wrapper around the vpdq signal type.
 """
 
-from .vpdq_util import (
-    VPDQ_INDEX_MATCH_THRESHOLD_PERCENT,
-    VpdqCompactFeature,
-    json_to_vpdq,
-    vpdq_to_json,
-    VPDQ_DISTANCE_THRESHOLD,
-    VPDQ_QUERY_MATCH_THRESHOLD_PERCENT,
-    VPDQ_QUALITY_THRESHOLD,
-    hash_file_compact,
-)
-from .vpdq_brute_matcher import match_VPDQ_hash_brute
 import pathlib
-import typing as t
 
-# from threatexchange.content_type.content_base import ContentType
-# from threatexchange.content_type.video import VideoContent
-# from threatexchange.signal_type import signal_base
-# from threatexchange.signal_type.pdq.signal import PdqSignal
-# from .vpdq_index import VPDQSimilarityInfo, VPDQIndex
+from .vpdq_brute_matcher import match_VPDQ_hash_brute
+from .vpdq_util import (VPDQ_DISTANCE_THRESHOLD,
+                        VPDQ_INDEX_MATCH_THRESHOLD_PERCENT,
+                        VPDQ_QUALITY_THRESHOLD,
+                        VPDQ_QUERY_MATCH_THRESHOLD_PERCENT, VpdqCompactFeature,
+                        hash_file_compact, json_to_vpdq, vpdq_to_json)
 
 
 class VPDQSignal:

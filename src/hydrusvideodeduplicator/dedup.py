@@ -15,6 +15,7 @@ import hydrusvideodeduplicator.hydrus_api.utils
 from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
 from .dedup_util import database_accessible, find_tag_in_tags, get_file_names_hydrus, ThreadSafeCounter
 from .vpdq import VPDQSignal
+from vpdqpy.vpdqpy import Vpdq
 
 
 class HydrusVideoDeduplicator:
@@ -127,8 +128,11 @@ class HydrusVideoDeduplicator:
                     logging.info("Fallback to transcode successful.")
             else:
                 perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
+                rprint("[green] OLD HASH METHOD:", perceptual_hash)
+                perceptual_hash_1 = Vpdq.vpdq_to_json(Vpdq.computeHash(str(tmp_vid_file.name)))
+                rprint("[blue] NEW HASH METHOD:", perceptual_hash_1)
 
-            return perceptual_hash
+            return perceptual_hash_1
 
     def _retrieve_video_hashes(self, search_tags) -> list:
         all_video_hashes = self.client.search_files(
@@ -183,7 +187,6 @@ class HydrusVideoDeduplicator:
                         # Calculate perceptual_hash
                         try:
                             perceptual_hash = self._calculate_perceptual_hash(video_response.content)
-                            print(perceptual_hash.hex)
                         except Exception as exc:
                             rprint("[red] Failed to calculate a perceptual hash.")
                             self.hydlog.exception(exc)

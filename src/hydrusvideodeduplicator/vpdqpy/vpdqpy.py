@@ -123,6 +123,11 @@ class Vpdq:
     @staticmethod
     def frame_extract_pyav(video: bytes) -> Generator[Image.Image]:
         with av.open(io.BytesIO(video), metadata_encoding='utf-8', metadata_errors='ignore') as container:
+            video_streams = container.streams.video
+            if len(video_streams) < 1:
+                logging.error("Video stream not found.")
+                raise ValueError("Video stream not found.")
+
             video = container.streams.video[0]
             video.thread_type = "AUTO"
 
@@ -133,7 +138,7 @@ class Vpdq:
                 average_fps = 1
                 logging.warning("Average FPS not found. Every frame will be hashed.")
             else:
-                average_fps: int = max(round(average_fps), 1)
+                average_fps: int = int(max(round(average_fps), 1))
 
             for index, frame in enumerate(container.decode(video)):
                 if index % average_fps == 0:

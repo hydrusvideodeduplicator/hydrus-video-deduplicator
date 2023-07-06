@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import av
-# import vpdq  # VPDQ CPP IMPLEMENTATION
 from PIL import Image
 
 from pdqhashing.hasher.pdq_hasher import PDQHasher

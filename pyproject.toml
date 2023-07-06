@@ -45,6 +45,13 @@ Source = "https://github.com/appleappleapplenanner/hydrus-video-deduplicator"
 hydrus_api = {path = "src/hydrusvideodeduplicator/hydrus_api"}
 vpdqpy = {path = "src/hydrusvideodeduplicator/vpdqpy"}
 
+[tool.hatch.build]
+exclude = [
+  "/.*",
+  "/docs",
+  "/tests",
+]
+
 [tool.hatch.metadata]
 allow-direct-references = true
 

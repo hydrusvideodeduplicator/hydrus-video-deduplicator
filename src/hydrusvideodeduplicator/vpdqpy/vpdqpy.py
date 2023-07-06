@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
+import logging
 
 import av
 from PIL import Image
@@ -125,7 +126,14 @@ class Vpdq:
             video = container.streams.video[0]
             video.thread_type = "AUTO"
 
-            average_fps: int = round(video.average_rate)
+            average_fps = video.average_rate
+            # Some videos, like small GIFs, will have a NoneType FPS
+            # If this happens or if the average FPS is below 1, every frame will be hashed
+            if average_fps is None:
+                average_fps = 1
+                logging.warning("Average FPS not found. Every frame will be hashed.")
+            else:
+                average_fps: int = max(round(average_fps), 1)
 
             for index, frame in enumerate(container.decode(video)):
                 if index % average_fps == 0:

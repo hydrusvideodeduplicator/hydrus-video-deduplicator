@@ -1,3 +1,14 @@
+
+"""
+
+These tests use clips from the Big Buck Bunny movie,
+which is licensed under Creative Commons Attribution 3.0
+(https://creativecommons.org/licenses/by/3.0/).
+(c) copyright 2008, Blender Foundation / www.bigbuckbunny.org
+Blender Foundation | www.blender.org
+
+"""
+
 import unittest
 from pathlib import Path
 

@@ -65,3 +65,5 @@ Please create an issue on Github if you have any problems or questions! Pull req
 [pdq](https://github.com/facebook/ThreatExchange/tree/main/pdq) by Meta
 
 vpdq by Meta, ported to Python by me.
+
+[Big Buck Bunny](https://peach.blender.org/about) clips by Blender Foundation (CC BY 3.0)

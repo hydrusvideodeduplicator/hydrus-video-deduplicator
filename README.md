@@ -25,16 +25,12 @@ For more information check out the [wiki](https://github.com/appleappleapplenann
 ---
 
 ## Installation:
-
-[Windows requires WSL](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/wiki/Installation#Windows)
-
-### Linux:
-[Install dependencies](https://github.com/appleappleapplenanner/hydrus-video-deduplicator/wiki/Installation#Linux)
-
-Then install with pip:
+#### Dependencies:
+- Python >=3.10
+- FFmpeg
 
 ```sh
-pip install hydrusvideodeduplicator
+python3 -m pip install hydrusvideodeduplicator
 ```
 
 ---
@@ -54,8 +50,8 @@ python3 -m hydrusvideodeduplicator --api-key="<your key>"
 - [ ] Automatically generate access key with Hydrus API
 - [x] Docker container
 - [ ] Upload Docker container to Docker Hub (GitHub Action)
-- [ ] Pure Python port of vpdq
-- [ ] Windows compatibility without WSL or Docker
+- [x] Pure Python port of vpdq
+- [x] Windows compatibility without WSL or Docker
 
 Please create an issue on Github if you have any problems or questions! Pull requests also welcome on this or my VideoHash fork. 
 
@@ -68,6 +64,6 @@ There is a lot to improve and cleanup and I'm more experienced in C than Python,
 
 [Hydrus API Library](https://gitlab.com/cryzed/hydrus-api) by Cryzed
 
-[vpdq](https://github.com/facebook/ThreatExchange/tree/main/vpdq) by Meta
+[pdq](https://github.com/facebook/ThreatExchange/tree/main/pdq) by Meta
 
-various other files from threatexchange by Meta
+vpdq by Meta, ported to Python by me.

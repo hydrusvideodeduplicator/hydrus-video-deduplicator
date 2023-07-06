@@ -22,10 +22,6 @@ class HydrusVideoDeduplicator:
     threshold: float = 75.0
     _DEBUG = False
 
-    # These are found by trial and error. If you find an unsupported codec, create an issue on GitHub please.
-    # For now, videos are transcoded to H.264 if possible
-    UNSUPPORTED_CODECS = set([""])
-
     def __init__(self, client: hydrus_api.Client, verify_connection: bool = True):
         self.client = client
         if verify_connection:

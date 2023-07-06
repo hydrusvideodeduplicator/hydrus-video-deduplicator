@@ -1,30 +1,31 @@
-import os
+from __future__ import annotations
+
 import logging
-import tempfile
+import os
 from itertools import islice
 from pathlib import Path
-import subprocess
+from typing import TYPE_CHECKING
 
-from tqdm import tqdm
+from joblib import Parallel, delayed
 from rich import print as rprint
 from sqlitedict import SqliteDict
-from joblib import Parallel, delayed
+from tqdm import tqdm
+
+if TYPE_CHECKING:
+    pass
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
-from .config import DEDUP_DATABASE_FILE, DEDUP_DATABASE_DIR, DEDUP_DATABASE_NAME
-from .dedup_util import database_accessible, find_tag_in_tags, get_file_names_hydrus, ThreadSafeCounter
-from .vpdq import VPDQSignal
+from vpdqpy.vpdqpy import Vpdq
+
+from .config import DEDUP_DATABASE_DIR, DEDUP_DATABASE_FILE, DEDUP_DATABASE_NAME
+from .dedup_util import database_accessible, find_tag_in_tags, get_file_names_hydrus
 
 
 class HydrusVideoDeduplicator:
     hydlog = logging.getLogger("hydlog")
-    threshold: float = 0.8
+    threshold: float = 75.0
     _DEBUG = False
-
-    # These are found by trial and error. If you find an unsupported codec, create an issue on GitHub please.
-    # For now, videos are transcoded to H.264 if possible
-    UNSUPPORTED_CODECS = set([""])
 
     def __init__(self, client: hydrus_api.Client, verify_connection: bool = True):
         self.client = client
@@ -73,60 +74,9 @@ class HydrusVideoDeduplicator:
 
     @staticmethod
     def _calculate_perceptual_hash(video: str | bytes) -> str:
-        with tempfile.NamedTemporaryFile(mode="w+b") as tmp_vid_file:
-            # Write video to file to be able to calculate hash
-            tmp_vid_file.write(video)
-            tmp_vid_file.flush()
-
-            # ffprobe command to check video codec
-            # ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1
-            ffprobe_cmd = [
-                'ffprobe',
-                '-v',
-                'error',
-                '-select_streams',
-                'v:0',
-                '-show_entries',
-                'stream=codec_name',
-                '-of',
-                'default=noprint_wrappers=1:nokey=1',
-                tmp_vid_file.name,
-            ]
-
-            # Get video codec type
-            video_codec: str = subprocess.check_output(ffprobe_cmd).decode('utf-8').strip()
-
-            if video_codec in HydrusVideoDeduplicator.UNSUPPORTED_CODECS:
-                logging.warning(f"Video file has unsupported codec: {video_codec}")
-                logging.warning("Falling back to transcoding (this may take a bit)")
-
-                # Transcode video
-                with tempfile.NamedTemporaryFile(mode="w+b", suffix=".mp4") as tmp_vid_file_transcoded:
-                    ffmpeg_cmd = [
-                        'ffmpeg',
-                        '-y',
-                        '-i',
-                        tmp_vid_file.name,
-                        '-c:v',
-                        'libx264',
-                        '-preset',
-                        'veryfast',
-                        '-crf',
-                        '28',
-                        tmp_vid_file_transcoded.name,
-                    ]
-
-                    # Execute the ffmpeg command
-                    with open(os.devnull, "w") as devnull:
-                        subprocess.call(ffmpeg_cmd, stdout=devnull, stderr=devnull)
-
-                    perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file_transcoded.name)
-
-                    logging.info("Fallback to transcode successful.")
-            else:
-                perceptual_hash = VPDQSignal.hash_from_file(tmp_vid_file.name)
-
-            return perceptual_hash
+        perceptual_hash = Vpdq.vpdq_to_json(Vpdq.computeHash(video))
+        assert perceptual_hash != "[]"
+        return perceptual_hash
 
     def _retrieve_video_hashes(self, search_tags) -> list:
         all_video_hashes = self.client.search_files(
@@ -217,26 +167,17 @@ class HydrusVideoDeduplicator:
             file_service_keys=[self.all_services["all_local_files"][0]["service_key"]]
         )["potential_duplicates_count"]
 
-    # Return similarity of two perceptual hashes given a threshold
-    @staticmethod
-    def is_similar(video1_phash: str, video2_phash: str, min_percent_similarity: float = 0.8) -> bool:
-        # They videos are compared and check if video1 is in video2 and also if video2 is in video1.
-        # If either is true, then they're similar. It doesn't make sense currently to have one similar to the other and not vice-versa.
-        query_match_percent, compare_match_percent = VPDQSignal.get_similarity(video1_phash, video2_phash)
-        if query_match_percent > 0 or compare_match_percent > 0:
-            # Note: This doesn't log for some reason unless it's set to some level like error.
-            logging.info(f"Similarity above 0: Query {query_match_percent}, Compared {compare_match_percent}")
-        return query_match_percent >= min_percent_similarity or compare_match_percent >= min_percent_similarity
-
-    def compare_videos(self, video1_hash, video2_hash, video1_phash, video2_phash):
-        similar = HydrusVideoDeduplicator.is_similar(video1_phash, video2_phash, self.threshold)
+    def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str):
+        vpdq_hash1 = Vpdq.json_to_vpdq(video1_phash)
+        vpdq_hash2 = Vpdq.json_to_vpdq(video2_phash)
+        similar, similarity = Vpdq.is_similar(vpdq_hash1, vpdq_hash2, self.threshold)
 
         if similar:
             if self._DEBUG:
                 # Getting the file names will be VERY slow because of the API call
                 # file_names = get_file_names_hydrus(self.client, [video1_hash, video2_hash])
                 # self.hydlog.info(f"Duplicates filenames: {file_names}")
-                self.hydlog.info(f"\"Duplicates hashes: {video1_hash}\" and \"{video2_hash}\"")
+                self.hydlog.info(f"\"Similar {similarity}%: {video1_hash}\" and \"{video2_hash}\"")
 
             new_relationship = {
                 "hash_a": str(video1_hash),

@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 license = "MIT"
 keywords = []
 authors = [
-  { name = "appleappleapplenanner", email = "" },
+  { name = "appleappleapplenanner", email = "applenannerapple@gmail.com" },
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -27,11 +27,13 @@ dependencies = [
     "tqdm",
     "python-dotenv",
     "typer",
-    "hvdvpdq>=0.0.11",
     "sqlitedict",
     "requests",
     "psutil",
     "joblib",
+    # Below is for vpdqpy
+    "Pillow",
+    "av",
 ]
 
 [project.urls]

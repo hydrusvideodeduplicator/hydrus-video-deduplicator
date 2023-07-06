@@ -65,10 +65,16 @@ class HydrusVideoDeduplicator:
             if query:
                 video_hashes = set(self._retrieve_video_hashes(search_tags))
         else:
-            video_hashes = self._retrieve_video_hashes(search_tags)
-            self._add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=video_hashes)
+            all_video_hashes = self._retrieve_video_hashes(search_tags)
+            self._add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=all_video_hashes)
+        
+        if query and not skip_hashing:
+            video_hashes = set(self._retrieve_video_hashes(search_tags))
 
-        self._find_potential_duplicates(limited_video_hashes=video_hashes)
+        if query:
+            self._find_potential_duplicates(limited_video_hashes=video_hashes)
+        else:
+            self._find_potential_duplicates(limited_video_hashes=None)
 
         self.hydlog.info("Deduplication done.")
 

@@ -53,9 +53,7 @@ python3 -m hydrusvideodeduplicator --api-key="<your key>"
 - [x] Pure Python port of vpdq
 - [x] Windows compatibility without WSL or Docker
 
-Please create an issue on Github if you have any problems or questions! Pull requests also welcome on this or my VideoHash fork. 
-
-There is a lot to improve and cleanup and I'm more experienced in C than Python, so fix stuff please.
+Please create an issue on Github if you have any problems or questions! Pull requests are also welcome.
 
 ---
 

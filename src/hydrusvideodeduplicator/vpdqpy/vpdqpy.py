@@ -123,6 +123,7 @@ class Vpdq:
     @staticmethod
     def frame_extract_pyav(video: bytes) -> Generator[Image.Image]:
         with av.open(io.BytesIO(video), metadata_encoding='utf-8', metadata_errors='ignore') as container:
+            # Check for video in video container
             video_streams = container.streams.video
             if len(video_streams) < 1:
                 logging.error("Video stream not found.")

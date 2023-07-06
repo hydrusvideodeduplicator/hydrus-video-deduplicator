@@ -1,4 +1,3 @@
-
 """
 
 These tests use clips from the Big Buck Bunny movie,

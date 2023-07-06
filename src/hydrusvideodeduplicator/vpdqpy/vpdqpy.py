@@ -9,16 +9,16 @@ from typing import TYPE_CHECKING
 import av
 from PIL import Image
 
-from pdqhashing.hasher.pdq_hasher import PDQHasher
+from ..pdqhashing.hasher.pdq_hasher import PDQHasher
 
 if TYPE_CHECKING:
     from typing import Annotated, Generator
 
     from .typing_utils import ValueRange
 
-    from pdqhashing.types.containers import HashAndQuality
+    from ..pdqhashing.types.containers import HashAndQuality
 
-from pdqhashing.types.hash256 import Hash256
+from ..pdqhashing.types.hash256 import Hash256
 
 
 @dataclass(slots=True)

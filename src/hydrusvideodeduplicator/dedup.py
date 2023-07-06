@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
-from vpdqpy.vpdqpy import Vpdq
+from .vpdqpy.vpdqpy import Vpdq
 
 from .config import DEDUP_DATABASE_DIR, DEDUP_DATABASE_FILE, DEDUP_DATABASE_NAME
 from .dedup_util import database_accessible, find_tag_in_tags, get_file_names_hydrus

@@ -8,8 +8,8 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
-from pdqhashing.hasher.pdq_hasher import PDQHasher
-from pdqhashing.types.hash256 import Hash256
+from ..hasher.pdq_hasher import PDQHasher
+from ..types.hash256 import Hash256
 
 
 class PDQPhotoHasherTool:

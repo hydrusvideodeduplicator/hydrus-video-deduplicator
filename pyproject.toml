@@ -42,7 +42,8 @@ Issues = "https://github.com/appleappleapplenanner/hydrus-video-deduplicator/iss
 Source = "https://github.com/appleappleapplenanner/hydrus-video-deduplicator"
 
 [tool.hatch.dependencies]
-local_dependency = {path = "src/hydrusvideodeduplicator/hydrus_api"}
+hydrus_api = {path = "src/hydrusvideodeduplicator/hydrus_api"}
+vpdqpy = {path = "src/hydrusvideodeduplicator/vpdqpy"}
 
 [tool.hatch.metadata]
 allow-direct-references = true

@@ -7,9 +7,9 @@ from typing import List
 
 from PIL import Image
 
-from pdqhashing.types.containers import HashAndQuality, HashesAndQuality
-from pdqhashing.types.hash256 import Hash256
-from pdqhashing.utils.matrix import MatrixUtil
+from ..types.containers import HashAndQuality, HashesAndQuality
+from ..types.hash256 import Hash256
+from ..utils.matrix import MatrixUtil
 
 
 class PDQHasher:

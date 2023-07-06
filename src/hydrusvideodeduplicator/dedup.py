@@ -19,7 +19,7 @@ from vpdqpy.vpdqpy import Vpdq
 
 class HydrusVideoDeduplicator:
     hydlog = logging.getLogger("hydlog")
-    threshold: float = 0.8
+    threshold: float = 75.0
     _DEBUG = False
 
     # These are found by trial and error. If you find an unsupported codec, create an issue on GitHub please.
@@ -61,12 +61,11 @@ class HydrusVideoDeduplicator:
         video_hashes = None
         if skip_hashing:
             rprint("[yellow] Skipping perceptual hashing")
+            if query and skip_hashing:
+                video_hashes = set(self._retrieve_video_hashes(search_tags))
         else:
             video_hashes = self._retrieve_video_hashes(search_tags)
             self._add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=video_hashes)
-
-        if query and skip_hashing:
-            video_hashes = set(self._retrieve_video_hashes(search_tags))
 
         self._find_potential_duplicates(limited_video_hashes=video_hashes)
 
@@ -75,7 +74,6 @@ class HydrusVideoDeduplicator:
     @staticmethod
     def _calculate_perceptual_hash(video: str | bytes) -> str:
         perceptual_hash = Vpdq.vpdq_to_json(Vpdq.computeHash(video))
-        rprint("[blue] NEW HASH METHOD:", perceptual_hash)
         assert perceptual_hash != "[]"
         return perceptual_hash
 
@@ -178,7 +176,7 @@ class HydrusVideoDeduplicator:
                 # Getting the file names will be VERY slow because of the API call
                 # file_names = get_file_names_hydrus(self.client, [video1_hash, video2_hash])
                 # self.hydlog.info(f"Duplicates filenames: {file_names}")
-                self.hydlog.info(f"\"Duplicates hashes: {video1_hash}\" and \"{video2_hash}\"")
+                self.hydlog.info(f"\"Similar hashes {similarity}%: {video1_hash}\" and \"{video2_hash}\"")
 
             new_relationship = {
                 "hash_a": str(video1_hash),

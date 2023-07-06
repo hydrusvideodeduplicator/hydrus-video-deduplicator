@@ -31,13 +31,9 @@ dependencies = [
     "requests",
     "psutil",
     "joblib",
-    
-    # Below is vpdq C++ implem. Linux only
-    "hvdvpdq>=0.0.11",
-
     # Below is for vpdqpy
     "Pillow",
-    "ffmpeg-python",
+    "av",
 ]
 
 [project.urls]

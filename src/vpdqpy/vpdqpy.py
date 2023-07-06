@@ -1,20 +1,19 @@
 from __future__ import annotations
 
+import io
 import json
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import ffmpeg
-
+import av
 # import vpdq  # VPDQ CPP IMPLEMENTATION
 from PIL import Image
 
 from pdqhashing.hasher.pdq_hasher import PDQHasher
 
 if TYPE_CHECKING:
-    from typing import Annotated
+    from typing import Annotated, Generator
 
     from .typing_utils import ValueRange
 
@@ -28,11 +27,6 @@ class VpdqFeature:
     pdq_hash: Hash256  # 64 char hex string
     quality: float  # 0 to 100
     frame_number: int
-
-    # ONLY FOR VPDQ CPP IMPLEMENTATION
-    @classmethod
-    def from_vpdq_feature(cls, feature: vpdq.VpdqFeature) -> VpdqFeature:
-        return cls(feature.hex, feature.quality, int(feature.frameNumber))
 
     def assert_valid(self) -> VpdqFeature:
         """Checks the bounds of all the elements, throws ValueError if invalid"""
@@ -59,36 +53,6 @@ class VpdqFeature:
 
 
 class Vpdq:
-    @staticmethod
-    def get_vid_info(file: bytes) -> dict:
-        # ffprobe command to get info. ffmpeg-python requires a file name, this does not.
-        ffprobe_process = subprocess.Popen(
-            ["ffprobe", "-show_streams", "-select_streams", "v:0", "-print_format", "json", "-", "-sexagesimal"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        # Retrieve the output and error streams from ffprobe
-        stdout, stderr = ffprobe_process.communicate(input=file)
-
-        # Decode the output stream as json
-        output = json.loads(stdout.decode("utf-8", errors="replace"))
-        error = stderr.decode("utf-8", errors="replace")
-        if "streams" not in output:
-            print(output)
-            print(error)
-            print(stderr)
-
-        video_info = next(
-            (stream for stream in output["streams"] if stream["codec_type"] == "video"),
-            None,
-        )
-
-        if not video_info:
-            raise ValueError("No video stream found in the input file.")
-        return video_info
-
     # Get the bytes of a video
     @staticmethod
     def get_video_bytes(video_file: Path | str | bytes) -> bytes:
@@ -156,67 +120,35 @@ class Vpdq:
         result = Vpdq.feature_match_count(query_filtered, target_filtered, distance_tolerance)
         return result * 100 / len(query_filtered)
 
-    # TODO: move this to util class
     @staticmethod
-    def convert_seconds_to_seek_time(seconds):
-        hours, remainder = divmod(seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
+    def frame_extract_pyav(video: bytes) -> Generator[Image.Image]:
+        with av.open(io.BytesIO(video), metadata_encoding='utf-8', metadata_errors='ignore') as container:
+            video = container.streams.video[0]
+            video.thread_type = "AUTO"
 
-        return f'{hours:02d}:{minutes:02d}:{seconds:02d}'
+            average_fps: int = round(video.average_rate)
+
+            for index, frame in enumerate(container.decode(video)):
+                if index % average_fps == 0:
+                    print(frame.time)
+                    yield frame
 
     # Perceptually hash video from a file path or the bytes
     @staticmethod
     def computeHash(
         video_file: Path | str | bytes,
-        ffmpeg_path: str = "ffmpeg",
-        seconds_per_hash: float = 1,
-        verbose: bool = False,
-        downsample_width: int = 0,
-        downsample_height: int = 0,
     ) -> list[VpdqFeature]:
         video = Vpdq.get_video_bytes(video_file)
         if video is None:
             raise ValueError
 
-        try:
-            video_info = Vpdq.get_vid_info(video)
-            width = int(video_info["width"])
-            height = int(video_info["height"])
-        except KeyError as exc:
-            raise ValueError from exc
-
         pdq = PDQHasher()
         features: list[VpdqFeature] = []
 
-        second = 0
-        while True:
-            out, _ = (
-                ffmpeg.input(ss=f"{Vpdq.convert_seconds_to_seek_time(second)}", filename="pipe:")
-                .output(
-                    "pipe:",
-                    loglevel="error",
-                    format="rawvideo",
-                    pix_fmt="rgb24",
-                    avoid_negative_ts=1,
-                    map="0:v",  # Get only first video stream
-                    frames=1,  # Extract frame
-                )
-                .run(input=video, capture_stdout=True)
-            )
-
-            # Create image or if end of video is reached then return
-            try:
-                image = Image.frombytes("RGB", tuple([width, height]), out)
-            except ValueError as exc:
-                if str(exc) != "not enough image data":
-                    raise ValueError from exc
-                else:
-                    break
-
-            pdq_hash_and_quality = pdq.fromBufferedImage(image)
+        for second, frame in enumerate(Vpdq.frame_extract_pyav(video)):
+            pdq_hash_and_quality = pdq.fromBufferedImage(frame.to_image())
             pdq_frame = VpdqFeature(pdq_hash_and_quality.getHash(), pdq_hash_and_quality.getQuality(), second)
             features.append(pdq_frame)
-            second += seconds_per_hash
 
         deduped_features = Vpdq.dedupe_features(features)
         return deduped_features

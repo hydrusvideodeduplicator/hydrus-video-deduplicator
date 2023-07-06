@@ -130,7 +130,6 @@ class Vpdq:
 
             for index, frame in enumerate(container.decode(video)):
                 if index % average_fps == 0:
-                    print(frame.time)
                     yield frame
 
     # Perceptually hash video from a file path or the bytes

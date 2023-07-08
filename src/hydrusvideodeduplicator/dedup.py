@@ -69,7 +69,9 @@ class HydrusVideoDeduplicator:
                 raise KeyError("File service key must be a local file service")
 
     # This is the master function of the class
-    def deduplicate(self, overwrite: bool = False, custom_query: Iterable[str] | None = None, skip_hashing: bool | None = False) -> None:
+    def deduplicate(
+        self, overwrite: bool = False, custom_query: Iterable[str] | None = None, skip_hashing: bool | None = False
+    ) -> None:
         # Add perceptual hashes to video files
         # system:filetype tags are really inconsistent
         search_tags = ['system:filetype=video, gif, apng', 'system:has duration']

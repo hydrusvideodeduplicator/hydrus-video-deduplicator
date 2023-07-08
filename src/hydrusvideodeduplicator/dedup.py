@@ -41,8 +41,8 @@ class HydrusVideoDeduplicator:
 
         # Set the file service keys to be used for hashing
         # Default is "all local files"
-        if file_service_keys is None:
-            self.file_service_key = self.all_services["all_local_files"][0]["service_key"]
+        if file_service_keys is None or len(file_service_keys) < 1 or file_service_keys[0] is None:
+            self.file_service_keys = [self.all_services["all_local_files"][0]["service_key"]]
         else:
             self.verify_file_service_key(file_service_keys)
             self.file_service_keys = file_service_keys
@@ -86,13 +86,13 @@ class HydrusVideoDeduplicator:
         if skip_hashing:
             rprint("[yellow] Skipping perceptual hashing")
             if query:
-                video_hashes = set(self._retrieve_video_hashes(search_tags))
+                video_hashes = set(self._retrieve_video_hashes(search_tags, self.file_service_keys))
         else:
-            all_video_hashes = self._retrieve_video_hashes(search_tags)
+            all_video_hashes = self._retrieve_video_hashes(search_tags, self.file_service_keys)
             self._add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=all_video_hashes)
 
         if query and not skip_hashing:
-            video_hashes = set(self._retrieve_video_hashes(search_tags))
+            video_hashes = set(self._retrieve_video_hashes(search_tags, self.file_service_keys))
 
         if query:
             self._find_potential_duplicates(limited_video_hashes=video_hashes)
@@ -110,9 +110,6 @@ class HydrusVideoDeduplicator:
     def _retrieve_video_hashes(
         self, search_tags: Iterable[str], file_service_keys: Iterable[str] | None = None
     ) -> Iterable[str]:
-        if file_service_keys is None:
-            file_service_keys = self.file_service_keys
-
         all_video_hashes = self.client.search_files(
             search_tags,
             file_service_keys=file_service_keys,

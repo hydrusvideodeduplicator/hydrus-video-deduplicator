@@ -120,7 +120,7 @@ def main(
         else:
             error_connecting_exception_msg = "Failed to connect to Hydrus. Is your Hydrus instance running?"
         error_connecting_exception = exc
-    except hydrus_api.HydrusAPIException as exc:
+    except KeyError as exc:
         # Probably a file_service_key error
         error_connecting_exception_msg = str(exc)
         error_connecting_exception = exc

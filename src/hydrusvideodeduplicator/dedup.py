@@ -42,9 +42,9 @@ class HydrusVideoDeduplicator:
         # Set the file service keys to be used for hashing
         # Default is "all local files"
         if file_service_keys is None:
-            self.file_service_key = self.all_services["all_local_files"][0]["service_key"]
+            self.file_service_keys = [self.all_services["all_local_files"][0]["service_key"]]
         else:
-            self.verify_file_service_key(file_service_keys)
+            self.verify_file_service_keys(file_service_keys)
             self.file_service_keys = file_service_keys
 
     # Verify client connection and permissions
@@ -56,7 +56,7 @@ class HydrusVideoDeduplicator:
         hydrus_api.utils.verify_permissions(self.client, hydrus_api.utils.Permission)
 
     # Verify that the supplied file_service_key is a valid key for a local file service
-    def verify_file_service_key(self, file_service_keys: Iterable[str]) -> None:
+    def verify_file_service_keys(self, file_service_keys: Iterable[str]) -> None:
         VALID_SERVICE_TYPES = [hydrus_api.ServiceType.ALL_LOCAL_FILES, hydrus_api.ServiceType.FILE_DOMAIN]
 
         for file_service_key in file_service_keys:

@@ -12,7 +12,7 @@ from sqlitedict import SqliteDict
 from tqdm import tqdm
 
 if TYPE_CHECKING:
-    from typing import Iterable
+    from typing import Any, Iterable, Generator
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
@@ -49,7 +49,7 @@ class HydrusVideoDeduplicator:
 
     # Verify client connection and permissions
     # Will throw a hydrus_api.APIError if something is wrong
-    def verify_api_connection(self):
+    def verify_api_connection(self) -> None:
         self.hydlog.info(
             f"Client API version: v{self.client.VERSION} | Endpoint API version: v{self.client.get_api_version()['version']}"
         )
@@ -69,7 +69,7 @@ class HydrusVideoDeduplicator:
                 raise KeyError("File service key must be a local file service")
 
     # This is the master function of the class
-    def deduplicate(self, overwrite: bool = False, custom_query: list | None = None, skip_hashing: bool | None = False):
+    def deduplicate(self, overwrite: bool = False, custom_query: Iterable[str] | None = None, skip_hashing: bool | None = False) -> None:
         # Add perceptual hashes to video files
         # system:filetype tags are really inconsistent
         search_tags = ['system:filetype=video, gif, apng', 'system:has duration']
@@ -102,14 +102,14 @@ class HydrusVideoDeduplicator:
         self.hydlog.info("Deduplication done.")
 
     @staticmethod
-    def _calculate_perceptual_hash(video: str | bytes) -> str:
+    def _calculate_perceptual_hash(video: Path | str | bytes) -> str:
         perceptual_hash = Vpdq.vpdq_to_json(Vpdq.computeHash(video))
         assert perceptual_hash != "[]"
         return perceptual_hash
 
     def _retrieve_video_hashes(
         self, search_tags: Iterable[str], file_service_keys: Iterable[str] | None = None
-    ) -> list:
+    ) -> Iterable[str]:
         if file_service_keys is None:
             file_service_keys = self.file_service_keys
 
@@ -123,7 +123,7 @@ class HydrusVideoDeduplicator:
         )["hashes"]
         return all_video_hashes
 
-    def _add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes=set | list) -> None:
+    def _add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes: Iterable[str]) -> None:
         # Create database folder
         try:
             os.makedirs(DEDUP_DATABASE_DIR, exist_ok=False)
@@ -200,7 +200,7 @@ class HydrusVideoDeduplicator:
     def get_potential_duplicate_count_hydrus(self) -> int:
         return self.client.get_potentials_count(file_service_keys=self.file_service_keys)["potential_duplicates_count"]
 
-    def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str):
+    def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> None:
         vpdq_hash1 = Vpdq.json_to_vpdq(video1_phash)
         vpdq_hash2 = Vpdq.json_to_vpdq(video2_phash)
         similar, similarity = Vpdq.is_similar(vpdq_hash1, vpdq_hash2, self.threshold)
@@ -223,7 +223,7 @@ class HydrusVideoDeduplicator:
 
     # Delete cache row in database
     @staticmethod
-    def clear_search_cache():
+    def clear_search_cache() -> None:
         try:
             with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
                 for key in hashdb:
@@ -237,7 +237,7 @@ class HydrusVideoDeduplicator:
 
     # Sliding window duplicate comparisons
     # Alternatively, I could scan duplicates when added and never do it again which would be one of the best ways without a VP tree
-    def _find_potential_duplicates(self, limited_video_hashes: list | set | None = None) -> None:
+    def _find_potential_duplicates(self, limited_video_hashes: Iterable[str] | None = None) -> None:
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos", verbose=True):
             rprint(f"[red] Could not search for duplicates.")
             return
@@ -330,7 +330,7 @@ class HydrusVideoDeduplicator:
             rprint("[green] No new potential duplicates found.")
 
     @staticmethod
-    def batched(iterable, n):
+    def batched(iterable, n) -> Generator[tuple, Any, None]:
         "Batch data into tuples of length n. The last batch may be shorter."
         # batched('ABCDEFG', 3) --> ABC DEF G
         if n < 1:
@@ -341,7 +341,7 @@ class HydrusVideoDeduplicator:
 
     # Check if files are trashed
     # Returns a dictionary of hash : trashed_or_not
-    def is_files_trashed_hydrus(self, file_hashes: list[str]) -> dict:
+    def is_files_trashed_hydrus(self, file_hashes: Iterable[str]) -> dict:
         videos_metadata = self.client.get_file_metadata(hashes=file_hashes, only_return_basic_information=False)[
             "metadata"
         ]
@@ -359,7 +359,7 @@ class HydrusVideoDeduplicator:
         return result
 
     # Delete trashed and deleted files from Hydrus from the database
-    def clear_trashed_files_from_db(self):
+    def clear_trashed_files_from_db(self) -> None:
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
             return
 

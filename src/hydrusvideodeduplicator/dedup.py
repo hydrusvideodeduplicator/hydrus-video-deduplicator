@@ -28,7 +28,7 @@ class HydrusVideoDeduplicator:
     _DEBUG = False
 
     def __init__(
-        self, client: hydrus_api.Client, verify_connection: bool = True, file_service_keys: Iterable[str] | None = None
+        self, client: hydrus_api.Client, verify_connection: bool = True, file_service_keys: List[str] | None = None
     ):
         self.client = client
         if verify_connection:

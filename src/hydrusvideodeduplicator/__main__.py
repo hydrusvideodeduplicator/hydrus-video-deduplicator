@@ -28,8 +28,9 @@ def main(
     api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = HYDRUS_API_URL,
     overwrite: Annotated[Optional[bool], typer.Option(help="Overwrite existing perceptual hashes")] = False,
     query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = HYDRUS_QUERY,
-    file_service_key: Annotated[Optional[str], typer.Option(
-        help="Local file service key for searching specific file domains")] = HYDRUS_LOCAL_FILE_SERVICE_KEY,
+    file_service_key: Annotated[
+        Optional[str], typer.Option(help="Local file service key")
+    ] = HYDRUS_LOCAL_FILE_SERVICE_KEY,
     threshold: Annotated[
         Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")
     ] = 75.0,
@@ -45,7 +46,6 @@ def main(
     verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
 ):
-
     # CLI debug parameter sets log level to info or debug
     loglevel = logging.WARNING
     if debug:

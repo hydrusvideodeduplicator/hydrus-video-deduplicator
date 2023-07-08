@@ -7,7 +7,7 @@ from rich import print as rprint
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .__about__ import __version__
-from .config import HYDRUS_API_KEY, HYDRUS_API_URL, HYDRUS_QUERY, REQUESTS_CA_BUNDLE, HYDRUS_LOCAL_FILE_SERVICE_KEY
+from .config import HYDRUS_API_KEY, HYDRUS_API_URL, HYDRUS_QUERY, REQUESTS_CA_BUNDLE, HYDRUS_LOCAL_FILE_SERVICE_KEYS
 from .dedup import HydrusVideoDeduplicator
 
 """
@@ -28,9 +28,7 @@ def main(
     api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = HYDRUS_API_URL,
     overwrite: Annotated[Optional[bool], typer.Option(help="Overwrite existing perceptual hashes")] = False,
     query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = HYDRUS_QUERY,
-    file_service_key: Annotated[
-        Optional[str], typer.Option(help="Local file service key")
-    ] = HYDRUS_LOCAL_FILE_SERVICE_KEY,
+    file_service_keys: Annotated[Optional[List[str]], typer.Option(help="Local file service key")] = None,
     threshold: Annotated[
         Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")
     ] = 75.0,
@@ -70,8 +68,8 @@ def main(
         api_key = HYDRUS_API_KEY
     if not api_url:
         api_url = HYDRUS_API_URL
-    if not file_service_key:
-        file_service_key = HYDRUS_LOCAL_FILE_SERVICE_KEY
+    if not file_service_keys:
+        file_service_keys = HYDRUS_LOCAL_FILE_SERVICE_KEYS
 
     # Check for necessary variables
     if not api_key:
@@ -95,7 +93,7 @@ def main(
     error_connecting_exception_msg = ""
     error_connecting_exception = ""
     try:
-        superdeduper = HydrusVideoDeduplicator(_client, file_service_keys=[file_service_key])
+        superdeduper = HydrusVideoDeduplicator(_client)
     except hydrus_api.InsufficientAccess as exc:
         error_connecting_exception_msg = "Invalid Hydrus API key."
         error_connecting_exception = exc
@@ -120,10 +118,6 @@ def main(
         else:
             error_connecting_exception_msg = "Failed to connect to Hydrus. Is your Hydrus instance running?"
         error_connecting_exception = exc
-    except KeyError as exc:
-        # Probably a file_service_key error
-        error_connecting_exception_msg = str(exc)
-        error_connecting_exception = exc
     else:
         error_connecting = False
 
@@ -147,7 +141,8 @@ def main(
     superdeduper.clear_trashed_files_from_db()
 
     # Run all deduplicate functionality
-    superdeduper.deduplicate(overwrite=overwrite, custom_query=query, skip_hashing=skip_hashing)
+    superdeduper.deduplicate(overwrite=overwrite, custom_query=query, skip_hashing=skip_hashing,
+                             file_service_keys=file_service_keys)
 
     raise typer.Exit()
 

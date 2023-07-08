@@ -24,9 +24,6 @@ if in_wsl():
 
 HYDRUS_API_URL = os.getenv("HYDRUS_API_URL", f"https://{_DEFAULT_IP}:{_DEFAULT_PORT}")
 
-# Service key of specific local file service to fetch files from
-HYDRUS_LOCAL_FILE_SERVICE_KEY = os.getenv("HYDRUS_LOCAL_FILE_SERVICE_KEY")
-
 # ~/.local/share/hydrusvideodeduplicator/ on Linux
 DEDUP_DATABASE_DIR = AppDirs("hydrusvideodeduplicator").user_data_dir
 DEDUP_DATABASE_DIR = os.getenv("DEDUP_DATABASE_DIR", DEDUP_DATABASE_DIR)
@@ -44,4 +41,16 @@ if HYDRUS_QUERY is not None:
     except json.decoder.JSONDecodeError as exc:
         print("ERROR:", exc)
         print("Invalid query passed as environment variable.")
+        exit(-1)
+
+# Service key of specific local file service to fetch files from
+HYDRUS_LOCAL_FILE_SERVICE_KEYS = os.getenv("HYDRUS_LOCAL_FILE_SERVICE_KEYS")
+if HYDRUS_LOCAL_FILE_SERVICE_KEYS is not None:
+    try:
+        HYDRUS_LOCAL_FILE_SERVICE_KEYS = json.loads(HYDRUS_LOCAL_FILE_SERVICE_KEYS)
+        if not isinstance(HYDRUS_LOCAL_FILE_SERVICE_KEYS, list):
+            raise Exception('Decoded JSON is not a list')
+    except Exception as exc:
+        print("Error:", exc)
+        print("Invalid list of file service keys passed as environment variable. Must be in JSON list format")
         exit(-1)

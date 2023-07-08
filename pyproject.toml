@@ -11,14 +11,13 @@ requires-python = ">=3.10"
 license = "MIT"
 keywords = []
 authors = [
-  { name = "appleappleapplenanner", email = "applenannerapple@gmail.com" },
+  { name = "hydrusvideodeduplicator", email = "applenannerapple@gmail.com" },
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
     "appdirs",
@@ -37,9 +36,9 @@ dependencies = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/appleappleapplenanner/hydrus-video-deduplicator#readme"
-Issues = "https://github.com/appleappleapplenanner/hydrus-video-deduplicator/issues"
-Source = "https://github.com/appleappleapplenanner/hydrus-video-deduplicator"
+Documentation = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator#readme"
+Issues = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/issues"
+Source = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator"
 
 [tool.hatch.dependencies]
 hydrus_api = {path = "src/hydrusvideodeduplicator/hydrus_api"}

@@ -95,7 +95,7 @@ def main(
     error_connecting_exception_msg = ""
     error_connecting_exception = ""
     try:
-        superdeduper = HydrusVideoDeduplicator(_client, file_service_key=file_service_key)
+        superdeduper = HydrusVideoDeduplicator(_client, file_service_keys=[file_service_key])
     except hydrus_api.InsufficientAccess as exc:
         error_connecting_exception_msg = "Invalid Hydrus API key."
         error_connecting_exception = exc

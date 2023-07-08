@@ -12,7 +12,7 @@ from sqlitedict import SqliteDict
 from tqdm import tqdm
 
 if TYPE_CHECKING:
-    pass
+    from typing import Iterable
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
@@ -27,7 +27,9 @@ class HydrusVideoDeduplicator:
     threshold: float = 75.0
     _DEBUG = False
 
-    def __init__(self, client: hydrus_api.Client, verify_connection: bool = True, file_service_key: str | None = None):
+    def __init__(
+        self, client: hydrus_api.Client, verify_connection: bool = True, file_service_keys: Iterable[str] | None = None
+    ):
         self.client = client
         if verify_connection:
             self.verify_api_connection()
@@ -37,14 +39,13 @@ class HydrusVideoDeduplicator:
         # If any of these are large they should probably be lazily loaded
         self.all_services = self.client.get_services()
 
-        # Set the file_service_key to be used for all queries.
-        # Defaults to the file_service_key of the "All Local Files" file service
-        # (Note: afaik, "file domain" and "file service" mean more or less the same thing in terms of the Client API)
-        if file_service_key is None:
+        # Set the file service keys to be used for hashing
+        # Default is "all local files"
+        if file_service_keys is None:
             self.file_service_key = self.all_services["all_local_files"][0]["service_key"]
         else:
-            self.verify_file_service_key(file_service_key)
-            self.file_service_key = file_service_key
+            self.verify_file_service_key(file_service_keys)
+            self.file_service_keys = file_service_keys
 
     # Verify client connection and permissions
     # Will throw a hydrus_api.APIError if something is wrong
@@ -55,13 +56,17 @@ class HydrusVideoDeduplicator:
         hydrus_api.utils.verify_permissions(self.client, hydrus_api.utils.Permission)
 
     # Verify that the supplied file_service_key is a valid key for a local file service
-    # Will throw a hydrus_api.HydrusAPIException if something is wrong
-    def verify_file_service_key(self, file_service_key: str):
-        service = self.all_services['services'][file_service_key]
-        if service is None:
-            raise hydrus_api.HydrusAPIException(Exception(f"Could not find file service for key {file_service_key}"))
-        elif service['type'] not in [hydrus_api.ServiceType.ALL_LOCAL_FILES, hydrus_api.ServiceType.FILE_DOMAIN]:
-            raise hydrus_api.HydrusAPIException(Exception(f"File service key must refer to a local file service"))
+    def verify_file_service_key(self, file_service_keys: Iterable[str]) -> None:
+        VALID_SERVICE_TYPES = [hydrus_api.ServiceType.ALL_LOCAL_FILES, hydrus_api.ServiceType.FILE_DOMAIN]
+
+        for file_service_key in file_service_keys:
+            file_service = self.all_services['services'].get(file_service_key)
+            if file_service is None:
+                raise KeyError(f"Invalid file service key: '{file_service_key}'")
+
+            service_type = file_service.get('type')
+            if service_type not in VALID_SERVICE_TYPES:
+                raise KeyError("File service key must be a local file service")
 
     # This is the master function of the class
     def deduplicate(self, overwrite: bool = False, custom_query: list | None = None, skip_hashing: bool | None = False):
@@ -102,10 +107,15 @@ class HydrusVideoDeduplicator:
         assert perceptual_hash != "[]"
         return perceptual_hash
 
-    def _retrieve_video_hashes(self, search_tags) -> list:
+    def _retrieve_video_hashes(
+        self, search_tags: Iterable[str], file_service_keys: Iterable[str] | None = None
+    ) -> list:
+        if file_service_keys is None:
+            file_service_keys = self.file_service_keys
+
         all_video_hashes = self.client.search_files(
             search_tags,
-            file_service_keys=[self.file_service_key],
+            file_service_keys=file_service_keys,
             file_sort_type=hydrus_api.FileSortType.FILE_SIZE,
             return_hashes=True,
             file_sort_asc=True,
@@ -188,7 +198,7 @@ class HydrusVideoDeduplicator:
                 self.hydlog.info("Finished perceptual hash processing.")
 
     def get_potential_duplicate_count_hydrus(self) -> int:
-        return self.client.get_potentials_count(file_service_keys=[self.file_service_key])["potential_duplicates_count"]
+        return self.client.get_potentials_count(file_service_keys=self.file_service_keys)["potential_duplicates_count"]
 
     def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str):
         vpdq_hash1 = Vpdq.json_to_vpdq(video1_phash)

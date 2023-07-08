@@ -85,7 +85,7 @@ class HydrusVideoDeduplicator:
         else:
             all_video_hashes = self._retrieve_video_hashes(search_tags)
             self._add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=all_video_hashes)
-        
+
         if query and not skip_hashing:
             video_hashes = set(self._retrieve_video_hashes(search_tags))
 
@@ -338,9 +338,13 @@ class HydrusVideoDeduplicator:
 
         result = {}
         for video_metadata in videos_metadata:
+            # This should never happen
+            if "hash" not in video_metadata:
+                logging.error("Hash not found for potentially trashed file.")
+                continue
             video_hash = video_metadata['hash']
-            is_trashed = video_metadata['is_trashed']
-            is_deleted = video_metadata['is_deleted']
+            is_trashed: bool = video_metadata.get('is_trashed', False)
+            is_deleted: bool = video_metadata.get('is_deleted', False)
             result[video_hash] = is_trashed or is_deleted
         return result
 

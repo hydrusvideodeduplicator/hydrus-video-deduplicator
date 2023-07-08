@@ -24,11 +24,8 @@ if in_wsl():
 
 HYDRUS_API_URL = os.getenv("HYDRUS_API_URL", f"https://{_DEFAULT_IP}:{_DEFAULT_PORT}")
 
-# Service name of where to store perceptual hash tag for video files
-HYDRUS_LOCAL_TAG_SERVICE_NAME = os.getenv("HYDRUS_LOCAL_TAG_SERVICE_NAME", "my tags")
-
 # Service key of specific local file service to fetch files from
-HYDRUS_LOCAL_FILE_SERVICE_KEY = os.getenv("HYDRUS_LOCAL_FILE_SERVICE_KEY", "my tags")
+HYDRUS_LOCAL_FILE_SERVICE_KEY = os.getenv("HYDRUS_LOCAL_FILE_SERVICE_KEY")
 
 # ~/.local/share/hydrusvideodeduplicator/ on Linux
 DEDUP_DATABASE_DIR = AppDirs("hydrusvideodeduplicator").user_data_dir

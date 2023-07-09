@@ -635,8 +635,7 @@ class PDQHasher:
         input - matrix as numRows x numCols in row-major order
         output - matrix as numRows x numCols in row-major order
         """
-        i = 0
-        while i < numRows:
+        for i in range(numRows):
             cls.box1DFloat(
                 _input,
                 i * numCols,
@@ -646,7 +645,6 @@ class PDQHasher:
                 1,  # stride
                 windowSize,
             )
-            i += 1
 
     @classmethod
     def boxAlongColsFloat(cls, _input, output, numRows, numCols, windowSize):
@@ -654,7 +652,5 @@ class PDQHasher:
         input - matrix as numRows x numCols in row-major order
         out - matrix as numRows x numCols in row-major order
         """
-        j = 0
-        while j < numCols:
+        for j in range(numCols):
             cls.box1DFloat(_input, j, output, j, numRows, numCols, windowSize)
-            j += 1

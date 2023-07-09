@@ -129,7 +129,6 @@ class PDQHasher:
         )
 
     def fillFloatLumaFromBufferImage(self, img, luma):
-        numCols, numRows = img.size
         rgb_image = img.convert("RGB")
         numCols, numRows = img.size
         for i in range(numRows):

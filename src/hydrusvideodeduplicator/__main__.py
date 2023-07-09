@@ -7,7 +7,7 @@ from rich import print as rprint
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .__about__ import __version__
-from .config import HYDRUS_API_KEY, HYDRUS_API_URL, HYDRUS_QUERY, REQUESTS_CA_BUNDLE, HYDRUS_LOCAL_FILE_SERVICE_KEYS
+from .config import HYDRUS_API_KEY, HYDRUS_API_URL, REQUESTS_CA_BUNDLE, HYDRUS_QUERY, HYDRUS_LOCAL_FILE_SERVICE_KEYS
 from .dedup import HydrusVideoDeduplicator
 
 """
@@ -28,13 +28,13 @@ def main(
     api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = HYDRUS_API_URL,
     overwrite: Annotated[Optional[bool], typer.Option(help="Overwrite existing perceptual hashes")] = False,
     query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = HYDRUS_QUERY,
-    file_service_keys: Annotated[Optional[List[str]], typer.Option(help="Local file service key")] = None,
     threshold: Annotated[
         Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")
     ] = 75.0,
     skip_hashing: Annotated[
         Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")
     ] = False,
+    file_service_key: Annotated[Optional[List[str]], typer.Option(help="Local file service key")] = HYDRUS_LOCAL_FILE_SERVICE_KEYS,
     verify_cert: Annotated[
         Optional[str], typer.Option(help="Path to TLS cert. This forces verification.")
     ] = REQUESTS_CA_BUNDLE,
@@ -63,13 +63,9 @@ def main(
         HydrusVideoDeduplicator.clear_search_cache()
         rprint("[green] Cleared search cache.")
 
-    # CLI overwrites env vars
+    # CLI overwrites env vars with no default value
     if not api_key:
         api_key = HYDRUS_API_KEY
-    if not api_url:
-        api_url = HYDRUS_API_URL
-    if not file_service_keys:
-        file_service_keys = HYDRUS_LOCAL_FILE_SERVICE_KEYS
 
     # Check for necessary variables
     if not api_key:
@@ -142,7 +138,7 @@ def main(
 
     # Run all deduplicate functionality
     superdeduper.deduplicate(overwrite=overwrite, custom_query=query, skip_hashing=skip_hashing,
-                             file_service_keys=file_service_keys)
+                             file_service_keys=file_service_key)
 
     raise typer.Exit()
 

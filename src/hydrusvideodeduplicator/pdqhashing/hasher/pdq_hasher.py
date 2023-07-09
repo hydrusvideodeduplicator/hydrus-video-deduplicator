@@ -165,8 +165,8 @@ class PDQHasher:
         self.decimateFloat(fullBuffer1, numRows, numCols, buffer64x64)
         quality = self.computePDQImageDomainQualityMetric(buffer64x64)
         self.dct64To16(buffer64x64, buffer16x64, buffer16x16)
-        hash = self.pdqBuffer16x16ToBits(buffer16x16)
-        return HashAndQuality(hash, quality)
+        _hash = self.pdqBuffer16x16ToBits(buffer16x16)
+        return HashAndQuality(_hash, quality)
 
     def dihedralFromFile(self, filename, hashingMetadata, dihFlags):
         t1 = time.time()
@@ -251,7 +251,7 @@ class PDQHasher:
         self.decimateFloat(fullBuffer1, numRows, numCols, buffer64x64)
         quality = self.computePDQImageDomainQualityMetric(buffer64x64)
         self.dct64To16(buffer64x64, buffer16x64, buffer16x16)
-        hash = None
+        _hash = None
         hashRotate90 = None
         hashRotate180 = None
         hashRotate270 = None
@@ -260,7 +260,7 @@ class PDQHasher:
         hashFlipPlus1 = None
         hashFlipMinus1 = None
         if (dihFlags & self.PDQ_DO_DIH_ORIGINAL) != 0:
-            hash = self.pdqBuffer16x16ToBits(buffer16x16)
+            _hash = self.pdqBuffer16x16ToBits(buffer16x16)
         if (dihFlags & self.PDQ_DO_DIH_ROTATE_90) != 0:
             self.dct16OriginalToRotate90(buffer16x16, buffer16x16Aux)
             hashRotate90 = self.pdqBuffer16x16ToBits(buffer16x16Aux)
@@ -283,7 +283,7 @@ class PDQHasher:
             self.dct16OriginalToFlipMinus1(buffer16x16, buffer16x16Aux)
             hashFlipMinus1 = self.pdqBuffer16x16ToBits(buffer16x16Aux)
         return HashesAndQuality(
-            hash,
+            _hash,
             hashRotate90,
             hashRotate180,
             hashRotate270,
@@ -442,13 +442,13 @@ class PDQHasher:
         Each bit of the 16x16 output hash is for whether the given frequency
         component is greater than the median frequency component or not.
         """
-        hash = Hash256()
+        _hash = Hash256()
         dctMedian = MatrixUtil.torben(dctOutput16x16, 16, 16)
         for i in range(16):
             for j in range(16):
                 if dctOutput16x16[i][j] > dctMedian:
-                    hash.setBit(i * 16 + j)
-        return hash
+                    _hash.setBit(i * 16 + j)
+        return _hash
 
     @classmethod
     def computeJaroszFilterWindowSize(cls, dimension):
@@ -607,31 +607,31 @@ class PDQHasher:
         li = 0  # Index of left edge of read window, for subtracts
         ri = 0  # Index of right edge of read windows, for adds
         oi = 0  # Index into output vector
-        sum = float(0.0)
+        _sum = float(0.0)
         currentWindowSize = 0
 
         # PHASE 1: ACCUMULATE FIRST SUM NO WRITES
         i = 0
         while i < phase_1_nreps:
-            sum += invec[inStartOffset + ri]
+            _sum += invec[inStartOffset + ri]
             currentWindowSize += 1
             ri += stride
             i += 1
         # PHASE 2: INITIAL WRITES WITH SMALL WINDOW
         i = 0
         while i < phase_2_nreps:
-            sum += invec[inStartOffset + ri]
+            _sum += invec[inStartOffset + ri]
             currentWindowSize += 1
-            outvec[outStartOffset + oi] = sum / currentWindowSize
+            outvec[outStartOffset + oi] = _sum / currentWindowSize
             ri += stride
             oi += stride
             i += 1
         # PHASE 3: WRITES WITH FULL WINDOW
         i = 0
         while i < phase_3_nreps:
-            sum += invec[inStartOffset + ri]
-            sum -= invec[inStartOffset + li]
-            outvec[outStartOffset + oi] = sum / currentWindowSize
+            _sum += invec[inStartOffset + ri]
+            _sum -= invec[inStartOffset + li]
+            outvec[outStartOffset + oi] = _sum / currentWindowSize
             li += stride
             ri += stride
             oi += stride
@@ -639,15 +639,15 @@ class PDQHasher:
         # PHASE 4: FINAL WRITES WITH SMALL WINDOW
         i = 0
         while i < phase_4_nreps:
-            sum -= invec[inStartOffset + li]
+            _sum -= invec[inStartOffset + li]
             currentWindowSize -= 1
-            outvec[outStartOffset + oi] = sum / currentWindowSize
+            outvec[outStartOffset + oi] = _sum / currentWindowSize
             li += stride
             oi += stride
             i += 1
 
     @classmethod
-    def boxAlongRowsFloat(cls, input, output, numRows, numCols, windowSize):
+    def boxAlongRowsFloat(cls, _input, output, numRows, numCols, windowSize):
         """
         input - matrix as numRows x numCols in row-major order
         output - matrix as numRows x numCols in row-major order
@@ -655,7 +655,7 @@ class PDQHasher:
         i = 0
         while i < numRows:
             cls.box1DFloat(
-                input,
+                _input,
                 i * numCols,
                 output,
                 i * numCols,
@@ -666,12 +666,12 @@ class PDQHasher:
             i += 1
 
     @classmethod
-    def boxAlongColsFloat(cls, input, output, numRows, numCols, windowSize):
+    def boxAlongColsFloat(cls, _input, output, numRows, numCols, windowSize):
         """
         input - matrix as numRows x numCols in row-major order
         out - matrix as numRows x numCols in row-major order
         """
         j = 0
         while j < numCols:
-            cls.box1DFloat(input, j, output, j, numRows, numCols, windowSize)
+            cls.box1DFloat(_input, j, output, j, numRows, numCols, windowSize)
             j += 1

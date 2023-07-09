@@ -82,11 +82,11 @@ class HydrusVideoDeduplicator:
 
         # Set the file service keys to be used for hashing
         # Default is "all local files"
-        if file_service_keys is None or len(file_service_keys) < 1 or file_service_keys[0] is None:
+        if file_service_keys is None or not file_service_keys:
             file_service_keys = [self.all_services["all_local_files"][0]["service_key"]]
         else:
             file_service_keys = [x for x in file_service_keys if x.strip()]
-            self.verify_file_service_keys(file_service_keys)
+        self.verify_file_service_keys(file_service_keys)
 
         video_hashes = None
         if skip_hashing:
@@ -117,7 +117,7 @@ class HydrusVideoDeduplicator:
         self, search_tags: Iterable[str], file_service_keys: Iterable[str] | None = None
     ) -> Iterable[str]:
         all_video_hashes = self.client.search_files(
-            search_tags,
+            tags=search_tags,
             file_service_keys=file_service_keys,
             file_sort_type=hydrus_api.FileSortType.FILE_SIZE,
             return_hashes=True,

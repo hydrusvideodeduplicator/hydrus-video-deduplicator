@@ -597,53 +597,37 @@ class PDQHasher:
         stride,
         fullWindowSize,
     ):
-
-        halfWindowSize = int((fullWindowSize + 2) / 2)  # 7->4, 8->5
-        phase_1_nreps = int(halfWindowSize - 1)
-        phase_2_nreps = int(fullWindowSize - halfWindowSize + 1)
-        phase_3_nreps = int(vectorLength - fullWindowSize)
-        phase_4_nreps = int(halfWindowSize - 1)
-        li = 0  # Index of left edge of read window, for subtracts
-        ri = 0  # Index of right edge of read windows, for adds
-        oi = 0  # Index into output vector
-        _sum = float(0.0)
+        halfWindowSize = (fullWindowSize + 2) // 2
+        phase_1_nreps = halfWindowSize - 1
+        phase_2_nreps = fullWindowSize - halfWindowSize + 1
+        phase_3_nreps = vectorLength - fullWindowSize
+        phase_4_nreps = halfWindowSize - 1
+        _sum = 0.0
         currentWindowSize = 0
 
         # PHASE 1: ACCUMULATE FIRST SUM NO WRITES
-        i = 0
-        while i < phase_1_nreps:
-            _sum += invec[inStartOffset + ri]
+        for i in range(phase_1_nreps):
+            _sum += invec[inStartOffset + i * stride]
             currentWindowSize += 1
-            ri += stride
-            i += 1
+
         # PHASE 2: INITIAL WRITES WITH SMALL WINDOW
-        i = 0
-        while i < phase_2_nreps:
-            _sum += invec[inStartOffset + ri]
+        for i in range(phase_2_nreps):
+            _sum += invec[inStartOffset + (i + phase_1_nreps) * stride]
             currentWindowSize += 1
-            outvec[outStartOffset + oi] = _sum / currentWindowSize
-            ri += stride
-            oi += stride
-            i += 1
+            outvec[outStartOffset + i * stride] = _sum / currentWindowSize
+
         # PHASE 3: WRITES WITH FULL WINDOW
-        i = 0
-        while i < phase_3_nreps:
-            _sum += invec[inStartOffset + ri]
-            _sum -= invec[inStartOffset + li]
-            outvec[outStartOffset + oi] = _sum / currentWindowSize
-            li += stride
-            ri += stride
-            oi += stride
-            i += 1
+        for i in range(phase_3_nreps):
+            _sum += invec[inStartOffset + (i + phase_2_nreps + phase_1_nreps) * stride]
+            _sum -= invec[inStartOffset + i * stride]
+            outvec[outStartOffset + (i + phase_2_nreps) * stride] = _sum / currentWindowSize
+
         # PHASE 4: FINAL WRITES WITH SMALL WINDOW
-        i = 0
-        while i < phase_4_nreps:
-            _sum -= invec[inStartOffset + li]
+        for i in range(phase_4_nreps):
+            _sum -= invec[inStartOffset + (i + phase_3_nreps + phase_2_nreps) * stride]
             currentWindowSize -= 1
-            outvec[outStartOffset + oi] = _sum / currentWindowSize
-            li += stride
-            oi += stride
-            i += 1
+            outvec[outStartOffset + (i + phase_3_nreps + phase_2_nreps) * stride] = _sum / currentWindowSize
+
 
     @classmethod
     def boxAlongRowsFloat(cls, _input, output, numRows, numCols, windowSize):

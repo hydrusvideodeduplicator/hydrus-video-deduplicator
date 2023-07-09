@@ -58,7 +58,13 @@ DEDUP_DATABASE_DIR = Path(_DEDUP_DATABASE_DIR_ENV)
 _DEDUP_DATABASE_NAME_ENV = os.getenv("DEDUP_DATABASE_NAME", "videohashes")
 DEDUP_DATABASE_FILE = Path(DEDUP_DATABASE_DIR, f"{_DEDUP_DATABASE_NAME_ENV}.sqlite")
 
+_PDQ_DATABASE_NAME = os.getenv("DEDUP_DATABASE_NAME", "pdq")
+PDQ_DATABASE_FILE = Path(DEDUP_DATABASE_DIR, f"{_PDQ_DATABASE_NAME}.sqlite")
+PDQ_TABLE_NAME = "potential_duplicates_queue"
+
 REQUESTS_CA_BUNDLE = os.getenv("REQUESTS_CA_BUNDLE")
+
+QUEUE_RELATIONSHIP_API_CALLS = True if os.getenv("QUEUE_RELATIONSHIP_API_CALLS") else False
 
 # Optional query for selecting files to process
 _HYDRUS_QUERY_ENV = os.getenv("HYDRUS_QUERY")

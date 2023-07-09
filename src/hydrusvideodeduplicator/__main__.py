@@ -7,7 +7,8 @@ from rich import print as rprint
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .__about__ import __version__
-from .config import HYDRUS_API_KEY, HYDRUS_API_URL, REQUESTS_CA_BUNDLE, HYDRUS_QUERY, HYDRUS_LOCAL_FILE_SERVICE_KEYS
+from .config import HYDRUS_API_KEY, HYDRUS_API_URL, REQUESTS_CA_BUNDLE, HYDRUS_QUERY, HYDRUS_LOCAL_FILE_SERVICE_KEYS, \
+    QUEUE_RELATIONSHIP_API_CALLS
 from .dedup import HydrusVideoDeduplicator
 
 """
@@ -41,11 +42,15 @@ def main(
     clear_search_cache: Annotated[
         Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared")
     ] = False,
+    queue_potential_dupes: Annotated[Optional[bool], typer.Option(
+        help="Queues any potential dupes found for batch sending later")] = QUEUE_RELATIONSHIP_API_CALLS,
+    only_send_queued_dupes: Annotated[
+        Optional[bool], typer.Option(help="No dupe searching, only sends dupes already queued")] = False,
     verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
 ):
     # CLI debug parameter sets log level to info or debug
-    loglevel = logging.WARNING
+    loglevel = logging.INFO
     if debug:
         loglevel = logging.DEBUG
         verbose = True
@@ -89,7 +94,8 @@ def main(
     error_connecting_exception_msg = ""
     error_connecting_exception = ""
     try:
-        superdeduper = HydrusVideoDeduplicator(_client)
+        superdeduper = HydrusVideoDeduplicator(_client,
+                                               queue_potential_dupes=(queue_potential_dupes or only_send_queued_dupes))
     except hydrus_api.InsufficientAccess as exc:
         error_connecting_exception_msg = "Invalid Hydrus API key."
         error_connecting_exception = exc
@@ -135,6 +141,10 @@ def main(
     superdeduper.threshold = threshold
 
     superdeduper.clear_trashed_files_from_db()
+
+    if only_send_queued_dupes:
+        superdeduper.send_queued_potential_duplicates();
+        raise typer.Exit(1)
 
     # Run all deduplicate functionality
     superdeduper.deduplicate(overwrite=overwrite, custom_query=query, skip_hashing=skip_hashing,

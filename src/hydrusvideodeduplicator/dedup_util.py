@@ -6,8 +6,11 @@ import contextlib
 from pathlib import Path
 from sqlitedict import SqliteDict
 from rich import print as rprint
+from tqdm import tqdm
 
 from hydrusvideodeduplicator.hydrus_api import Client
+
+from .config import DEDUP_DATABASE_FILE
 
 
 # Given a lexicographically SORTED list of tags, find the tag given a namespace
@@ -162,3 +165,15 @@ def database_accessible(db_file: Path | str, tablename: str, verbose: bool = Fal
             rprint(f"[red] Could not access database.")
         logging.error(str(exc))
     return False
+
+
+def get_pd_table_key(hash_a: str, hash_b: str):
+    if hash_a > hash_b:
+        return hash(hash(hash_a) + hash(hash_b))
+    elif hash_a < hash_b:
+        return hash(hash(hash_b) + hash(hash_a))
+    else:
+        raise Exception(
+            f"hash_a is the same as hash_b, which means we're comparing a file with itself - something's not "
+            f"right here."
+        )

@@ -10,6 +10,7 @@ from joblib import Parallel, delayed
 from rich import print as rprint
 from sqlitedict import SqliteDict
 from tqdm import tqdm
+from collections import defaultdict
 
 if TYPE_CHECKING:
     from typing import Any
@@ -18,8 +19,8 @@ if TYPE_CHECKING:
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
 
-from .config import DEDUP_DATABASE_DIR, DEDUP_DATABASE_FILE
-from .dedup_util import database_accessible
+from .config import DEDUP_DATABASE_DIR, DEDUP_DATABASE_FILE, PDQ_DATABASE_FILE, PDQ_TABLE_NAME
+from .dedup_util import database_accessible, get_pd_table_key
 from .vpdqpy.vpdqpy import Vpdq
 
 
@@ -28,11 +29,12 @@ class HydrusVideoDeduplicator:
     threshold: float = 75.0
     _DEBUG = False
 
-    def __init__(self, client: hydrus_api.Client, verify_connection: bool = True):
+    def __init__(self, client: hydrus_api.Client, verify_connection: bool = True, queue_potential_dupes: bool = False):
         self.client = client
         if verify_connection:
             self.verify_api_connection()
         self.hydlog.setLevel(logging.WARNING)
+        self.queue_potential_duplicates = queue_potential_dupes
 
         # Commonly used things from the Hydrus database
         # If any of these are large they should probably be lazily loaded
@@ -168,6 +170,8 @@ class HydrusVideoDeduplicator:
 
                         # Calculate perceptual_hash
                         try:
+                            rprint(
+                                f"[blue] Hashing file, size = {round(float(video_response.headers.get('Content-length')) / 1024 / 1024, 2)} ")
                             perceptual_hash = self._calculate_perceptual_hash(video_response.content)
                         except Exception as exc:
                             rprint("[red] Failed to calculate a perceptual hash.")
@@ -203,7 +207,7 @@ class HydrusVideoDeduplicator:
     def get_potential_duplicate_count_hydrus(self, file_service_keys: Iterable[str]) -> int:
         return self.client.get_potentials_count(file_service_keys=file_service_keys)["potential_duplicates_count"]
 
-    def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> None:
+    def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> dict | None:
         vpdq_hash1 = Vpdq.json_to_vpdq(video1_phash)
         vpdq_hash2 = Vpdq.json_to_vpdq(video2_phash)
         similar, similarity = Vpdq.is_similar(vpdq_hash1, vpdq_hash2, self.threshold)
@@ -222,7 +226,10 @@ class HydrusVideoDeduplicator:
                 "do_default_content_merge": True,
             }
 
-            self.client.set_file_relationships([new_relationship])
+            if self.queue_potential_duplicates:
+                return new_relationship
+            else:
+                self.client.set_file_relationships([new_relationship])
 
     # Delete cache row in database
     @staticmethod
@@ -253,7 +260,8 @@ class HydrusVideoDeduplicator:
         # BUG: If this process is interrupted, the farthest_search_index will not save for ANY entries.
         #      I think it might be because every entry in the column needs an entry for SQlite but I'm not sure.
         video_counter = 0
-        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb, SqliteDict(
+                str(PDQ_DATABASE_FILE), tablename=PDQ_TABLE_NAME, flag="c", autocommit=True) as pdq:
             try:
                 if limited_video_hashes is not None:
                     total = len(limited_video_hashes)
@@ -264,7 +272,7 @@ class HydrusVideoDeduplicator:
                     dynamic_ncols=True, total=total, desc="Finding duplicates", unit="video", colour="BLUE"
                 ) as pbar:
                     # -1 is all cores, -2 is all cores but one
-                    with Parallel(n_jobs=-2) as parallel:
+                    with Parallel(n_jobs=-2, return_as='list') as parallel:
                         if limited_video_hashes is not None:
                             # Avoid checking if in hashdb for each hash. Just do it now.
                             clean_all_retrieved_video_hashes = [
@@ -274,7 +282,7 @@ class HydrusVideoDeduplicator:
                             for i, video1_hash in enumerate(clean_all_retrieved_video_hashes):
                                 video_counter += 1
                                 pbar.update(1)
-                                parallel(
+                                new_relationships = parallel(
                                     delayed(self.compare_videos)(
                                         video1_hash,
                                         clean_all_retrieved_video_hashes[j],
@@ -283,6 +291,9 @@ class HydrusVideoDeduplicator:
                                     )
                                     for j in range(i + 1, len(clean_all_retrieved_video_hashes))
                                 )
+
+                                if self.queue_potential_duplicates and len(new_relationships) > 0:
+                                    self.enqueue_potential_dupes(pdq, new_relationships)
 
                         else:
                             count_since_last_commit = 0
@@ -302,7 +313,7 @@ class HydrusVideoDeduplicator:
                                 if row["farthest_search_index"] >= len(hashdb) - 1:
                                     continue
 
-                                parallel(
+                                new_relationships = parallel(
                                     delayed(self.compare_videos)(
                                         video1_hash,
                                         video2_hash,
@@ -317,6 +328,9 @@ class HydrusVideoDeduplicator:
                                 hashdb[video1_hash] = row
                                 count_since_last_commit += 1
 
+                                if self.queue_potential_duplicates and len(new_relationships) > 0:
+                                    self.enqueue_potential_dupes(pdq, new_relationships)
+
                                 if count_since_last_commit >= commit_interval:
                                     hashdb.commit()
                                     count_since_last_commit = 0
@@ -325,12 +339,23 @@ class HydrusVideoDeduplicator:
                 pass
             finally:
                 hashdb.commit()
+                pdq.commit()
 
         # Statistics for user
-        post_dedupe_count = self.get_potential_duplicate_count_hydrus(file_service_keys)
-        new_dedupes_count = post_dedupe_count - pre_dedupe_count
+        if self.queue_potential_duplicates:
+            if database_accessible(PDQ_DATABASE_FILE, PDQ_TABLE_NAME):
+                new_dedupes_count = len(SqliteDict(PDQ_DATABASE_FILE, PDQ_TABLE_NAME, 'r'))
+            else:
+                new_dedupes_count = 0
+        else:
+            post_dedupe_count = self.get_potential_duplicate_count_hydrus(file_service_keys)
+            new_dedupes_count = post_dedupe_count - pre_dedupe_count
+
         if new_dedupes_count > 0:
-            rprint(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
+            if self.queue_potential_duplicates:
+                self.send_queued_potential_duplicates()
+            else:
+                rprint(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
         else:
             rprint("[green] No new potential duplicates found.")
 
@@ -365,20 +390,102 @@ class HydrusVideoDeduplicator:
 
     # Delete trashed and deleted files from Hydrus from the database
     def clear_trashed_files_from_db(self) -> None:
-        if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
+        if database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
+            try:
+                CHUNK_SIZE = 32
+                delete_count = 0
+                with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+                    for batched_keys in self.batched(hashdb, CHUNK_SIZE):
+                        is_trashed_result = self.is_files_trashed_hydrus(batched_keys)
+                        for result in is_trashed_result.items():
+                            if result[1] is True:
+                                del hashdb[result[0]]
+                                delete_count += 1
+                        hashdb.commit()
+                self.hydlog.info(f"Cleared {delete_count} trashed files from the database.")
+            except OSError:
+                rprint("[red] Error while clearing trashed files cache.")
+
+        if database_accessible(DEDUP_DATABASE_FILE, tablename="potential_duplicates"):
+            try:
+                CHUNK_SIZE = 32
+                delete_count = 0
+                with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="potential_duplicates", flag="c") as pdq:
+                    starting_potential_dupes = len(pdq)
+                    for batched_dupe_keys in self.batched(pdq, CHUNK_SIZE):
+                        file_hash_to_dupe_keys = defaultdict(list)
+                        for dupe_key in batched_dupe_keys:
+                            relationship = pdq[dupe_key]
+                            file_hash_to_dupe_keys[relationship['hash_a']].append(dupe_key)
+                            file_hash_to_dupe_keys[relationship['hash_b']].append(dupe_key)
+
+                        is_trashed_result = self.is_files_trashed_hydrus(list(file_hash_to_dupe_keys.keys()))
+
+                        for file_hash, is_trashed in is_trashed_result:
+                            if is_trashed:
+                                delete_count += 1
+                                for dupe_key in file_hash_to_dupe_keys[file_hash]:
+                                    pdq.pop(dupe_key, None)
+
+                        pdq.commit()
+
+                    deleted_potential_dupes = starting_potential_dupes - len(pdq)
+                    self.hydlog.info(f"Found {delete_count} files that have been deleted or trashed but were part "
+                                     f"of potential dupes. Deleted {deleted_potential_dupes} potential dupes "
+                                     f"containing deleted files.")
+            except OSError:
+                rprint("[red] Error while clearing potential duplicates queue.")
+
+    # Adds potential dupes to the queue, if the potential dupe has not already been added to it
+    def enqueue_potential_dupes(self, potential_dupe_queue: SqliteDict, new_relationships: Iterable[dict | None]):
+        for new_relationship in new_relationships:
+            if new_relationship is None:
+                continue
+            self.hydlog.info(new_relationship)
+            row_key = get_pd_table_key(new_relationship['hash_a'], new_relationship['hash_b'])
+            if row_key not in potential_dupe_queue:
+                potential_dupe_queue[row_key] = new_relationship
+        potential_dupe_queue.commit()
+
+    def send_queued_potential_duplicates(self):
+        if not database_accessible(PDQ_DATABASE_FILE, PDQ_TABLE_NAME, True):
+            rprint(f"[red] Could not access potential duplicates queue for sending.")
             return
 
-        try:
-            CHUNK_SIZE = 32
-            delete_count = 0
-            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
-                for batched_keys in self.batched(hashdb, CHUNK_SIZE):
-                    is_trashed_result = self.is_files_trashed_hydrus(batched_keys)
-                    for result in is_trashed_result.items():
-                        if result[1] is True:
-                            del hashdb[result[0]]
-                            delete_count += 1
-                    hashdb.commit()
-            self.hydlog.info(f"Cleared {delete_count} trashed files from the database.")
-        except OSError:
-            rprint("[red] Error while clearing trashed files cache.")
+        CHUNK_SIZE = 32
+        with SqliteDict(str(PDQ_DATABASE_FILE), tablename=PDQ_TABLE_NAME, flag="c") as pdq:
+            total = len(pdq)
+            sent_count = 0
+            failed_to_send_count = 0
+            try:
+                with tqdm(
+                        dynamic_ncols=True, total=total, desc="Sending potential duplicates", unit="dupe", colour="BLUE"
+                ) as pbar:
+                    for batched_dupe_keys in self.batched(pdq, CHUNK_SIZE):
+                        relationships_to_send = [pdq[dupe_key] for dupe_key in batched_dupe_keys]
+                        try:
+                            self.client.set_file_relationships(relationships_to_send)
+                            sent_count += len(relationships_to_send)
+                            for dupe_key in batched_dupe_keys:
+                                pdq.pop(dupe_key, None)
+                            pdq.commit()
+                            pbar.update(len(relationships_to_send))
+                        except hydrus_api.HydrusAPIException as exc:
+                            self.hydlog.info(f"Encountered HydrusAPIException when trying to send queued dupe batch.")
+                            self.hydlog.info(str(exc))
+                            self.hydlog.info("Dupes that could not be sent will remain in the queue for retry later.")
+                            failed_to_send_count += len(relationships_to_send)
+            except KeyboardInterrupt:
+                pass
+            finally:
+                pdq.commit()
+
+            rprint(f"[green] Sent {sent_count}/{total} potential duplicates to Hydrus successfully")
+            if failed_to_send_count > 0:
+                rprint(f"[yellow] Failed to send {failed_to_send_count} potential duplicates due to API errors. "
+                       f"Duplicates not sent remain in the queue for later retry.")
+
+
+
+
+

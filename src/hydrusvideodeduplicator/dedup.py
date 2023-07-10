@@ -12,8 +12,8 @@ from sqlitedict import SqliteDict
 from tqdm import tqdm
 
 if TYPE_CHECKING:
+    from collections.abc import Generator, Iterable, Sequence
     from typing import Any
-    from collections.abc import Iterable, Sequence, Generator
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
@@ -140,7 +140,6 @@ class HydrusVideoDeduplicator:
             dbsize = os.path.getsize(DEDUP_DATABASE_FILE)
 
             if dblen > 0:
-                rprint(f"[blue] Database found with {dblen} videos already hashed.")
                 self.hydlog.info(f"Database found of length {dblen}, size {dbsize} bytes")
             else:
                 self.hydlog.info(f"Database not found. Creating one at {DEDUP_DATABASE_FILE}")
@@ -364,6 +363,7 @@ class HydrusVideoDeduplicator:
         return result
 
     # Delete trashed and deleted files from Hydrus from the database
+    # TODO: This doesn't have to run everytime. Run it every couple startups or something.
     def clear_trashed_files_from_db(self) -> None:
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
             return
@@ -372,13 +372,27 @@ class HydrusVideoDeduplicator:
             CHUNK_SIZE = 32
             delete_count = 0
             with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
-                for batched_keys in self.batched(hashdb, CHUNK_SIZE):
-                    is_trashed_result = self.is_files_trashed_hydrus(batched_keys)
-                    for result in is_trashed_result.items():
-                        if result[1] is True:
-                            del hashdb[result[0]]
-                            delete_count += 1
-                    hashdb.commit()
-            self.hydlog.info(f"Cleared {delete_count} trashed files from the database.")
+                total = len(hashdb)
+
+                if total < 1:
+                    return
+
+                rprint(f"[blue] Database found with {total} videos already hashed.")
+                with tqdm(
+                    dynamic_ncols=True,
+                    total=total,
+                    desc="Clearing trashed videos",
+                    unit="video",
+                    colour="BLUE",
+                ) as pbar:
+                    for batched_keys in self.batched(hashdb, CHUNK_SIZE):
+                        is_trashed_result = self.is_files_trashed_hydrus(batched_keys)
+                        for result in is_trashed_result.items():
+                            if result[1] is True:
+                                del hashdb[result[0]]
+                                delete_count += 1
+                        hashdb.commit()
+                        pbar.update(len(batched_keys))
+            self.hydlog.info(f"Cleared {delete_count} trashed videos from the database.")
         except OSError:
-            rprint("[red] Error while clearing trashed files cache.")
+            rprint("[red] Error while clearing trashed videos cache.")

@@ -57,30 +57,25 @@ class TestVpdq(unittest.TestCase):
 
     # Hash all videos. They should all have hashes.
     def test_hashing(self):
-        print("Hashing:")
         self.calc_hashes(self.all_vids)
         self.calc_hashes(self.strange_vids)
 
-    # Compare similar videos. They should be similar.
+    # Compare similar videos. They should be similar if they're in the same similarity group.
     def test_compare_similarity_true(self):
-        print("Comparing similarity:")
         vids_hashes = self.calc_hashes(self.all_vids)
         for vid1 in vids_hashes.items():
-            print(vid1[0].name)
             for vid2 in vids_hashes.items():
                 if vid1[0] == vid2[0]:
                     continue
 
-                vpdq_hash1 = vid1[1]
-                vpdq_hash2 = vid2[1]
-
-                similar, similarity = Vpdq.is_similar(vpdq_hash1, vpdq_hash2)
+                similar, similarity = Vpdq.is_similar(vid1[1], vid2[1])
                 self.assertTrue(0 <= similarity <= 100)
 
-                if self.similar_group(vid1[0], vid2[0]):
-                    self.assertTrue(similar, f"{vid1[0].name}, {vid2[0].name}")
-                else:
-                    self.assertFalse(similar, f"{vid1[0].name}, {vid2[0].name}")
+                with self.subTest(msg=f"Similar: {similar}", vid1=vid1[0].name, vid2=vid2[0].name):
+                    if self.similar_group(vid1[0], vid2[0]):
+                        self.assertTrue(similar)
+                    else:
+                        self.assertFalse(similar)
 
 
 if __name__ == "__main__":

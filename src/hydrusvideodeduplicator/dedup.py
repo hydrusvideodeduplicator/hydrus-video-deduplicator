@@ -363,6 +363,7 @@ class HydrusVideoDeduplicator:
         return result
 
     # Delete trashed and deleted files from Hydrus from the database
+    # TODO: This doesn't have to run everytime. Run it every couple startups or something.
     def clear_trashed_files_from_db(self) -> None:
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
             return
@@ -380,8 +381,8 @@ class HydrusVideoDeduplicator:
                 with tqdm(
                     dynamic_ncols=True,
                     total=total,
-                    desc="Checking for trashed videos in cache",
-                    unit="videos",
+                    desc="Clearing trashed videos",
+                    unit="video",
                     colour="BLUE",
                 ) as pbar:
                     for batched_keys in self.batched(hashdb, CHUNK_SIZE):

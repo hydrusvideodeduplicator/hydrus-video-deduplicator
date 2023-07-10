@@ -372,9 +372,13 @@ class HydrusVideoDeduplicator:
             delete_count = 0
             with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
                 total = len(hashdb)
+
+                if total < 1:
+                    return
+
                 rprint(f"[blue] Database found with {total} videos already hashed.")
-                with tqdm(dynamic_ncols=True, total=total, desc="Checking for trashed files in cache",
-                          unit="files", colour="BLUE") as pbar:
+                with tqdm(dynamic_ncols=True, total=total, desc="Checking for trashed videos in cache",
+                          unit="videos", colour="BLUE") as pbar:
                     for batched_keys in self.batched(hashdb, CHUNK_SIZE):
                         is_trashed_result = self.is_files_trashed_hydrus(batched_keys)
                         for result in is_trashed_result.items():
@@ -383,6 +387,6 @@ class HydrusVideoDeduplicator:
                                 delete_count += 1
                         hashdb.commit()
                         pbar.update(len(batched_keys))
-            self.hydlog.info(f"Cleared {delete_count} trashed files from the database.")
+            self.hydlog.info(f"Cleared {delete_count} trashed videos from the database.")
         except OSError:
-            rprint("[red] Error while clearing trashed files cache.")
+            rprint("[red] Error while clearing trashed videos cache.")

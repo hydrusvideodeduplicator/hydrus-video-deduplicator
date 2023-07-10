@@ -1,10 +1,10 @@
+import json
 import os
 from pathlib import Path
 from platform import uname
-import json
 
 from dotenv import load_dotenv
-from appdirs import AppDirs
+from platformdirs import PlatformDirs
 
 
 class InvalidEnvironmentVariable(Exception):
@@ -51,7 +51,7 @@ if in_wsl():
 HYDRUS_API_URL = os.getenv("HYDRUS_API_URL", f"https://{_DEFAULT_IP}:{_DEFAULT_PORT}")
 
 # ~/.local/share/hydrusvideodeduplicator/ on Linux
-_DEDUP_DATABASE_DIR_ENV = AppDirs("hydrusvideodeduplicator").user_data_dir
+_DEDUP_DATABASE_DIR_ENV = PlatformDirs("hydrusvideodeduplicator").user_data_dir
 _DEDUP_DATABASE_DIR_ENV = os.getenv("DEDUP_DATABASE_DIR", _DEDUP_DATABASE_DIR_ENV)
 DEDUP_DATABASE_DIR = Path(_DEDUP_DATABASE_DIR_ENV)
 

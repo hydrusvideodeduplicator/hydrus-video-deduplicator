@@ -76,4 +76,4 @@ Message @applenanner on the [Hydrus Discord](https://discord.gg/wPHPCUZ) for oth
 
 [vpdq](https://github.com/facebook/ThreatExchange/tree/main/vpdq) (BSD) by Meta
 
-[Big Buck Bunny](https://peach.blender.org/about)  (CC BY 3.0) clips by Blender Foundation
+[Big Buck Bunny](https://peach.blender.org/about), [Sintel](https://durian.blender.org/about/)  (CC BY 3.0) clips by Blender Foundation

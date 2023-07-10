@@ -1,9 +1,10 @@
 """
 
-These tests use clips from the Big Buck Bunny movie,
-which is licensed under Creative Commons Attribution 3.0
+These tests use clips from the Big Buck Bunny movie and Sintel movie,
+which are licensed under Creative Commons Attribution 3.0
 (https://creativecommons.org/licenses/by/3.0/).
 (c) copyright 2008, Blender Foundation / www.bigbuckbunny.org
+(c) copyright Blender Foundation | durian.blender.org
 Blender Foundation | www.blender.org
 
 """
@@ -28,7 +29,7 @@ class TestVpdq(unittest.TestCase):
         # Similarity videos should be checked for similarity.
         # They should be similar to other videos in the same group, but not to videos in other groups.
         # They are in separate folders for organizational purposes.
-        similarity_vids_dirs = ["big_buck_bunny"]
+        similarity_vids_dirs = ["big_buck_bunny", "sintel"]
         self.similarity_vids: list[Path] = []
         for vids_dir in similarity_vids_dirs:
             self.similarity_vids.extend(Path(all_vids_dir / vids_dir).glob("*"))

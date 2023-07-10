@@ -140,7 +140,6 @@ class HydrusVideoDeduplicator:
             dbsize = os.path.getsize(DEDUP_DATABASE_FILE)
 
             if dblen > 0:
-                rprint(f"[blue] Database found with {dblen} videos already hashed.")
                 self.hydlog.info(f"Database found of length {dblen}, size {dbsize} bytes")
             else:
                 self.hydlog.info(f"Database not found. Creating one at {DEDUP_DATABASE_FILE}")
@@ -373,6 +372,7 @@ class HydrusVideoDeduplicator:
             delete_count = 0
             with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
                 total = len(hashdb)
+                rprint(f"[blue] Database found with {total} videos already hashed.")
                 with tqdm(dynamic_ncols=True, total=total, desc="Checking for trashed files in cache",
                           unit="files", colour="BLUE") as pbar:
                     for batched_keys in self.batched(hashdb, CHUNK_SIZE):

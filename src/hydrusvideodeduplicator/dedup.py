@@ -12,8 +12,8 @@ from sqlitedict import SqliteDict
 from tqdm import tqdm
 
 if TYPE_CHECKING:
+    from collections.abc import Generator, Iterable, Sequence
     from typing import Any
-    from collections.abc import Iterable, Sequence, Generator
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils
@@ -377,8 +377,13 @@ class HydrusVideoDeduplicator:
                     return
 
                 rprint(f"[blue] Database found with {total} videos already hashed.")
-                with tqdm(dynamic_ncols=True, total=total, desc="Checking for trashed videos in cache",
-                          unit="videos", colour="BLUE") as pbar:
+                with tqdm(
+                    dynamic_ncols=True,
+                    total=total,
+                    desc="Checking for trashed videos in cache",
+                    unit="videos",
+                    colour="BLUE",
+                ) as pbar:
                     for batched_keys in self.batched(hashdb, CHUNK_SIZE):
                         is_trashed_result = self.is_files_trashed_hydrus(batched_keys)
                         for result in is_trashed_result.items():

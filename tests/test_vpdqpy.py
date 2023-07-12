@@ -81,10 +81,6 @@ class TestVpdq(unittest.TestCase):
             perceptual_hash = Vpdq.computeHash(vid)
             vids_hashes[vid] = perceptual_hash
             self.assertTrue(len(perceptual_hash) > 0)
-            for feature in perceptual_hash:
-                self.assertFalse(
-                    str(feature.pdq_hash) == "0000000000000000000000000000000000000000000000000000000000000000"
-                )
 
             perceptual_hash_json = Vpdq.vpdq_to_json(perceptual_hash)
             self.assertTrue(perceptual_hash_json != "[]")

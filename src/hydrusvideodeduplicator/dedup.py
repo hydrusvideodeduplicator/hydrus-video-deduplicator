@@ -329,7 +329,7 @@ class HydrusVideoDeduplicator:
                                                     f"'farthest_search_index' of {farthest_search_index} for db size " +
                                                     f"of {total}. Please report error.")
                                 elif farthest_search_index == len(hashdb):
-                                    # This is not necessary but may increase speed by avoiding any of the code below
+                                    # This file has already been searched for dupes against all other videos in the DB
                                     continue
 
                                 parallel(

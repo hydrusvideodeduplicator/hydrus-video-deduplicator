@@ -250,21 +250,13 @@ class HydrusVideoDeduplicator:
             with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", outer_stack=False) as hashdb:
                 if new_total is None:
                     new_total = len(hashdb)
-                with tqdm(
-                        dynamic_ncols=True,
-                        total=new_total,
-                        desc="Updating video search indices",
-                        unit="video",
-                        colour="BLUE",
-                ) as pbar:
-                    for batched_keys in HydrusVideoDeduplicator.batched(hashdb, CHUNK_SIZE):
-                        for key in batched_keys:
-                            row = hashdb[key]
-                            if 'farthest_search_index' in row and row['farthest_search_index'] > new_total:
-                                row['farthest_search_index'] = new_total
-                                hashdb[key] = row
-                        hashdb.commit()
-                        pbar.update(len(batched_keys))
+                for batched_keys in HydrusVideoDeduplicator.batched(hashdb, CHUNK_SIZE):
+                    for key in batched_keys:
+                        row = hashdb[key]
+                        if 'farthest_search_index' in row and row['farthest_search_index'] > new_total:
+                            row['farthest_search_index'] = new_total
+                            hashdb[key] = row
+                    hashdb.commit()
         except Exception as exc:
             rprint(f"[red] Error encountered when updating search indices:\n{str(exc)}")
             rprint("[red] Warning: duplicate search for this run may not be fully complete.")

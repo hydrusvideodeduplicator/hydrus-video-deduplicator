@@ -197,6 +197,7 @@ class HydrusVideoDeduplicator:
 
             finally:
                 hashdb.commit()
+                rprint(f"[green] Added {len(hashdb) - dblen} new videos to database.")
                 self.hydlog.info("Finished perceptual hash processing.")
 
     def get_potential_duplicate_count_hydrus(self, file_service_keys: Iterable[str]) -> int:
@@ -223,7 +224,7 @@ class HydrusVideoDeduplicator:
 
             self.client.set_file_relationships([new_relationship])
 
-    # Delete cache row in database
+    # Delete cache search index value for each video in database
     @staticmethod
     def clear_search_cache() -> None:
         try:
@@ -236,6 +237,32 @@ class HydrusVideoDeduplicator:
                 hashdb.commit()
         except OSError:
             rprint(f"[red] Database does not exist. Cannot clear search cache.")
+
+    # Updates the 'farthest_search_index' of all videos in the database that have an index greater than the length of
+    # the database, reducing them down to the length of the database.
+    @staticmethod
+    def update_search_cache() -> None:
+        try:
+            CHUNK_SIZE = 32
+            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+                new_total = len(hashdb)
+                with tqdm(
+                        dynamic_ncols=True,
+                        total=new_total,
+                        desc="Updating video search indices",
+                        unit="video",
+                        colour="BLUE",
+                ) as pbar:
+                    for batched_keys in HydrusVideoDeduplicator.batched(hashdb, CHUNK_SIZE):
+                        for key in batched_keys:
+                            row = hashdb[key]
+                            if row['farthest_search_index'] > new_total:
+                                row['farthest_search_index'] = new_total
+                        hashdb.commit()
+                        pbar.update(len(batched_keys))
+        except Exception as exc:
+            rprint(f"[red] Error encountered when updating search indices:\n{str(exc)}")
+            rprint("[red] Warning: uplicate search for this run may not be fully complete.")
 
     # Sliding window duplicate comparisons
     # Alternatively, I could scan duplicates when added and never do it again which would be one of the best ways without a VP tree
@@ -295,10 +322,14 @@ class HydrusVideoDeduplicator:
 
                                 # Store last furthest searched position in the database for each element
                                 # This way you only have to start searching at that place instead of at i+1 if it exists
-                                row.setdefault("farthest_search_index", i + 1)
+                                farthest_search_index = row.setdefault("farthest_search_index", i + 1)
 
-                                # This is not necessary but may increase speed by avoiding any of the code below
-                                if row["farthest_search_index"] >= len(hashdb) - 1:
+                                if farthest_search_index > len(hashdb):
+                                    raise Exception(f"Found video at index {i} that had impossible " +
+                                                    f"'farthest_search_index' of {farthest_search_index} for db size " +
+                                                    f"of {total}. Please report error.")
+                                elif farthest_search_index == len(hashdb):
+                                    # This is not necessary but may increase speed by avoiding any of the code below
                                     continue
 
                                 parallel(
@@ -311,8 +342,9 @@ class HydrusVideoDeduplicator:
                                     for video2_hash in islice(hashdb, row["farthest_search_index"], None)
                                 )
 
-                                # Update furthest search position to the current length of the table
-                                row["farthest_search_index"] = len(hashdb) - 1
+                                # Video has now been compared against all other videos for dupes, so update
+                                # farthest_search_index to the current length of the table
+                                row["farthest_search_index"] = len(hashdb)
                                 hashdb[video1_hash] = row
                                 count_since_last_commit += 1
 
@@ -370,7 +402,6 @@ class HydrusVideoDeduplicator:
 
         try:
             CHUNK_SIZE = 32
-            delete_count = 0
             with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
                 total = len(hashdb)
 
@@ -378,21 +409,35 @@ class HydrusVideoDeduplicator:
                     return
 
                 rprint(f"[blue] Database found with {total} videos already hashed.")
-                with tqdm(
-                    dynamic_ncols=True,
-                    total=total,
-                    desc="Clearing trashed videos",
-                    unit="video",
-                    colour="BLUE",
-                ) as pbar:
-                    for batched_keys in self.batched(hashdb, CHUNK_SIZE):
-                        is_trashed_result = self.is_files_trashed_hydrus(batched_keys)
-                        for result in is_trashed_result.items():
-                            if result[1] is True:
-                                del hashdb[result[0]]
-                                delete_count += 1
-                        hashdb.commit()
-                        pbar.update(len(batched_keys))
-            self.hydlog.info(f"Cleared {delete_count} trashed videos from the database.")
-        except OSError:
-            rprint("[red] Error while clearing trashed videos cache.")
+                try:
+                    with tqdm(
+                        dynamic_ncols=True,
+                        total=total,
+                        desc="Clearing trashed videos",
+                        unit="video",
+                        colour="BLUE",
+                    ) as pbar:
+                        for batched_keys in self.batched(hashdb, CHUNK_SIZE):
+                            is_trashed_result = self.is_files_trashed_hydrus(batched_keys)
+                            for result in is_trashed_result.items():
+                                if result[1] is True:
+                                    del hashdb[result[0]]
+                            hashdb.commit()
+                            pbar.update(len(batched_keys))
+                except Exception as exc:
+                    rprint("[red] Error while clearing trashed videos cache.")
+                    self.hydlog.info(exc)
+                finally:
+                    delete_count = total - len(hashdb)
+                    if delete_count > 0:
+                        rprint(f"[green] Cleared {delete_count} trashed videos from the database.")
+                        rprint(f"[blue] Updating search indices for remaining files")
+                        self.update_search_cache()
+                    else:
+                        rprint(f"[green] Found no trashed videos to delete from the database.")
+                    rprint(f"[green] There are now {len(hashdb)} videos now the database.")
+
+        except OSError as exc:
+            rprint("[red] Error accessing database. Skipping clearing of trashed videos")
+            self.hydlog.info(exc)
+

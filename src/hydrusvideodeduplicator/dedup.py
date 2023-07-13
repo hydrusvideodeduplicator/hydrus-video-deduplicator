@@ -241,11 +241,15 @@ class HydrusVideoDeduplicator:
     # Updates the 'farthest_search_index' of all videos in the database that have an index greater than the length of
     # the database, reducing them down to the length of the database.
     @staticmethod
-    def update_search_cache() -> None:
+    def update_search_cache(new_total: int | None = None) -> None:
+
+        if new_total is not None and new_total < 1:
+            raise Exception(f"passed in total must be greater than 0, but received {new_total}")
         try:
             CHUNK_SIZE = 32
-            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
-                new_total = len(hashdb)
+            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", outer_stack=False) as hashdb:
+                if new_total is None:
+                    new_total = len(hashdb)
                 with tqdm(
                         dynamic_ncols=True,
                         total=new_total,
@@ -403,7 +407,7 @@ class HydrusVideoDeduplicator:
 
         try:
             CHUNK_SIZE = 32
-            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", outer_stack=False) as hashdb:
                 total = len(hashdb)
 
                 if total < 1:
@@ -429,11 +433,12 @@ class HydrusVideoDeduplicator:
                     rprint("[red] Error while clearing trashed videos cache.")
                     self.hydlog.info(exc)
                 finally:
-                    delete_count = total - len(hashdb)
+                    new_total = len(hashdb)
+                    delete_count = total - new_total
                     if delete_count > 0:
                         rprint(f"[green] Cleared {delete_count} trashed videos from the database.")
                         rprint(f"[blue] Updating search indices for remaining files")
-                        self.update_search_cache()
+                        self.update_search_cache(new_total)
                     else:
                         rprint(f"[green] Found no trashed videos to delete from the database.")
                     rprint(f"[green] There are {len(hashdb)} videos now the database.")

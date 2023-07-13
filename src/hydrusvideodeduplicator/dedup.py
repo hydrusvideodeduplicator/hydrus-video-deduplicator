@@ -256,13 +256,14 @@ class HydrusVideoDeduplicator:
                     for batched_keys in HydrusVideoDeduplicator.batched(hashdb, CHUNK_SIZE):
                         for key in batched_keys:
                             row = hashdb[key]
-                            if row['farthest_search_index'] > new_total:
+                            if 'farthest_search_index' in row and row['farthest_search_index'] > new_total:
                                 row['farthest_search_index'] = new_total
+                                hashdb[key] = row
                         hashdb.commit()
                         pbar.update(len(batched_keys))
         except Exception as exc:
             rprint(f"[red] Error encountered when updating search indices:\n{str(exc)}")
-            rprint("[red] Warning: uplicate search for this run may not be fully complete.")
+            rprint("[red] Warning: duplicate search for this run may not be fully complete.")
 
     # Sliding window duplicate comparisons
     # Alternatively, I could scan duplicates when added and never do it again which would be one of the best ways without a VP tree
@@ -435,7 +436,7 @@ class HydrusVideoDeduplicator:
                         self.update_search_cache()
                     else:
                         rprint(f"[green] Found no trashed videos to delete from the database.")
-                    rprint(f"[green] There are now {len(hashdb)} videos now the database.")
+                    rprint(f"[green] There are {len(hashdb)} videos now the database.")
 
         except OSError as exc:
             rprint("[red] Error accessing database. Skipping clearing of trashed videos")

@@ -187,7 +187,7 @@ class HydrusVideoDeduplicator:
                     # Change to return_as='unordered_generator' when joblib supports it! (should be soon)
                     with Parallel(n_jobs=-2, return_as='generator') as parallel:
                         result_generator = parallel(
-                            delayed(self._fetch_and_hash_file)(video_hash) for video_hash in video_hashes)
+                            delayed(self._fetch_and_hash_file)(video_hash) for video_hash in hashes_to_process)
                         for result in result_generator:
                             if result is None:
                                 continue

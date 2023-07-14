@@ -40,10 +40,6 @@ Documentation = "https://github.com/hydrusvideodeduplicator/hydrus-video-dedupli
 Issues = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/issues"
 Source = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator"
 
-[build-system.dependencies]
-hydrus_api = {path = "./src/hydrusvideodeduplicator/hydrus_api"}
-vpdqpy = {path = "./src/hydrusvideodeduplicator/vpdqpy"}
-
 [tool.hatch.build]
 exclude = [
   "/.*",

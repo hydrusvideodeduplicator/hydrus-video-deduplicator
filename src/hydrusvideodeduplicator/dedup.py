@@ -32,7 +32,7 @@ class HydrusVideoDeduplicator:
         self.client = client
         if verify_connection:
             self.verify_api_connection()
-        self.hydlog.setLevel(logging.WARNING)
+        self.hydlog.setLevel(logging.INFO)
 
         # Commonly used things from the Hydrus database
         # If any of these are large they should probably be lazily loaded
@@ -133,6 +133,25 @@ class HydrusVideoDeduplicator:
         )["hashes"]
         return all_video_hashes
 
+    def _fetch_and_hash_file(self, video_hash: str) -> dict | None:
+        try:
+            video_response = self.client.get_file(hash_=video_hash)
+        except hydrus_api.HydrusAPIException:
+            rprint("[red] Failed to get video from Hydrus.")
+            self.hydlog.error("Error getting video from Hydrus.")
+            return None
+
+        # Calculate perceptual_hash
+        try:
+            perceptual_hash = self._calculate_perceptual_hash(video_response.content)
+        except Exception as exc:
+            rprint("[red] Failed to calculate a perceptual hash.")
+            self.hydlog.exception(exc)
+            self.hydlog.error(f"Errored file hash: {video_hash}")
+            return None
+        else:
+            return {"video_hash": video_hash, "perceptual_hash": perceptual_hash}
+
     def _add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes: Sequence[str]) -> None:
         # Create database folder
         try:
@@ -154,43 +173,28 @@ class HydrusVideoDeduplicator:
             try:
                 with tqdm(total=len(video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
                     count_since_last_commit = 0
-                    COMMIT_INTERVAL = 16
+                    COMMIT_INTERVAL = 8
 
-                    for video_hash in video_hashes:
-                        pbar.update(1)
-                        # Only calculate new hash if it's missing or if overwrite is true
-                        if not overwrite and video_hash in hashdb and "perceptual_hash" in hashdb[video_hash]:
-                            continue
-
-                        # Get video file from Hydrus
-                        try:
-                            video_response = self.client.get_file(hash_=video_hash)
-                        except hydrus_api.HydrusAPIException:
-                            rprint("[red] Failed to get video from Hydrus.")
-                            self.hydlog.error("Error getting video from Hydrus.")
-                            continue
-
-                        # Calculate perceptual_hash
-                        try:
-                            perceptual_hash = self._calculate_perceptual_hash(video_response.content)
-                        except Exception as exc:
-                            rprint("[red] Failed to calculate a perceptual hash.")
-                            self.hydlog.exception(exc)
-                            self.hydlog.error(f"Errored file hash: {video_hash}")
-                        else:
-                            # Write perceptual hash to DB
-                            row = hashdb.get(video_hash, {})
-                            row["perceptual_hash"] = perceptual_hash
-                            hashdb[video_hash] = row
-
-                            # Batch DB commits to avoid excessive writes
-                            count_since_last_commit += 1
-                            if count_since_last_commit >= COMMIT_INTERVAL:
-                                hashdb.commit()
-                                count_since_last_commit = 0
-                                self.hydlog.debug("Committed perceptual hashes to database.")
-
-                            self.hydlog.debug("Perceptual hash calculated.")
+                    with Parallel(n_jobs=-2, return_as='list') as parallel:
+                        for batched_hashes in self.batched(video_hashes, COMMIT_INTERVAL):
+                            if overwrite:
+                                clean_batched_hashes = batched_hashes
+                            else:
+                                clean_batched_hashes = [video_hash for video_hash in batched_hashes if
+                                                        video_hash not in hashdb or "perceptual_hash" not in hashdb[
+                                                            video_hash]]
+                            results = parallel(
+                                delayed(self._fetch_and_hash_file)(video_hash) for video_hash in clean_batched_hashes)
+                            for result in results:
+                                if result is None:
+                                    continue
+                                video_hash = result["video_hash"]
+                                perceptual_hash = result["perceptual_hash"]
+                                row = hashdb.get(video_hash, {})
+                                row["perceptual_hash"] = perceptual_hash
+                                hashdb[video_hash] = row
+                            hashdb.commit()
+                            pbar.update(COMMIT_INTERVAL)
 
             except KeyboardInterrupt:
                 interrupt_msg = "Perceptual hash processing was interrupted!"

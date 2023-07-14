@@ -51,7 +51,7 @@ class PDQHasher:
     DCT_matrix: List[List[float]] = []
 
     def compute_dct_matrix(self):
-        matrix_scale_factor = math.sqrt(2.0 / 64.0)
+        # matrix_scale_factor = math.sqrt(2.0 / 64.0)
         d = [0] * 16
         for i in range(0, 16):
             di = [0] * 64
@@ -93,9 +93,7 @@ class PDQHasher:
         buffer16x64 = MatrixUtil.allocateMatrix(16, 64)
         buffer16x16 = MatrixUtil.allocateMatrix(16, 16)
         t1 = time.time()
-        rv = self.fromImage(
-            img, buffer1, buffer2, buffer64x64, buffer16x64, buffer16x16
-        )
+        rv = self.fromImage(img, buffer1, buffer2, buffer64x64, buffer16x64, buffer16x16)
         t2 = time.time()
 
         if hashingMetadata is not None:
@@ -106,7 +104,7 @@ class PDQHasher:
 
     def fromBufferedImage(self, img):
         try:
-            #img = Image.open(img_bytes)
+            # img = Image.open(img_bytes)
             # resizing the image proportionally to max 512px width and max 512px height
             img.thumbnail((512, 512))
         except IOError as e:
@@ -117,16 +115,12 @@ class PDQHasher:
         buffer64x64 = MatrixUtil.allocateMatrix(64, 64)
         buffer16x64 = MatrixUtil.allocateMatrix(16, 64)
         buffer16x16 = MatrixUtil.allocateMatrix(16, 16)
-        return self.fromImage(
-            img, buffer1, buffer2, buffer64x64, buffer16x64, buffer16x16
-        )
+        return self.fromImage(img, buffer1, buffer2, buffer64x64, buffer16x64, buffer16x16)
 
     def fromImage(self, img, buffer1, buffer2, buffer64x64, buffer16x64, buffer16x16):
         numCols, numRows = img.size
         self.fillFloatLumaFromBufferImage(img, buffer1)
-        return self.pdqHash256FromFloatLuma(
-            buffer1, buffer2, numRows, numCols, buffer64x64, buffer16x64, buffer16x16
-        )
+        return self.pdqHash256FromFloatLuma(buffer1, buffer2, numRows, numCols, buffer64x64, buffer16x64, buffer16x16)
 
     def fillFloatLumaFromBufferImage(self, img, luma):
         numCols, numRows = img.size
@@ -137,12 +131,8 @@ class PDQHasher:
             for j in range(numCols):
                 r, g, b = pixels[j, i]
                 luma[i * numCols + j] = (
-                    self.LUMA_FROM_R_COEFF * r
-                    + self.LUMA_FROM_G_COEFF * g
-                    + self.LUMA_FROM_B_COEFF * b
+                    self.LUMA_FROM_R_COEFF * r + self.LUMA_FROM_G_COEFF * g + self.LUMA_FROM_B_COEFF * b
                 )
-
-
 
     def pdqHash256FromFloatLuma(
         self,
@@ -298,9 +288,7 @@ class PDQHasher:
         )
 
     @classmethod
-    def decimateFloat(
-        cls, in_, inNumRows, inNumCols, out  # numRows x numCols in row-major order
-    ):
+    def decimateFloat(cls, in_, inNumRows, inNumCols, out):  # numRows x numCols in row-major order
         for i in range(64):
             ini = int(((i + 0.5) * inNumRows) / 64)
             for j in range(64):
@@ -456,10 +444,7 @@ class PDQHasher:
     @classmethod
     def computeJaroszFilterWindowSize(cls, dimension):
         """Round up. See comments at top of file for details."""
-        return int(
-            (dimension + cls.PDQ_JAROSZ_WINDOW_SIZE_DIVISOR - 1)
-            / cls.PDQ_JAROSZ_WINDOW_SIZE_DIVISOR
-        )
+        return int((dimension + cls.PDQ_JAROSZ_WINDOW_SIZE_DIVISOR - 1) / cls.PDQ_JAROSZ_WINDOW_SIZE_DIVISOR)
 
     @classmethod
     def jaroszFilterFloat(
@@ -473,12 +458,8 @@ class PDQHasher:
         nreps,
     ):
         for _i in range(nreps):
-            cls.boxAlongRowsFloat(
-                buffer1, buffer2, numRows, numCols, windowSizeAlongRows
-            )
-            cls.boxAlongColsFloat(
-                buffer2, buffer1, numRows, numCols, windowSizeAlongCols
-            )
+            cls.boxAlongRowsFloat(buffer1, buffer2, numRows, numCols, windowSizeAlongRows)
+            cls.boxAlongColsFloat(buffer2, buffer1, numRows, numCols, windowSizeAlongCols)
 
     """
     ----------------------------------------------------------------
@@ -631,7 +612,6 @@ class PDQHasher:
             _sum -= invec[inStartOffset + (i + phase_3_nreps + phase_2_nreps) * stride]
             currentWindowSize -= 1
             outvec[outStartOffset + (i + phase_3_nreps + phase_2_nreps) * stride] = _sum / currentWindowSize
-
 
     @classmethod
     def boxAlongRowsFloat(cls, _input, output, numRows, numCols, windowSize):

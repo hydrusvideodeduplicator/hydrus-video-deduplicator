@@ -14,9 +14,7 @@ class Hash256Test(unittest.TestCase):
 
     def test_incorrect_hex_format(self) -> None:
         with self.assertRaises(PDQHashFormatException):
-            Hash256.fromHexString(
-                "9c151c3af838278e3ef57c180c7d031c07aefd12f2ccc1e18f2a1e1c7d0ff16!"
-            )
+            Hash256.fromHexString("9c151c3af838278e3ef57c180c7d031c07aefd12f2ccc1e18f2a1e1c7d0ff16!")
 
     def test_correct_hex_format(self) -> None:
         hash = Hash256.fromHexString(self.SAMPLE_HASH)

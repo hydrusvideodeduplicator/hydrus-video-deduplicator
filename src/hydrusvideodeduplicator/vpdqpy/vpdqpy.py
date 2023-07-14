@@ -2,24 +2,21 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
-import logging
 
 import av
 from PIL import Image
 
 from ..pdqhashing.hasher.pdq_hasher import PDQHasher
+from ..pdqhashing.types.hash256 import Hash256
 
 if TYPE_CHECKING:
     from typing import Annotated, Generator
 
     from .typing_utils import ValueRange
-
-    from ..pdqhashing.types.containers import HashAndQuality
-
-from ..pdqhashing.types.hash256 import Hash256
 
 
 @dataclass(slots=True)

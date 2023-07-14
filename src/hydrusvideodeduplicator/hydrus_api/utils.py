@@ -18,7 +18,14 @@ import os
 import typing as T
 import collections.abc as abc
 
-from hydrusvideodeduplicator.hydrus_api import DEFAULT_API_URL, HYDRUS_METADATA_ENCODING, BinaryFileLike, Client, ImportStatus, Permission
+from hydrusvideodeduplicator.hydrus_api import (
+    DEFAULT_API_URL,
+    HYDRUS_METADATA_ENCODING,
+    BinaryFileLike,
+    Client,
+    ImportStatus,
+    Permission,
+)
 
 _X = T.TypeVar("_X")
 

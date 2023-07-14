@@ -13,11 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import collections.abc as abc
 import enum
 import json
 import os
 import typing as T
-import collections.abc as abc
 
 import requests
 
@@ -282,7 +282,7 @@ class Client:
         access_key: T.Optional[str] = None,
         api_url: str = DEFAULT_API_URL,
         session: T.Optional[requests.Session] = None,
-        verify_cert: T.Optional[str] = None, # Path to cert
+        verify_cert: T.Optional[str] = None,  # Path to cert
     ) -> None:
         """
         See https://hydrusnetwork.github.io/hydrus/client_api.html for documentation.
@@ -305,12 +305,12 @@ class Client:
             # Since we aren't using the json keyword-argument, we have to set the Content-Type manually
             kwargs["headers"]["Content-Type"] = "application/json"
 
-        if self._verify_cert == None:
+        if self._verify_cert is None:
             kwargs["verify"] = False
-            requests.packages.urllib3.disable_warnings() 
+            requests.packages.urllib3.disable_warnings()
         else:
             kwargs["verify"] = self._verify_cert
-        
+
         try:
             response = self.session.request(method, self.api_url + path, **kwargs)
         except requests.RequestException as error:

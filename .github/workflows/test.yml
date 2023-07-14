@@ -1,0 +1,30 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linter:
+    name: Linter and Formatter
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    - name: Install hatch
+      run: pip install hatch
+    - name: Install dependencies
+      run: pip install -e .
+    - name: Lint with Ruff
+      run: hatch run lint:lint
+    - name: Format check with black
+      run: hatch run lint:format

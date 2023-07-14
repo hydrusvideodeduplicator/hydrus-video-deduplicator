@@ -54,6 +54,16 @@ exclude = [
 [tool.hatch.version]
 path = "src/hydrusvideodeduplicator/__about__.py"
 
+[tool.hatch.envs.lint]
+dependencies = [
+  "black",
+  "ruff",
+]
+
+[tool.hatch.envs.lint.scripts]
+format = "black --check src"
+lint = "ruff src"
+
 [tool.black]
 target-version = ["py310", "py311"]
 line-length = 120

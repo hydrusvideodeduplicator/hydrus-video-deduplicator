@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from typing import Any
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
-import hydrusvideodeduplicator.hydrus_api.utils
+import hydrusvideodeduplicator.hydrus_api.utils as hydrus_api_utils
 
 from .config import DEDUP_DATABASE_DIR, DEDUP_DATABASE_FILE
 from .dedup_util import database_accessible
@@ -42,9 +42,12 @@ class HydrusVideoDeduplicator:
     # Will throw a hydrus_api.APIError if something is wrong
     def verify_api_connection(self) -> None:
         self.hydlog.info(
-            f"Client API version: v{self.client.VERSION} | Endpoint API version: v{self.client.get_api_version()['version']}"
+            (
+                f"Client API version: v{self.client.VERSION}"
+                "| Endpoint API version: v{self.client.get_api_version()['version']}"
+            )
         )
-        hydrus_api.utils.verify_permissions(self.client, hydrus_api.utils.Permission)
+        hydrus_api_utils.verify_permissions(self.client, hydrus_api.utils.Permission)
 
     # Verify that the supplied file_service_key is a valid key for a local file service
     def verify_file_service_keys(self, file_service_keys: Iterable[str]) -> None:
@@ -158,8 +161,6 @@ class HydrusVideoDeduplicator:
                         # Get video file from Hydrus
                         try:
                             video_response = self.client.get_file(hash_=video_hash)
-                            # video_metadata = self.client.get_file_metadata(hashes=[video_hash], only_return_basic_information=False)
-                            # print(video_metadata)
                         except hydrus_api.HydrusAPIException:
                             rprint("[red] Failed to get video from Hydrus.")
                             self.hydlog.error("Error getting video from Hydrus.")
@@ -197,6 +198,7 @@ class HydrusVideoDeduplicator:
 
             finally:
                 hashdb.commit()
+                rprint(f"[green] Added {len(hashdb) - dblen} new videos to database.")
                 self.hydlog.info("Finished perceptual hash processing.")
 
     def get_potential_duplicate_count_hydrus(self, file_service_keys: Iterable[str]) -> int:
@@ -223,27 +225,25 @@ class HydrusVideoDeduplicator:
 
             self.client.set_file_relationships([new_relationship])
 
-    # Delete cache row in database
+    # Delete cache search index value for each video in database
     @staticmethod
     def clear_search_cache() -> None:
-        try:
-            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
-                for key in hashdb:
-                    row = hashdb[key]
-                    if "farthest_search_index" in row:
-                        del row["farthest_search_index"]
-                    hashdb[key] = row
-                hashdb.commit()
-        except OSError:
-            rprint(f"[red] Database does not exist. Cannot clear search cache.")
+        if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
+            return
+        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+            for key in hashdb:
+                row = hashdb[key]
+                if "farthest_search_index" in row:
+                    del row["farthest_search_index"]
+                hashdb[key] = row
+            hashdb.commit()
+        rprint("[green] Cleared search cache.")
 
-    # Sliding window duplicate comparisons
-    # Alternatively, I could scan duplicates when added and never do it again which would be one of the best ways without a VP tree
     def _find_potential_duplicates(
         self, limited_video_hashes: Sequence[str] | None = None, file_service_keys: Iterable[str] | None = None
     ) -> None:
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos", verbose=True):
-            rprint(f"[red] Could not search for duplicates.")
+            rprint("[red] Could not search for duplicates.")
             return
 
         # Number of potential duplicates before adding more. Just for user info.
@@ -295,10 +295,11 @@ class HydrusVideoDeduplicator:
 
                                 # Store last furthest searched position in the database for each element
                                 # This way you only have to start searching at that place instead of at i+1 if it exists
-                                row.setdefault("farthest_search_index", i + 1)
+                                farthest_search_index = row.setdefault("farthest_search_index", i + 1)
 
-                                # This is not necessary but may increase speed by avoiding any of the code below
-                                if row["farthest_search_index"] >= len(hashdb) - 1:
+                                assert farthest_search_index <= total
+                                if farthest_search_index == total:
+                                    # This file has already been searched for dupes against all other videos in the DB
                                     continue
 
                                 parallel(
@@ -311,8 +312,9 @@ class HydrusVideoDeduplicator:
                                     for video2_hash in islice(hashdb, row["farthest_search_index"], None)
                                 )
 
-                                # Update furthest search position to the current length of the table
-                                row["farthest_search_index"] = len(hashdb) - 1
+                                # Video has now been compared against all other videos for dupes,
+                                # so update farthest_search_index to the current length of the table
+                                row["farthest_search_index"] = total
                                 hashdb[video1_hash] = row
                                 count_since_last_commit += 1
 
@@ -334,25 +336,53 @@ class HydrusVideoDeduplicator:
             rprint("[green] No new potential duplicates found.")
 
     @staticmethod
-    def batched(iterable, n) -> Generator[tuple, Any, None]:
-        "Batch data into tuples of length n. The last batch may be shorter."
-        # batched('ABCDEFG', 3) --> ABC DEF G
-        if n < 1:
-            raise ValueError('n must be at least one')
+    def batched(iterable: Iterable, n: int) -> Generator[tuple, Any, None]:
+        """
+        Batch data into tuples of length n. The last batch may be shorter."
+        batched('ABCDEFG', 3) --> ABC DEF G
+        DO NOT use this for iterating over the database. Use batched_and_save_db instead.
+        """
+        assert n >= 1
         it = iter(iterable)
         while batch := tuple(islice(it, n)):
             yield batch
 
-    # Check if files are trashed
-    # Returns a dictionary of hash : trashed_or_not
-    def is_files_trashed_hydrus(self, file_hashes: Iterable[str]) -> dict:
+    @staticmethod
+    def batched_and_save_db(
+        db: SqliteDict,
+        n: int,
+        chunk_size: int | None = None,
+    ) -> Generator[dict[str, dict[str, Any]], Any, None]:
+        """
+        Batch rows of into rows of length n and save changes after each batch or after chunk_size batches.
+        """
+        assert n >= 1
+        assert chunk_size is None or chunk_size >= 1
+        if chunk_size is None:
+            chunk_size = n
+        it = iter(db.items())
+        while batch_items := dict(islice(it, n)):
+            batch_dict = {
+                key: {col: val for col, val in row.items() if col != 'key'} for key, row in batch_items.items()
+            }
+
+            yield batch_dict
+
+            # Save changes after each batch
+            db.commit()
+
+    def is_files_trashed_hydrus(self, file_hashes: Iterable[str]) -> dict[str, bool]:
+        """
+        Check if files are trashed or deleted in Hydrus
+        Returns a dictionary of hash : trashed_or_not
+        """
         videos_metadata = self.client.get_file_metadata(hashes=file_hashes, only_return_basic_information=False)[
             "metadata"
         ]
 
         result = {}
         for video_metadata in videos_metadata:
-            # This should never happen
+            # This should never happen, but it shouldn't break the program if it does
             if "hash" not in video_metadata:
                 logging.error("Hash not found for potentially trashed file.")
                 continue
@@ -362,37 +392,69 @@ class HydrusVideoDeduplicator:
             result[video_hash] = is_trashed or is_deleted
         return result
 
-    # Delete trashed and deleted files from Hydrus from the database
-    # TODO: This doesn't have to run everytime. Run it every couple startups or something.
+    @staticmethod
+    def update_search_cache(new_total: int | None = None) -> None:
+        """
+        Update the search cache to clamp the farthest_search_index to the current length of the database
+        """
+        assert new_total is None or new_total >= 0
+
+        if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
+            return
+
+        CHUNK_SIZE = 256
+        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", outer_stack=False) as hashdb:
+            if new_total is None:
+                new_total = len(hashdb)
+            for batched_items in HydrusVideoDeduplicator.batched_and_save_db(hashdb, CHUNK_SIZE):
+                for item in batched_items.items():
+                    row = hashdb[item[0]]
+                    if 'farthest_search_index' in row and row['farthest_search_index'] > new_total:
+                        row['farthest_search_index'] = new_total
+                        hashdb[item[0]] = row
+
     def clear_trashed_files_from_db(self) -> None:
+        """
+        Delete trashed and deleted files from Hydrus from the database
+        TODO: This doesn't have to run everytime. Run it every couple startups or something.
+        """
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
             return
 
         try:
-            CHUNK_SIZE = 32
-            delete_count = 0
-            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
-                total = len(hashdb)
-
-                if total < 1:
+            with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", outer_stack=False) as hashdb:
+                # This is EXPENSIVE. sqlitedict gets len by iterating over the entire database!
+                if (total := len(hashdb)) < 1:
                     return
 
+                delete_count = 0
                 rprint(f"[blue] Database found with {total} videos already hashed.")
-                with tqdm(
-                    dynamic_ncols=True,
-                    total=total,
-                    desc="Clearing trashed videos",
-                    unit="video",
-                    colour="BLUE",
-                ) as pbar:
-                    for batched_keys in self.batched(hashdb, CHUNK_SIZE):
-                        is_trashed_result = self.is_files_trashed_hydrus(batched_keys)
-                        for result in is_trashed_result.items():
-                            if result[1] is True:
-                                del hashdb[result[0]]
-                                delete_count += 1
-                        hashdb.commit()
-                        pbar.update(len(batched_keys))
-            self.hydlog.info(f"Cleared {delete_count} trashed videos from the database.")
-        except OSError:
-            rprint("[red] Error while clearing trashed videos cache.")
+                try:
+                    with tqdm(
+                        dynamic_ncols=True,
+                        total=total,
+                        desc="Clearing trashed videos",
+                        unit="video",
+                        colour="BLUE",
+                    ) as pbar:
+                        CHUNK_SIZE = 32
+                        for batched_items in self.batched_and_save_db(hashdb, CHUNK_SIZE):
+                            is_trashed_result = self.is_files_trashed_hydrus(batched_items.keys())
+                            for result in is_trashed_result.items():
+                                video_hash = result[0]
+                                is_trashed = result[1]
+                                if is_trashed is True:
+                                    del hashdb[video_hash]
+                                    delete_count += 1
+                            pbar.update(min(CHUNK_SIZE, total - pbar.n))
+                except Exception as exc:
+                    rprint("[red] Error while clearing trashed videos cache.")
+                    print(exc)
+                    self.hydlog.error(exc)
+                finally:
+                    if delete_count > 0:
+                        print(f"Cleared {delete_count} trashed videos from the database.")
+                    self.update_search_cache(total - delete_count)
+
+        except OSError as exc:
+            self.hydlog.info(exc)

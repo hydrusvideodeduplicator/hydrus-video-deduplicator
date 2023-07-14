@@ -7,7 +7,7 @@ from rich import print as rprint
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .__about__ import __version__
-from .config import HYDRUS_API_KEY, HYDRUS_API_URL, REQUESTS_CA_BUNDLE, HYDRUS_QUERY, HYDRUS_LOCAL_FILE_SERVICE_KEYS
+from .config import HYDRUS_API_KEY, HYDRUS_API_URL, HYDRUS_LOCAL_FILE_SERVICE_KEYS, HYDRUS_QUERY, REQUESTS_CA_BUNDLE
 from .dedup import HydrusVideoDeduplicator
 
 """
@@ -34,7 +34,9 @@ def main(
     skip_hashing: Annotated[
         Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")
     ] = False,
-    file_service_key: Annotated[Optional[List[str]], typer.Option(help="Local file service key")] = HYDRUS_LOCAL_FILE_SERVICE_KEYS,
+    file_service_key: Annotated[
+        Optional[List[str]], typer.Option(help="Local file service key")
+    ] = HYDRUS_LOCAL_FILE_SERVICE_KEYS,
     verify_cert: Annotated[
         Optional[str], typer.Option(help="Path to TLS cert. This forces verification.")
     ] = REQUESTS_CA_BUNDLE,
@@ -61,7 +63,6 @@ def main(
     # Clear cache
     if clear_search_cache:
         HydrusVideoDeduplicator.clear_search_cache()
-        rprint("[green] Cleared search cache.")
 
     # CLI overwrites env vars with no default value
     if not api_key:
@@ -137,8 +138,9 @@ def main(
     superdeduper.clear_trashed_files_from_db()
 
     # Run all deduplicate functionality
-    superdeduper.deduplicate(overwrite=overwrite, custom_query=query, skip_hashing=skip_hashing,
-                             file_service_keys=file_service_key)
+    superdeduper.deduplicate(
+        overwrite=overwrite, custom_query=query, skip_hashing=skip_hashing, file_service_keys=file_service_key
+    )
 
     raise typer.Exit()
 

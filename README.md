@@ -26,7 +26,7 @@ For more information check out the [wiki](https://github.com/hydrusvideodeduplic
 
 ---
 
-## Installation:
+## [Installation:](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/wiki/Installation)
 #### Dependencies:
 - Python >=3.10
 - FFmpeg

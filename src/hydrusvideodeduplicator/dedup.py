@@ -72,7 +72,11 @@ class HydrusVideoDeduplicator:
     ) -> None:
         # Add perceptual hashes to video files
         # system:filetype tags are really inconsistent
-        search_tags = ['system:filetype=video, gif, apng', 'system:has duration']
+        search_tags = [
+            'system:filetype=video, gif, apng',
+            'system:has duration',
+            'system:file service is not currently in trash',
+        ]
 
         query = False
         if custom_query is not None:
@@ -323,7 +327,7 @@ class HydrusVideoDeduplicator:
                                     count_since_last_commit = 0
 
             except KeyboardInterrupt:
-                pass
+                rprint("[yellow] Duplicate search was interrupted!")
             finally:
                 hashdb.commit()
 
@@ -371,7 +375,7 @@ class HydrusVideoDeduplicator:
             # Save changes after each batch
             db.commit()
 
-    def is_files_trashed_hydrus(self, file_hashes: Iterable[str]) -> dict[str, bool]:
+    def is_files_deleted_hydrus(self, file_hashes: Iterable[str]) -> dict[str, bool]:
         """
         Check if files are trashed or deleted in Hydrus
         Returns a dictionary of hash : trashed_or_not
@@ -386,10 +390,9 @@ class HydrusVideoDeduplicator:
             if "hash" not in video_metadata:
                 logging.error("Hash not found for potentially trashed file.")
                 continue
-            video_hash = video_metadata['hash']
-            is_trashed: bool = video_metadata.get('is_trashed', False)
-            is_deleted: bool = video_metadata.get('is_deleted', False)
-            result[video_hash] = is_trashed or is_deleted
+            video_hash = video_metadata["hash"]
+            is_deleted: bool = video_metadata.get("is_deleted", False)
+            result[video_hash] = is_deleted
         return result
 
     @staticmethod
@@ -439,7 +442,7 @@ class HydrusVideoDeduplicator:
                     ) as pbar:
                         CHUNK_SIZE = 32
                         for batched_items in self.batched_and_save_db(hashdb, CHUNK_SIZE):
-                            is_trashed_result = self.is_files_trashed_hydrus(batched_items.keys())
+                            is_trashed_result = self.is_files_deleted_hydrus(batched_items.keys())
                             for result in is_trashed_result.items():
                                 video_hash = result[0]
                                 is_trashed = result[1]

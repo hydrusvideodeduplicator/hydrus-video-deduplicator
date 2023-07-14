@@ -101,7 +101,8 @@ class HydrusVideoDeduplicator:
             if query:
                 video_hashes = set(self._retrieve_video_hashes(search_tags, file_service_keys))
         else:
-            all_video_hashes = self._retrieve_video_hashes(search_tags, file_service_keys)
+            all_video_hashes = list(self._retrieve_video_hashes(search_tags, file_service_keys))
+            rprint(f"[blue] Found {len(all_video_hashes)} videos to process")
             self._add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=all_video_hashes)
 
         if query and not skip_hashing:
@@ -164,6 +165,7 @@ class HydrusVideoDeduplicator:
         with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
             dblen = len(hashdb)
             dbsize = os.path.getsize(DEDUP_DATABASE_FILE)
+            videoslen = len(video_hashes)
 
             if dblen > 0:
                 self.hydlog.info(f"Database found of length {dblen}, size {dbsize} bytes")
@@ -171,30 +173,31 @@ class HydrusVideoDeduplicator:
                 self.hydlog.info(f"Database not found. Creating one at {DEDUP_DATABASE_FILE}")
 
             try:
-                with tqdm(total=len(video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
-                    count_since_last_commit = 0
-                    COMMIT_INTERVAL = 8
+                if overwrite or dblen == 0:
+                    hashes_to_process = video_hashes
+                else:
+                    # We could put a progress bar on this process, but it's only a few seconds on a 10k db right now
+                    hashes_to_process = [video_hash for video_hash in video_hashes if
+                                         video_hash not in hashdb or "perceptual_hash" not in hashdb[video_hash]]
+                hashes_to_process_len = len(hashes_to_process)
+                self.hydlog.info(f"{videoslen - hashes_to_process_len} videos already phashed and cached in DB")
+                self.hydlog.info(f"Starting perceptual hashing of remaining {hashes_to_process_len} videos")
 
-                    with Parallel(n_jobs=-2, return_as='list') as parallel:
-                        for batched_hashes in self.batched(video_hashes, COMMIT_INTERVAL):
-                            if overwrite:
-                                clean_batched_hashes = batched_hashes
-                            else:
-                                clean_batched_hashes = [video_hash for video_hash in batched_hashes if
-                                                        video_hash not in hashdb or "perceptual_hash" not in hashdb[
-                                                            video_hash]]
-                            results = parallel(
-                                delayed(self._fetch_and_hash_file)(video_hash) for video_hash in clean_batched_hashes)
-                            for result in results:
-                                if result is None:
-                                    continue
-                                video_hash = result["video_hash"]
-                                perceptual_hash = result["perceptual_hash"]
-                                row = hashdb.get(video_hash, {})
-                                row["perceptual_hash"] = perceptual_hash
-                                hashdb[video_hash] = row
+                with tqdm(total=hashes_to_process_len, dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
+                    # Change to return_as='unordered_generator' when joblib supports it! (should be soon)
+                    with Parallel(n_jobs=-2, return_as='generator') as parallel:
+                        result_generator = parallel(
+                            delayed(self._fetch_and_hash_file)(video_hash) for video_hash in video_hashes)
+                        for result in result_generator:
+                            if result is None:
+                                continue
+                            video_hash = result["video_hash"]
+                            perceptual_hash = result["perceptual_hash"]
+                            row = hashdb.get(video_hash, {})
+                            row["perceptual_hash"] = perceptual_hash
+                            hashdb[video_hash] = row
                             hashdb.commit()
-                            pbar.update(COMMIT_INTERVAL)
+                            pbar.update(1)
 
             except KeyboardInterrupt:
                 interrupt_msg = "Perceptual hash processing was interrupted!"

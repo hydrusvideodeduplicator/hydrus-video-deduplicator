@@ -1,4 +1,4 @@
-name: Upload Python Package
+name: Upload Python Package to PyPI
 
 on:
   release:
@@ -9,30 +9,17 @@ on:
     paths:
       - "src/hydrusvideodeduplicator/__about__.py"
   workflow_dispatch:
-    inputs:
-      logLevel:
-        description: 'Log level'
-        required: true
-        default: 'warning'
-        type: choice
-        options:
-          - info
-          - warning
-          - debug
-  
 
 permissions:
   contents: read
 
 jobs:
   deploy:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v4
       with:
         python-version: '3.10'
     - name: Install dependencies

@@ -369,12 +369,8 @@ class HydrusVideoDeduplicator:
         if chunk_size is None:
             chunk_size = n
         it = iter(db.items())
-        while batch_items := dict(islice(it, n)):
-            batch_dict = {
-                key: {col: val for col, val in row.items() if col != 'key'} for key, row in batch_items.items()
-            }
-
-            yield batch_dict
+        while batch_items := dict(islice(it, 1)):
+            yield batch_items
 
             # Save changes after each batch
             db.commit()

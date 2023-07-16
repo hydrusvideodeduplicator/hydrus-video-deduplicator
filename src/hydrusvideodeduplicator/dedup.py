@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections import namedtuple
 from itertools import islice
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -64,11 +65,11 @@ class HydrusVideoDeduplicator:
 
     # This is the master function of the class
     def deduplicate(
-        self,
-        overwrite: bool = False,
-        custom_query: Sequence[str] | None = None,
-        skip_hashing: bool = False,
-        file_service_keys: Sequence[str] | None = None,
+            self,
+            overwrite: bool = False,
+            custom_query: Sequence[str] | None = None,
+            skip_hashing: bool = False,
+            file_service_keys: Sequence[str] | None = None,
     ) -> None:
         # Add perceptual hashes to video files
         # system:filetype tags are really inconsistent
@@ -122,7 +123,7 @@ class HydrusVideoDeduplicator:
         return perceptual_hash
 
     def _retrieve_video_hashes(
-        self, search_tags: Iterable[str], file_service_keys: Iterable[str] | None = None
+            self, search_tags: Iterable[str], file_service_keys: Iterable[str] | None = None
     ) -> Iterable[str]:
         all_video_hashes = self.client.search_files(
             tags=search_tags,
@@ -134,7 +135,7 @@ class HydrusVideoDeduplicator:
         )["hashes"]
         return all_video_hashes
 
-    def _fetch_and_hash_file(self, video_hash: str) -> dict | None:
+    def _fetch_and_hash_file(self, video_hash: str) -> tuple | None:
         try:
             video_response = self.client.get_file(hash_=video_hash)
         except hydrus_api.HydrusAPIException:
@@ -151,7 +152,8 @@ class HydrusVideoDeduplicator:
             self.hydlog.error(f"Errored file hash: {video_hash}")
             return None
         else:
-            return {"video_hash": video_hash, "perceptual_hash": perceptual_hash}
+            PHashedVideo = namedtuple("PHashedVideo", "video_hash perceptual_hash")
+            return PHashedVideo(video_hash, perceptual_hash)
 
     def _add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes: Sequence[str]) -> None:
         # Create database folder
@@ -173,26 +175,19 @@ class HydrusVideoDeduplicator:
                 self.hydlog.info(f"Database not found. Creating one at {DEDUP_DATABASE_FILE}")
 
             try:
-                if overwrite or dblen == 0:
-                    hashes_to_process = video_hashes
-                else:
-                    # We could put a progress bar on this process, but it's only a few seconds on a 10k db right now
-                    hashes_to_process = [video_hash for video_hash in video_hashes if
-                                         video_hash not in hashdb or "perceptual_hash" not in hashdb[video_hash]]
-                hashes_to_process_len = len(hashes_to_process)
-                self.hydlog.info(f"{videoslen - hashes_to_process_len} videos already phashed and cached in DB")
-                self.hydlog.info(f"Starting perceptual hashing of remaining {hashes_to_process_len} videos")
+                self.hydlog.info("Starting perceptual hashing")
 
-                with tqdm(total=hashes_to_process_len, dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
+                with tqdm(total=videoslen, dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
                     # Change to return_as='unordered_generator' when joblib supports it! (should be soon)
                     with Parallel(n_jobs=-2, return_as='generator') as parallel:
                         result_generator = parallel(
-                            delayed(self._fetch_and_hash_file)(video_hash) for video_hash in hashes_to_process)
+                            delayed(self._fetch_and_hash_file)(video_hash) for video_hash in video_hashes
+                            if overwrite or video_hash not in hashdb or "perceptual_hash" not in hashdb[video_hash])
                         for result in result_generator:
                             if result is None:
                                 continue
-                            video_hash = result["video_hash"]
-                            perceptual_hash = result["perceptual_hash"]
+                            video_hash = result.video_hash
+                            perceptual_hash = result.perceptual_hash
                             row = hashdb.get(video_hash, {})
                             row["perceptual_hash"] = perceptual_hash
                             hashdb[video_hash] = row

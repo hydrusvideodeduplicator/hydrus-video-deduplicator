@@ -65,11 +65,11 @@ class HydrusVideoDeduplicator:
 
     # This is the master function of the class
     def deduplicate(
-            self,
-            overwrite: bool = False,
-            custom_query: Sequence[str] | None = None,
-            skip_hashing: bool = False,
-            file_service_keys: Sequence[str] | None = None,
+        self,
+        overwrite: bool = False,
+        custom_query: Sequence[str] | None = None,
+        skip_hashing: bool = False,
+        file_service_keys: Sequence[str] | None = None,
     ) -> None:
         # Add perceptual hashes to video files
         # system:filetype tags are really inconsistent
@@ -123,7 +123,7 @@ class HydrusVideoDeduplicator:
         return perceptual_hash
 
     def _retrieve_video_hashes(
-            self, search_tags: Iterable[str], file_service_keys: Iterable[str] | None = None
+        self, search_tags: Iterable[str], file_service_keys: Iterable[str] | None = None
     ) -> Iterable[str]:
         all_video_hashes = self.client.search_files(
             tags=search_tags,
@@ -181,8 +181,10 @@ class HydrusVideoDeduplicator:
                     # Change to return_as='unordered_generator' when joblib supports it! (should be soon)
                     with Parallel(n_jobs=-2, return_as='generator') as parallel:
                         result_generator = parallel(
-                            delayed(self._fetch_and_hash_file)(video_hash) for video_hash in video_hashes
-                            if overwrite or video_hash not in hashdb or "perceptual_hash" not in hashdb[video_hash])
+                            delayed(self._fetch_and_hash_file)(video_hash)
+                            for video_hash in video_hashes
+                            if overwrite or video_hash not in hashdb or "perceptual_hash" not in hashdb[video_hash]
+                        )
                         for result in result_generator:
                             if result is None:
                                 continue

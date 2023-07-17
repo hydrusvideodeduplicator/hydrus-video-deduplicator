@@ -94,20 +94,16 @@ class Hash256:
 
     def hammingDistance(self, that):
         n = 0
-        i = 0
-        while i < self.HASH256_NUM_SLOTS:
-            n += self.hammingNorm16(int((self.w[i] ^ that.w[i])))
-            i += 1
+        for w1, w2 in zip(self.w, that.w):
+            n += self.hammingNorm16(int(w1 ^ w2))
         return n
 
     def hammingDistanceLE(self, that, d) -> bool:
         e = 0
-        i = 0
-        while i < self.HASH256_NUM_SLOTS:
-            e += self.hammingNorm16(int((self.w[i] ^ that.w[i])))
+        for w1, w2 in zip(self.w, that.w):
+            e += self.hammingNorm16(int(w1 ^ w2))
             if e > d:
                 return False
-            i += 1
         return True
 
     def setBit(self, k):

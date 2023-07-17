@@ -43,6 +43,7 @@ def main(
     clear_search_cache: Annotated[
         Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared")
     ] = False,
+    job_count: Annotated[Optional[int], typer.Option(help="Number of CPUs to use. Default is all but one core.")] = -2,
     verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
 ):
@@ -135,11 +136,16 @@ def main(
         raise typer.Exit(code=1)
     superdeduper.threshold = threshold
 
+    superdeduper.job_count = job_count
+
     superdeduper.clear_trashed_files_from_db()
 
     # Run all deduplicate functionality
     superdeduper.deduplicate(
-        overwrite=overwrite, custom_query=query, skip_hashing=skip_hashing, file_service_keys=file_service_key
+        overwrite=overwrite,
+        custom_query=query,
+        skip_hashing=skip_hashing,
+        file_service_keys=file_service_key,
     )
 
     raise typer.Exit()

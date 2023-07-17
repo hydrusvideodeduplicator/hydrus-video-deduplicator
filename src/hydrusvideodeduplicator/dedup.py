@@ -29,11 +29,12 @@ class HydrusVideoDeduplicator:
     threshold: float = 75.0
     _DEBUG = False
 
-    def __init__(self, client: hydrus_api.Client, verify_connection: bool = True):
+    def __init__(self, client: hydrus_api.Client, verify_connection: bool = True, job_count: int = -2):
         self.client = client
         if verify_connection:
             self.verify_api_connection()
         self.hydlog.setLevel(logging.INFO)
+        self.job_count = job_count
 
         # Commonly used things from the Hydrus database
         # If any of these are large they should probably be lazily loaded
@@ -202,7 +203,7 @@ class HydrusVideoDeduplicator:
 
                 with tqdm(total=len(new_video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
                     # Change to return_as='unordered_generator' when joblib supports it! (should be soon)
-                    with Parallel(n_jobs=-2, return_as='generator') as parallel:
+                    with Parallel(n_jobs=self.job_count, return_as='generator') as parallel:
                         result_generator = parallel(
                             delayed(self.fetch_and_hash_file)(video_hash) for video_hash in new_video_hashes
                         )
@@ -266,7 +267,9 @@ class HydrusVideoDeduplicator:
         print("[green] Cleared search cache.")
 
     def _find_potential_duplicates(
-        self, limited_video_hashes: Sequence[str] | None = None, file_service_keys: Iterable[str] | None = None
+        self,
+        limited_video_hashes: Sequence[str] | None = None,
+        file_service_keys: Iterable[str] | None = None,
     ) -> None:
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos", verbose=True):
             print("[red] Could not search for duplicates.")
@@ -289,7 +292,7 @@ class HydrusVideoDeduplicator:
                     dynamic_ncols=True, total=total, desc="Finding duplicates", unit="video", colour="BLUE"
                 ) as pbar:
                     # -1 is all cores, -2 is all cores but one
-                    with Parallel(n_jobs=-2) as parallel:
+                    with Parallel(n_jobs=self.job_count) as parallel:
                         if limited_video_hashes is not None:
                             # Avoid checking if in hashdb for each hash. Just do it now.
                             clean_all_retrieved_video_hashes = [

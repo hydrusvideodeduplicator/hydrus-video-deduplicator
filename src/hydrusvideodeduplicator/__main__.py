@@ -2,7 +2,7 @@ import logging
 from typing import Annotated, List, Optional
 
 import typer
-from rich import print as rprint
+from rich import print
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
@@ -20,7 +20,7 @@ Parameters:
 - verbose turns on logging
 - debug turns on logging and sets the logging level to debug
 """
-rprint(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
+print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
 
 
 def main(
@@ -121,7 +121,7 @@ def main(
     if error_connecting:
         logging.fatal("FATAL ERROR HAS OCCURRED")
         logging.fatal(error_connecting_exception)
-        rprint(f"[red] {error_connecting_exception_msg} ")
+        print(f"[red] {error_connecting_exception_msg} ")
         raise typer.Exit(code=1)
 
     # Deduplication parameters
@@ -131,7 +131,7 @@ def main(
         superdeduper._DEBUG = True
 
     if threshold < 0:
-        rprint("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
+        print("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
         raise typer.Exit(code=1)
     superdeduper.threshold = threshold
 

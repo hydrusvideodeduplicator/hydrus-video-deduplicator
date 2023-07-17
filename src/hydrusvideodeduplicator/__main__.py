@@ -2,7 +2,7 @@ import logging
 from typing import Annotated, List, Optional
 
 import typer
-from rich import print as rprint
+from rich import print
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
@@ -20,7 +20,7 @@ Parameters:
 - verbose turns on logging
 - debug turns on logging and sets the logging level to debug
 """
-rprint(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
+print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
 
 
 def main(
@@ -43,6 +43,7 @@ def main(
     clear_search_cache: Annotated[
         Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared")
     ] = False,
+    job_count: Annotated[Optional[int], typer.Option(help="Number of CPUs to use. Default is all but one core.")] = -2,
     verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
 ):
@@ -121,7 +122,7 @@ def main(
     if error_connecting:
         logging.fatal("FATAL ERROR HAS OCCURRED")
         logging.fatal(error_connecting_exception)
-        rprint(f"[red] {error_connecting_exception_msg} ")
+        print(f"[red] {error_connecting_exception_msg} ")
         raise typer.Exit(code=1)
 
     # Deduplication parameters
@@ -131,15 +132,20 @@ def main(
         superdeduper._DEBUG = True
 
     if threshold < 0:
-        rprint("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
+        print("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
         raise typer.Exit(code=1)
     superdeduper.threshold = threshold
+
+    superdeduper.job_count = job_count
 
     superdeduper.clear_trashed_files_from_db()
 
     # Run all deduplicate functionality
     superdeduper.deduplicate(
-        overwrite=overwrite, custom_query=query, skip_hashing=skip_hashing, file_service_keys=file_service_key
+        overwrite=overwrite,
+        custom_query=query,
+        skip_hashing=skip_hashing,
+        file_service_keys=file_service_key,
     )
 
     raise typer.Exit()

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 import os
+from collections import namedtuple
 from itertools import islice
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from joblib import Parallel, delayed
-from rich import print as rprint
+from rich import print
 from sqlitedict import SqliteDict
 from tqdm import tqdm
 
@@ -28,11 +29,12 @@ class HydrusVideoDeduplicator:
     threshold: float = 75.0
     _DEBUG = False
 
-    def __init__(self, client: hydrus_api.Client, verify_connection: bool = True):
+    def __init__(self, client: hydrus_api.Client, verify_connection: bool = True, job_count: int = -2):
         self.client = client
         if verify_connection:
             self.verify_api_connection()
-        self.hydlog.setLevel(logging.WARNING)
+        self.hydlog.setLevel(logging.INFO)
+        self.job_count = job_count
 
         # Commonly used things from the Hydrus database
         # If any of these are large they should probably be lazily loaded
@@ -84,7 +86,7 @@ class HydrusVideoDeduplicator:
             custom_query = [x for x in custom_query if x.strip()]
             if len(custom_query) > 0:
                 search_tags.extend(custom_query)
-                rprint(f"[yellow] Custom Query: {custom_query}")
+                print(f"[yellow] Custom Query: {custom_query}")
                 query = True
 
         # Set the file service keys to be used for hashing
@@ -97,12 +99,12 @@ class HydrusVideoDeduplicator:
 
         video_hashes = None
         if skip_hashing:
-            rprint("[yellow] Skipping perceptual hashing")
+            print("[yellow] Skipping perceptual hashing")
             if query:
                 video_hashes = set(self._retrieve_video_hashes(search_tags, file_service_keys))
         else:
-            all_video_hashes = self._retrieve_video_hashes(search_tags, file_service_keys)
-            self._add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=all_video_hashes)
+            all_video_hashes = list(self._retrieve_video_hashes(search_tags, file_service_keys))
+            self.add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=all_video_hashes)
 
         if query and not skip_hashing:
             video_hashes = set(self._retrieve_video_hashes(search_tags, file_service_keys))
@@ -133,7 +135,36 @@ class HydrusVideoDeduplicator:
         )["hashes"]
         return all_video_hashes
 
-    def _add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes: Sequence[str]) -> None:
+    def fetch_and_hash_file(self, video_hash: str) -> tuple | None:
+        """
+        Retrieves the video from Hydrus,
+        calculates the perceptual hash,
+        """
+        try:
+            video_response = self.client.get_file(hash_=video_hash)
+        except hydrus_api.HydrusAPIException:
+            print("[red] Failed to get video from Hydrus.")
+            self.hydlog.error("Error getting video from Hydrus.")
+            return
+
+        # Calculate perceptual_hash
+        try:
+            perceptual_hash = self._calculate_perceptual_hash(video_response.content)
+        except Exception as exc:
+            print("[red] Failed to calculate a perceptual hash.")
+            self.hydlog.exception(exc)
+            self.hydlog.error(f"Errored file hash: {video_hash}")
+        else:
+            PHashedVideo = namedtuple("PHashedVideo", "video_hash perceptual_hash")
+            return PHashedVideo(video_hash, perceptual_hash)
+
+    def add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes: Sequence[str]) -> None:
+        """
+        Retrieves the video from Hydrus,
+        calculates the perceptual hash,
+        and then add it to the database.
+        """
+
         # Create database folder
         try:
             os.makedirs(DEDUP_DATABASE_DIR, exist_ok=False)
@@ -142,68 +173,60 @@ class HydrusVideoDeduplicator:
         except OSError:
             pass
 
-        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
-            dblen = len(hashdb)
+        with SqliteDict(
+            str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", autocommit=True, outer_stack=False
+        ) as hashdb:
             dbsize = os.path.getsize(DEDUP_DATABASE_FILE)
 
-            if dblen > 0:
+            # Cache len(hashdb) because it's O(n) to get the length.
+            if (dblen := len(hashdb)) > 0:
                 self.hydlog.info(f"Database found of length {dblen}, size {dbsize} bytes")
             else:
                 self.hydlog.info(f"Database not found. Creating one at {DEDUP_DATABASE_FILE}")
 
+            if overwrite:
+                new_video_hashes = video_hashes
+                print(f"[yellow] Overwriting {dblen} existing hashes.")
+            else:
+                # Filter existing hashes
+                new_video_hashes = [
+                    video_hash
+                    for video_hash in video_hashes
+                    if video_hash not in hashdb or "perceptual_hash" not in hashdb[video_hash]
+                ]
+
+            print(f"[blue] Found {len(new_video_hashes)} videos to process")
+
+            hash_count = 0
             try:
-                with tqdm(total=len(video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
-                    count_since_last_commit = 0
-                    COMMIT_INTERVAL = 16
+                self.hydlog.info("Starting perceptual hash processing")
 
-                    for video_hash in video_hashes:
-                        pbar.update(1)
-                        # Only calculate new hash if it's missing or if overwrite is true
-                        if not overwrite and video_hash in hashdb and "perceptual_hash" in hashdb[video_hash]:
-                            continue
-
-                        # Get video file from Hydrus
-                        try:
-                            video_response = self.client.get_file(hash_=video_hash)
-                        except hydrus_api.HydrusAPIException:
-                            rprint("[red] Failed to get video from Hydrus.")
-                            self.hydlog.error("Error getting video from Hydrus.")
-                            continue
-
-                        # Calculate perceptual_hash
-                        try:
-                            perceptual_hash = self._calculate_perceptual_hash(video_response.content)
-                        except Exception as exc:
-                            rprint("[red] Failed to calculate a perceptual hash.")
-                            self.hydlog.exception(exc)
-                            self.hydlog.error(f"Errored file hash: {video_hash}")
-                        else:
-                            # Write perceptual hash to DB
+                with tqdm(total=len(new_video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
+                    # Change to return_as='unordered_generator' when joblib supports it! (should be soon)
+                    with Parallel(n_jobs=self.job_count, return_as='generator') as parallel:
+                        result_generator = parallel(
+                            delayed(self.fetch_and_hash_file)(video_hash) for video_hash in new_video_hashes
+                        )
+                        for result in result_generator:
+                            if result is None:
+                                continue
+                            video_hash = result.video_hash
+                            perceptual_hash = result.perceptual_hash
                             row = hashdb.get(video_hash, {})
                             row["perceptual_hash"] = perceptual_hash
                             hashdb[video_hash] = row
 
-                            # Batch DB commits to avoid excessive writes
-                            count_since_last_commit += 1
-                            if count_since_last_commit >= COMMIT_INTERVAL:
-                                hashdb.commit()
-                                count_since_last_commit = 0
-                                self.hydlog.debug("Committed perceptual hashes to database.")
-
-                            self.hydlog.debug("Perceptual hash calculated.")
+                            hash_count += 1
+                            pbar.update(1)
 
             except KeyboardInterrupt:
-                interrupt_msg = "Perceptual hash processing was interrupted!"
-                rprint(f"[yellow] {interrupt_msg}")
-                self.hydlog.error(interrupt_msg)
+                print("[yellow] Perceptual hash processing was interrupted!")
 
             else:
-                rprint("[green] Finished perceptual hash processing.")
+                print("[green] Finished perceptual hash processing.")
 
             finally:
-                hashdb.commit()
-                rprint(f"[green] Added {len(hashdb) - dblen} new videos to database.")
-                self.hydlog.info("Finished perceptual hash processing.")
+                print(f"[green] Added {hash_count} new videos to the database.")
 
     def get_potential_duplicate_count_hydrus(self, file_service_keys: Iterable[str]) -> int:
         return self.client.get_potentials_count(file_service_keys=file_service_keys)["potential_duplicates_count"]
@@ -241,13 +264,15 @@ class HydrusVideoDeduplicator:
                     del row["farthest_search_index"]
                 hashdb[key] = row
             hashdb.commit()
-        rprint("[green] Cleared search cache.")
+        print("[green] Cleared search cache.")
 
     def _find_potential_duplicates(
-        self, limited_video_hashes: Sequence[str] | None = None, file_service_keys: Iterable[str] | None = None
+        self,
+        limited_video_hashes: Sequence[str] | None = None,
+        file_service_keys: Iterable[str] | None = None,
     ) -> None:
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos", verbose=True):
-            rprint("[red] Could not search for duplicates.")
+            print("[red] Could not search for duplicates.")
             return
 
         # Number of potential duplicates before adding more. Just for user info.
@@ -267,7 +292,7 @@ class HydrusVideoDeduplicator:
                     dynamic_ncols=True, total=total, desc="Finding duplicates", unit="video", colour="BLUE"
                 ) as pbar:
                     # -1 is all cores, -2 is all cores but one
-                    with Parallel(n_jobs=-2) as parallel:
+                    with Parallel(n_jobs=self.job_count) as parallel:
                         if limited_video_hashes is not None:
                             # Avoid checking if in hashdb for each hash. Just do it now.
                             clean_all_retrieved_video_hashes = [
@@ -327,7 +352,7 @@ class HydrusVideoDeduplicator:
                                     count_since_last_commit = 0
 
             except KeyboardInterrupt:
-                rprint("[yellow] Duplicate search was interrupted!")
+                print("[yellow] Duplicate search was interrupted!")
             finally:
                 hashdb.commit()
 
@@ -335,9 +360,9 @@ class HydrusVideoDeduplicator:
         post_dedupe_count = self.get_potential_duplicate_count_hydrus(file_service_keys)
         new_dedupes_count = post_dedupe_count - pre_dedupe_count
         if new_dedupes_count > 0:
-            rprint(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
+            print(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
         else:
-            rprint("[green] No new potential duplicates found.")
+            print("[green] No new potential duplicates found.")
 
     @staticmethod
     def batched(iterable: Iterable, n: int) -> Generator[tuple, Any, None]:
@@ -427,7 +452,7 @@ class HydrusVideoDeduplicator:
                     return
 
                 delete_count = 0
-                rprint(f"[blue] Database found with {total} videos already hashed.")
+                print(f"[blue] Database found with {total} videos already hashed.")
                 try:
                     with tqdm(
                         dynamic_ncols=True,
@@ -447,7 +472,7 @@ class HydrusVideoDeduplicator:
                                     delete_count += 1
                             pbar.update(min(CHUNK_SIZE, total - pbar.n))
                 except Exception as exc:
-                    rprint("[red] Error while clearing trashed videos cache.")
+                    print("[red] Error while clearing trashed videos cache.")
                     print(exc)
                     self.hydlog.error(exc)
                 finally:

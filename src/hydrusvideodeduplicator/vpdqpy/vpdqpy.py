@@ -94,7 +94,7 @@ class Vpdq:
     ) -> int:
         return sum(
             any(
-                query_feature.pdq_hash.hammingDistance(target_feature.pdq_hash) <= distance_tolerance
+                query_feature.pdq_hash.hammingDistanceLE(target_feature.pdq_hash, distance_tolerance)
                 for target_feature in target_features
             )
             for query_feature in query_features

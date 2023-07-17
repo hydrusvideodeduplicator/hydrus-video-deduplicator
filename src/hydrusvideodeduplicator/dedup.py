@@ -103,8 +103,7 @@ class HydrusVideoDeduplicator:
                 video_hashes = set(self._retrieve_video_hashes(search_tags, file_service_keys))
         else:
             all_video_hashes = list(self._retrieve_video_hashes(search_tags, file_service_keys))
-            rprint(f"[blue] Found {len(all_video_hashes)} videos to process")
-            self._add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=all_video_hashes)
+            self.add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=all_video_hashes)
 
         if query and not skip_hashing:
             video_hashes = set(self._retrieve_video_hashes(search_tags, file_service_keys))
@@ -135,13 +134,17 @@ class HydrusVideoDeduplicator:
         )["hashes"]
         return all_video_hashes
 
-    def _fetch_and_hash_file(self, video_hash: str) -> tuple | None:
+    def fetch_and_hash_file(self, video_hash: str) -> tuple | None:
+        """
+        Retrieves the video from Hydrus,
+        calculates the perceptual hash,
+        """
         try:
             video_response = self.client.get_file(hash_=video_hash)
         except hydrus_api.HydrusAPIException:
             rprint("[red] Failed to get video from Hydrus.")
             self.hydlog.error("Error getting video from Hydrus.")
-            return None
+            return
 
         # Calculate perceptual_hash
         try:
@@ -150,12 +153,17 @@ class HydrusVideoDeduplicator:
             rprint("[red] Failed to calculate a perceptual hash.")
             self.hydlog.exception(exc)
             self.hydlog.error(f"Errored file hash: {video_hash}")
-            return None
         else:
             PHashedVideo = namedtuple("PHashedVideo", "video_hash perceptual_hash")
             return PHashedVideo(video_hash, perceptual_hash)
 
-    def _add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes: Sequence[str]) -> None:
+    def add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes: Sequence[str]) -> None:
+        """
+        Retrieves the video from Hydrus,
+        calculates the perceptual hash,
+        and then add it to the database.
+        """
+
         # Create database folder
         try:
             os.makedirs(DEDUP_DATABASE_DIR, exist_ok=False)
@@ -164,26 +172,39 @@ class HydrusVideoDeduplicator:
         except OSError:
             pass
 
-        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
-            dblen = len(hashdb)
+        with SqliteDict(
+            str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", autocommit=True, outer_stack=False
+        ) as hashdb:
             dbsize = os.path.getsize(DEDUP_DATABASE_FILE)
-            videoslen = len(video_hashes)
 
-            if dblen > 0:
+            # Cache len(hashdb) because it's O(n) to get the length.
+            if (dblen := len(hashdb)) > 0:
                 self.hydlog.info(f"Database found of length {dblen}, size {dbsize} bytes")
             else:
                 self.hydlog.info(f"Database not found. Creating one at {DEDUP_DATABASE_FILE}")
 
-            try:
-                self.hydlog.info("Starting perceptual hashing")
+            if overwrite:
+                new_video_hashes = video_hashes
+                rprint(f"[yellow] Overwriting {dblen} existing hashes.")
+            else:
+                # Filter existing hashes
+                new_video_hashes = [
+                    video_hash
+                    for video_hash in video_hashes
+                    if video_hash not in hashdb or "perceptual_hash" not in hashdb[video_hash]
+                ]
 
-                with tqdm(total=videoslen, dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
+            rprint(f"[blue] Found {len(new_video_hashes)} videos to process")
+
+            hash_count = 0
+            try:
+                self.hydlog.info("Starting perceptual hash processing")
+
+                with tqdm(total=len(new_video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
                     # Change to return_as='unordered_generator' when joblib supports it! (should be soon)
                     with Parallel(n_jobs=-2, return_as='generator') as parallel:
                         result_generator = parallel(
-                            delayed(self._fetch_and_hash_file)(video_hash)
-                            for video_hash in video_hashes
-                            if overwrite or video_hash not in hashdb or "perceptual_hash" not in hashdb[video_hash]
+                            delayed(self.fetch_and_hash_file)(video_hash) for video_hash in new_video_hashes
                         )
                         for result in result_generator:
                             if result is None:
@@ -193,21 +214,18 @@ class HydrusVideoDeduplicator:
                             row = hashdb.get(video_hash, {})
                             row["perceptual_hash"] = perceptual_hash
                             hashdb[video_hash] = row
-                            hashdb.commit()
+
+                            hash_count += 1
                             pbar.update(1)
 
             except KeyboardInterrupt:
-                interrupt_msg = "Perceptual hash processing was interrupted!"
-                rprint(f"[yellow] {interrupt_msg}")
-                self.hydlog.error(interrupt_msg)
+                rprint("[yellow] Perceptual hash processing was interrupted!")
 
             else:
                 rprint("[green] Finished perceptual hash processing.")
 
             finally:
-                hashdb.commit()
-                rprint(f"[green] Added {len(hashdb) - dblen} new videos to database.")
-                self.hydlog.info("Finished perceptual hash processing.")
+                rprint(f"[green] Added {hash_count} new videos to database.")
 
     def get_potential_duplicate_count_hydrus(self, file_service_keys: Iterable[str]) -> int:
         return self.client.get_potentials_count(file_service_keys=file_service_keys)["potential_duplicates_count"]

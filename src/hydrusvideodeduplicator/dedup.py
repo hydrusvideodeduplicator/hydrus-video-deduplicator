@@ -225,7 +225,7 @@ class HydrusVideoDeduplicator:
                 print("[green] Finished perceptual hash processing.")
 
             finally:
-                print(f"[green] Added {hash_count} new videos to database.")
+                print(f"[green] Added {hash_count} new videos to the database.")
 
     def get_potential_duplicate_count_hydrus(self, file_service_keys: Iterable[str]) -> int:
         return self.client.get_potentials_count(file_service_keys=file_service_keys)["potential_duplicates_count"]

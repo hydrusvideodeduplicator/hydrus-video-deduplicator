@@ -29,7 +29,13 @@ class HydrusVideoDeduplicator:
     threshold: float = 75.0
     _DEBUG = False
 
-    def __init__(self, client: hydrus_api.Client, verify_connection: bool = True, job_count: int = -2):
+    def __init__(
+        self,
+        client: hydrus_api.Client,
+        verify_connection: bool = True,
+        file_service_keys: Sequence[str] | None = None,
+        job_count: int = -2,
+    ):
         self.client = client
         if verify_connection:
             self.verify_api_connection()
@@ -39,6 +45,14 @@ class HydrusVideoDeduplicator:
         # Commonly used things from the Hydrus database
         # If any of these are large they should probably be lazily loaded
         self.all_services = self.client.get_services()
+
+        # Set the file service keys to be used for hashing
+        # Default is "all local files"
+        if file_service_keys is None or not file_service_keys:
+            self.file_service_keys = [self.all_services["all_local_files"][0]["service_key"]]
+        else:
+            self.file_service_keys = [x for x in file_service_keys if x.strip()]
+        self.verify_file_service_keys()
 
     # Verify client connection and permissions
     # Will throw a hydrus_api.APIError if something is wrong
@@ -52,10 +66,10 @@ class HydrusVideoDeduplicator:
         hydrus_api_utils.verify_permissions(self.client, hydrus_api.utils.Permission)
 
     # Verify that the supplied file_service_key is a valid key for a local file service
-    def verify_file_service_keys(self, file_service_keys: Iterable[str]) -> None:
+    def verify_file_service_keys(self) -> None:
         VALID_SERVICE_TYPES = [hydrus_api.ServiceType.ALL_LOCAL_FILES, hydrus_api.ServiceType.FILE_DOMAIN]
 
-        for file_service_key in file_service_keys:
+        for file_service_key in self.file_service_keys:
             file_service = self.all_services['services'].get(file_service_key)
             if file_service is None:
                 raise KeyError(f"Invalid file service key: '{file_service_key}'")
@@ -70,7 +84,6 @@ class HydrusVideoDeduplicator:
         overwrite: bool = False,
         custom_query: Sequence[str] | None = None,
         skip_hashing: bool = False,
-        file_service_keys: Sequence[str] | None = None,
     ) -> None:
         # Add perceptual hashes to video files
         # system:filetype tags are really inconsistent
@@ -89,30 +102,22 @@ class HydrusVideoDeduplicator:
                 print(f"[yellow] Custom Query: {custom_query}")
                 query = True
 
-        # Set the file service keys to be used for hashing
-        # Default is "all local files"
-        if file_service_keys is None or not file_service_keys:
-            file_service_keys = [self.all_services["all_local_files"][0]["service_key"]]
-        else:
-            file_service_keys = [x for x in file_service_keys if x.strip()]
-        self.verify_file_service_keys(file_service_keys)
-
         video_hashes = None
         if skip_hashing:
             print("[yellow] Skipping perceptual hashing")
             if query:
-                video_hashes = set(self._retrieve_video_hashes(search_tags, file_service_keys))
+                video_hashes = set(self._retrieve_video_hashes(search_tags))
         else:
-            all_video_hashes = list(self._retrieve_video_hashes(search_tags, file_service_keys))
+            all_video_hashes = list(self._retrieve_video_hashes(search_tags))
             self.add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=all_video_hashes)
 
         if query and not skip_hashing:
-            video_hashes = set(self._retrieve_video_hashes(search_tags, file_service_keys))
+            video_hashes = set(self._retrieve_video_hashes(search_tags))
 
         if query:
-            self._find_potential_duplicates(limited_video_hashes=video_hashes, file_service_keys=file_service_keys)
+            self._find_potential_duplicates(limited_video_hashes=video_hashes)
         else:
-            self._find_potential_duplicates(limited_video_hashes=None, file_service_keys=file_service_keys)
+            self._find_potential_duplicates(limited_video_hashes=None)
 
         self.hydlog.info("Deduplication done.")
 
@@ -127,7 +132,6 @@ class HydrusVideoDeduplicator:
     ) -> Iterable[str]:
         all_video_hashes = self.client.search_files(
             tags=search_tags,
-            file_service_keys=file_service_keys,
             file_sort_type=hydrus_api.FileSortType.FILE_SIZE,
             return_hashes=True,
             file_sort_asc=True,
@@ -228,8 +232,8 @@ class HydrusVideoDeduplicator:
             finally:
                 print(f"[green] Added {hash_count} new videos to the database.")
 
-    def get_potential_duplicate_count_hydrus(self, file_service_keys: Iterable[str]) -> int:
-        return self.client.get_potentials_count(file_service_keys=file_service_keys)["potential_duplicates_count"]
+    def get_potential_duplicate_count_hydrus(self) -> int:
+        return self.client.get_potentials_count(file_service_keys=self.file_service_keys)["potential_duplicates_count"]
 
     def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> None:
         vpdq_hash1 = Vpdq.json_to_vpdq(video1_phash)
@@ -269,14 +273,13 @@ class HydrusVideoDeduplicator:
     def _find_potential_duplicates(
         self,
         limited_video_hashes: Sequence[str] | None = None,
-        file_service_keys: Iterable[str] | None = None,
     ) -> None:
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos", verbose=True):
             print("[red] Could not search for duplicates.")
             return
 
         # Number of potential duplicates before adding more. Just for user info.
-        pre_dedupe_count = self.get_potential_duplicate_count_hydrus(file_service_keys)
+        pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
 
         # BUG: If this process is interrupted, the farthest_search_index will not save for ANY entries.
         #      I think it might be because every entry in the column needs an entry for SQlite but I'm not sure.
@@ -357,7 +360,7 @@ class HydrusVideoDeduplicator:
                 hashdb.commit()
 
         # Statistics for user
-        post_dedupe_count = self.get_potential_duplicate_count_hydrus(file_service_keys)
+        post_dedupe_count = self.get_potential_duplicate_count_hydrus()
         new_dedupes_count = post_dedupe_count - pre_dedupe_count
         if new_dedupes_count > 0:
             print(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")

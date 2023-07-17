@@ -81,7 +81,7 @@ def main(
     print(f"Connecting to {api_url}")
     # Client connection
     # TODO: Try to connect with https first and then fallback to http with a strong warning
-    _client = hydrus_api.Client(
+    hydrus_client = hydrus_api.Client(
         api_url=api_url,
         access_key=api_key,
         verify_cert=verify_cert,
@@ -91,7 +91,11 @@ def main(
     error_connecting_exception_msg = ""
     error_connecting_exception = ""
     try:
-        superdeduper = HydrusVideoDeduplicator(_client)
+        superdeduper = HydrusVideoDeduplicator(
+            hydrus_client,
+            file_service_keys=file_service_key,
+            job_count=job_count,
+        )
     except hydrus_api.InsufficientAccess as exc:
         error_connecting_exception_msg = "Invalid Hydrus API key."
         error_connecting_exception = exc
@@ -136,8 +140,6 @@ def main(
         raise typer.Exit(code=1)
     superdeduper.threshold = threshold
 
-    superdeduper.job_count = job_count
-
     superdeduper.clear_trashed_files_from_db()
 
     # Run all deduplicate functionality
@@ -145,7 +147,6 @@ def main(
         overwrite=overwrite,
         custom_query=query,
         skip_hashing=skip_hashing,
-        file_service_keys=file_service_key,
     )
 
     raise typer.Exit()

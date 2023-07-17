@@ -28,8 +28,7 @@ For more information check out the [wiki](https://github.com/hydrusvideodeduplic
 
 ## [Installation:](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/wiki/Installation)
 #### Dependencies:
-- Python >=3.10
-- FFmpeg
+- [Python](https://www.python.org/downloads/) >=3.10
 
 ```sh
 python3 -m pip install hydrusvideodeduplicator
@@ -50,7 +49,7 @@ For full list of options see `--help` or the [usage page.](https://github.com/hy
 ## TODO:
 - [ ] Option to rollback and remove potential duplicates
 - [ ] OR predicates for --query
-- [ ] Parallelize hashing and duplicate search
+- [x] Parallelize hashing and duplicate search
 - [ ] Automatically generate access key with Hydrus API
 - [x] Docker container
 - [ ] Upload Docker container to Docker Hub (GitHub Action)

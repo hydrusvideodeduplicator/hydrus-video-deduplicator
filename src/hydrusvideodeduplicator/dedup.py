@@ -382,22 +382,23 @@ class HydrusVideoDeduplicator:
     @staticmethod
     def batched_and_save_db(
         db: SqliteDict,
-        n: int,
-        chunk_size: int | None = None,
+        batch_size: int = 1,
+        chunk_size: int = 1,
     ) -> Generator[dict[str, dict[str, Any]], Any, None]:
         """
         Batch rows of into rows of length n and save changes after each batch or after chunk_size batches.
         """
-        assert n >= 1
-        assert chunk_size is None or chunk_size >= 1
-        if chunk_size is None:
-            chunk_size = n
+        assert batch_size >= 1
+        assert chunk_size >= 1
         it = iter(db.items())
-        while batch_items := dict(islice(it, 1)):
+        chunk_counter = 0
+        while batch_items := dict(islice(it, batch_size)):
             yield batch_items
+            chunk_counter += 1
 
-            # Save changes after each batch
-            db.commit()
+            # Save changes after chunk_size batches
+            if chunk_counter % chunk_size == 0:
+                db.commit()
 
     def is_files_deleted_hydrus(self, file_hashes: Iterable[str]) -> dict[str, bool]:
         """
@@ -429,11 +430,11 @@ class HydrusVideoDeduplicator:
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
             return
 
-        CHUNK_SIZE = 256
+        BATCH_SIZE = 256
         with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", outer_stack=False) as hashdb:
             if new_total is None:
                 new_total = len(hashdb)
-            for batched_items in HydrusVideoDeduplicator.batched_and_save_db(hashdb, CHUNK_SIZE):
+            for batched_items in HydrusVideoDeduplicator.batched_and_save_db(hashdb, BATCH_SIZE):
                 for item in batched_items.items():
                     row = hashdb[item[0]]
                     if 'farthest_search_index' in row and row['farthest_search_index'] > new_total:
@@ -464,8 +465,8 @@ class HydrusVideoDeduplicator:
                         unit="video",
                         colour="BLUE",
                     ) as pbar:
-                        CHUNK_SIZE = 32
-                        for batched_items in self.batched_and_save_db(hashdb, CHUNK_SIZE):
+                        BATCH_SIZE = 32
+                        for batched_items in self.batched_and_save_db(hashdb, BATCH_SIZE):
                             is_trashed_result = self.is_files_deleted_hydrus(batched_items.keys())
                             for result in is_trashed_result.items():
                                 video_hash = result[0]
@@ -473,7 +474,7 @@ class HydrusVideoDeduplicator:
                                 if is_trashed is True:
                                     del hashdb[video_hash]
                                     delete_count += 1
-                            pbar.update(min(CHUNK_SIZE, total - pbar.n))
+                            pbar.update(min(BATCH_SIZE, total - pbar.n))
                 except Exception as exc:
                     print("[red] Error while clearing trashed videos cache.")
                     print(exc)

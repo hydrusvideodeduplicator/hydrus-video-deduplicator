@@ -280,10 +280,10 @@ class HydrusVideoDeduplicator:
         # Number of potential duplicates before adding more. Just for user info.
         pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
 
-        # BUG: If this process is interrupted, the farthest_search_index will not save for ANY entries.
-        #      I think it might be because every entry in the column needs an entry for SQlite but I'm not sure.
         video_counter = 0
-        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+        with SqliteDict(
+            str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", autocommit=True, outer_stack=False
+        ) as hashdb:
             try:
                 total = len(hashdb)
 
@@ -292,9 +292,6 @@ class HydrusVideoDeduplicator:
                 ) as pbar:
                     # -1 is all cores, -2 is all cores but one
                     with Parallel(n_jobs=self.job_count) as parallel:
-                        count_since_last_commit = 0
-                        commit_interval = 32
-
                         for i, video1_hash in enumerate(hashdb):
                             video_counter += 1
                             pbar.update(1)
@@ -314,7 +311,7 @@ class HydrusVideoDeduplicator:
                                 delayed(self.compare_videos)(
                                     video1_hash,
                                     video2_hash,
-                                    hashdb[video1_hash]["perceptual_hash"],
+                                    row["perceptual_hash"],
                                     hashdb[video2_hash]["perceptual_hash"],
                                 )
                                 for video2_hash in islice(hashdb, row["farthest_search_index"], None)
@@ -324,16 +321,9 @@ class HydrusVideoDeduplicator:
                             # so update farthest_search_index to the current length of the table
                             row["farthest_search_index"] = total
                             hashdb[video1_hash] = row
-                            count_since_last_commit += 1
-
-                            if count_since_last_commit >= commit_interval:
-                                hashdb.commit()
-                                count_since_last_commit = 0
 
             except KeyboardInterrupt:
                 print("[yellow] Duplicate search was interrupted!")
-            finally:
-                hashdb.commit()
 
         # Statistics for user
         post_dedupe_count = self.get_potential_duplicate_count_hydrus()

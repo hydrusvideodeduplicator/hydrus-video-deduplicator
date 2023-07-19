@@ -25,7 +25,8 @@ from .vpdqpy.vpdqpy import Vpdq
 
 
 class HydrusVideoDeduplicator:
-    hydlog = logging.getLogger("hydlog")
+    hydlog = logging.getLogger("hvd")
+    hydlog.setLevel(logging.INFO)
     threshold: float = 75.0
     _DEBUG = False
 
@@ -39,7 +40,6 @@ class HydrusVideoDeduplicator:
         self.client = client
         if verify_connection:
             self.verify_api_connection()
-        self.hydlog.setLevel(logging.INFO)
         self.job_count = job_count
 
         # Commonly used things from the Hydrus database
@@ -54,19 +54,22 @@ class HydrusVideoDeduplicator:
             self.file_service_keys = [x for x in file_service_keys if x.strip()]
         self.verify_file_service_keys()
 
-    # Verify client connection and permissions
-    # Will throw a hydrus_api.APIError if something is wrong
     def verify_api_connection(self) -> None:
+        """
+        Verify client connection and permissions.
+
+        Throws hydrus_api.APIError if something is wrong.
+        """
         self.hydlog.info(
             (
-                f"Client API version: v{self.client.VERSION}"
-                "| Endpoint API version: v{self.client.get_api_version()['version']}"
+                f"Client API version: v{self.client.VERSION} "
+                f"| Endpoint API version: v{self.client.get_api_version()['version']}"
             )
         )
         hydrus_api_utils.verify_permissions(self.client, hydrus_api.utils.Permission)
 
-    # Verify that the supplied file_service_key is a valid key for a local file service
     def verify_file_service_keys(self) -> None:
+        """Verify that the supplied file_service_key is a valid key for a local file service"""
         VALID_SERVICE_TYPES = [hydrus_api.ServiceType.ALL_LOCAL_FILES, hydrus_api.ServiceType.FILE_DOMAIN]
 
         for file_service_key in self.file_service_keys:
@@ -78,13 +81,19 @@ class HydrusVideoDeduplicator:
             if service_type not in VALID_SERVICE_TYPES:
                 raise KeyError("File service key must be a local file service")
 
-    # This is the master function of the class
     def deduplicate(
         self,
         overwrite: bool = False,
         custom_query: Sequence[str] | None = None,
         skip_hashing: bool = False,
     ) -> None:
+        """
+        Run all deduplicate functions:
+        1. Retrieve video hashes
+        2. Calculate perceptual hashes
+        3. Find potential duplicates
+        """
+
         # Add perceptual hashes to video files
         # system:filetype tags are really inconsistent
         search_tags = [
@@ -103,7 +112,7 @@ class HydrusVideoDeduplicator:
         if skip_hashing:
             print("[yellow] Skipping perceptual hashing")
         else:
-            video_hashes = list(self._retrieve_video_hashes(search_tags))
+            video_hashes = list(self.retrieve_video_hashes(search_tags))
             self.add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=video_hashes)
 
         self._find_potential_duplicates()
@@ -111,12 +120,14 @@ class HydrusVideoDeduplicator:
         self.hydlog.info("Deduplication done.")
 
     @staticmethod
-    def _calculate_perceptual_hash(video: Path | str | bytes) -> str:
+    def calculate_perceptual_hash(video: Path | str | bytes) -> str:
+        """Calculate the perceptual hash of a video using vpdq"""
         perceptual_hash = Vpdq.vpdq_to_json(Vpdq.computeHash(video))
-        assert perceptual_hash != "[]"
+        assert perceptual_hash is not None and perceptual_hash != "[]"
         return perceptual_hash
 
-    def _retrieve_video_hashes(self, search_tags: Iterable[str]) -> Iterable[str]:
+    def retrieve_video_hashes(self, search_tags: Iterable[str]) -> Iterable[str]:
+        """Retrieve video hashes from Hydrus"""
         all_video_hashes = self.client.search_files(
             tags=search_tags,
             file_service_keys=self.file_service_keys,
@@ -128,10 +139,7 @@ class HydrusVideoDeduplicator:
         return all_video_hashes
 
     def fetch_and_hash_file(self, video_hash: str) -> tuple | None:
-        """
-        Retrieves the video from Hydrus,
-        calculates the perceptual hash,
-        """
+        """Retrieves the video from Hydrus and calculates its perceptual hash"""
         try:
             video_response = self.client.get_file(hash_=video_hash)
         except hydrus_api.HydrusAPIException:
@@ -141,7 +149,7 @@ class HydrusVideoDeduplicator:
 
         # Calculate perceptual_hash
         try:
-            perceptual_hash = self._calculate_perceptual_hash(video_response.content)
+            perceptual_hash = self.calculate_perceptual_hash(video_response.content)
         except Exception as exc:
             print("[red] Failed to calculate a perceptual hash.")
             self.hydlog.exception(exc)
@@ -225,6 +233,7 @@ class HydrusVideoDeduplicator:
         return self.client.get_potentials_count(file_service_keys=self.file_service_keys)["potential_duplicates_count"]
 
     def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> None:
+        """Compare videos and mark them as potential duplicates in Hydrus if they are similar."""
         vpdq_hash1 = Vpdq.json_to_vpdq(video1_phash)
         vpdq_hash2 = Vpdq.json_to_vpdq(video2_phash)
         similar, similarity = Vpdq.is_similar(vpdq_hash1, vpdq_hash2, self.threshold)
@@ -245,23 +254,25 @@ class HydrusVideoDeduplicator:
 
             self.client.set_file_relationships([new_relationship])
 
-    # Delete cache search index value for each video in database
     @staticmethod
     def clear_search_cache() -> None:
+        """Delete cache search index value for each video in database"""
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
             return
+
         with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
             for key in hashdb:
                 row = hashdb[key]
                 if "farthest_search_index" in row:
                     del row["farthest_search_index"]
-                hashdb[key] = row
-            hashdb.commit()
+                    hashdb[key] = row
+                    hashdb.commit()
         print("[green] Cleared search cache.")
 
     def _find_potential_duplicates(
         self,
     ) -> None:
+        """Find potential duplicates in the database and mark them in Hydrus."""
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos", verbose=True):
             print("[red] Could not search for duplicates.")
             return
@@ -333,15 +344,15 @@ class HydrusVideoDeduplicator:
             print("[green] No new potential duplicates found.")
 
     @staticmethod
-    def batched(iterable: Iterable, n: int) -> Generator[tuple, Any, None]:
+    def batched(iterable: Iterable, batch_size: int) -> Generator[tuple, Any, None]:
         """
-        Batch data into tuples of length n. The last batch may be shorter."
+        Batch data into tuples of length batch_size. The last batch may be shorter."
         batched('ABCDEFG', 3) --> ABC DEF G
         DO NOT use this for iterating over the database. Use batched_and_save_db instead.
         """
-        assert n >= 1
+        assert batch_size >= 1
         it = iter(iterable)
-        while batch := tuple(islice(it, n)):
+        while batch := tuple(islice(it, batch_size)):
             yield batch
 
     @staticmethod
@@ -353,8 +364,7 @@ class HydrusVideoDeduplicator:
         """
         Batch rows of into rows of length n and save changes after each batch or after chunk_size batches.
         """
-        assert batch_size >= 1
-        assert chunk_size >= 1
+        assert batch_size >= 1 and chunk_size >= 1
         it = iter(db.items())
         chunk_counter = 0
         while batch_items := dict(islice(it, batch_size)):
@@ -441,7 +451,7 @@ class HydrusVideoDeduplicator:
                                     delete_count += 1
                             pbar.update(min(BATCH_SIZE, total - pbar.n))
                 except Exception as exc:
-                    print("[red] Error while clearing trashed videos cache.")
+                    print("[red] Failed to clear trashed videos cache.")
                     print(exc)
                     self.hydlog.error(exc)
                 finally:

@@ -14,7 +14,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from typing import TYPE_CHECKING
-
+import logging
 from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqFeature
 
 if TYPE_CHECKING:
@@ -22,6 +22,10 @@ if TYPE_CHECKING:
 
 
 class TestVpdq(unittest.TestCase):
+    log = logging.getLogger(__name__)
+    log.setLevel(logging.WARNING)
+    logging.basicConfig()
+
     def setUp(self):
         all_vids_dir = Path(__file__).parent / "videos"
         self.video_hashes_dir = Path(__file__).parent / "video hashes"
@@ -102,7 +106,10 @@ class TestVpdq(unittest.TestCase):
             with open(self.video_hashes_dir / f"{vid[0].name}.txt", "r") as hashes_file:
                 perceptual_hash_json = Vpdq.vpdq_to_json(vid[1])
                 known_good_hash = hashes_file.readline()
-                self.assertEqual(known_good_hash, perceptual_hash_json)
+                self.log.error(known_good_hash)
+                self.assertEqual(
+                    known_good_hash, perceptual_hash_json, msg=f"{known_good_hash} \n {perceptual_hash_json}"
+                )
 
     # Compare similar videos. They should be similar if they're in the same similarity group.
     def test_compare_similarity_true(self):
@@ -117,10 +124,10 @@ class TestVpdq(unittest.TestCase):
 
                 with self.subTest(msg=f"Similar: {similar}", vid1=vid1[0].name, vid2=vid2[0].name):
                     if self.similar_group(vid1[0], vid2[0]):
-                        self.assertTrue(similar)
+                        self.assertTrue(similar, msg=f"{vid1[1]}, \n {vid2[1]}")
                     else:
-                        self.assertFalse(similar)
+                        self.assertFalse(similar, msg=f"{vid1[1]}, \n {vid2[1]}")
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(module="test_vpdqpy")

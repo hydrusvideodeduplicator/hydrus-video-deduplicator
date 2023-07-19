@@ -14,9 +14,15 @@ from ..pdqhashing.hasher.pdq_hasher import PDQHasher
 from ..pdqhashing.types.hash256 import Hash256
 
 if TYPE_CHECKING:
-    from typing import Annotated, Generator
+    from typing import Annotated
+
+    from fractions import Fraction
+    from collections.abc import Iterator
 
     from .typing_utils import ValueRange
+
+log = logging.getLogger(__name__)
+log.setLevel(logging.CRITICAL)
 
 
 @dataclass(slots=True)
@@ -41,7 +47,7 @@ class VpdqFeature:
         parts = serialized.split(",")
         try:
             pdq_hex, qual_str, time_str = parts  # Wrong count = ValueError
-            return VpdqFeature(Hash256.fromHexString(pdq_hex), float(qual_str), float(time_str)).assert_valid()
+            return VpdqFeature(Hash256.fromHexString(pdq_hex), float(qual_str), int(time_str)).assert_valid()
         except ValueError:
             raise ValueError(f"invalid {Vpdq.__name__} serialization: {serialized}")
 
@@ -53,7 +59,7 @@ class Vpdq:
     # Get the bytes of a video
     @staticmethod
     def get_video_bytes(video_file: Path | str | bytes) -> bytes:
-        video: bytes = None
+        video = bytes()
         if isinstance(video_file, (Path, str)):
             try:
                 with open(str(video_file), "rb") as file:
@@ -118,25 +124,24 @@ class Vpdq:
         return result * 100 / len(query_filtered)
 
     @staticmethod
-    def frame_extract_pyav(video: bytes) -> Generator[Image.Image]:
-        with av.open(io.BytesIO(video), metadata_encoding='utf-8', metadata_errors='ignore') as container:
+    def frame_extract_pyav(video_bytes: bytes) -> Iterator[Image.Image]:
+        with av.open(io.BytesIO(video_bytes), metadata_encoding='utf-8', metadata_errors='ignore') as container:
             # Check for video in video container
             video_streams = container.streams.video
-            if len(video_streams) < 1:
-                logging.error("Video stream not found.")
+            if video_streams is None or len(video_streams) < 1:
+                log.error("Video stream not found.")
                 raise ValueError("Video stream not found.")
 
             video = container.streams.video[0]
             video.thread_type = "AUTO"
 
-            average_fps = video.average_rate
+            raw_average_fps: Fraction = video.average_rate
+            average_fps: int = 1
             # Some videos, like small GIFs, will have a NoneType FPS
-            # If this happens or if the average FPS is below 1, every frame will be hashed
-            if average_fps is None:
-                average_fps = 1
-                logging.warning("Average FPS not found. Every frame will be hashed.")
+            if raw_average_fps is None or raw_average_fps < 1:
+                log.warning("Average FPS is None or less than 1. Every frame will be hashed.")
             else:
-                average_fps: int = int(max(round(average_fps), 1))
+                average_fps = round(raw_average_fps)
 
             for index, frame in enumerate(container.decode(video)):
                 if index % average_fps == 0:

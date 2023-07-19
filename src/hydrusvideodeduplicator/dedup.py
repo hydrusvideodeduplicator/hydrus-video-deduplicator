@@ -137,7 +137,7 @@ class HydrusVideoDeduplicator:
         except hydrus_api.HydrusAPIException:
             print("[red] Failed to get video from Hydrus.")
             self.hydlog.error("Error getting video from Hydrus.")
-            return
+            return None
 
         # Calculate perceptual_hash
         try:
@@ -146,6 +146,7 @@ class HydrusVideoDeduplicator:
             print("[red] Failed to calculate a perceptual hash.")
             self.hydlog.exception(exc)
             self.hydlog.error(f"Errored file hash: {video_hash}")
+            return None
         else:
             PHashedVideo = namedtuple("PHashedVideo", "video_hash perceptual_hash")
             return PHashedVideo(video_hash, perceptual_hash)

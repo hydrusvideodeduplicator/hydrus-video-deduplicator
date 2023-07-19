@@ -127,11 +127,10 @@ class HydrusVideoDeduplicator:
         assert perceptual_hash != "[]"
         return perceptual_hash
 
-    def _retrieve_video_hashes(
-        self, search_tags: Iterable[str], file_service_keys: Iterable[str] | None = None
-    ) -> Iterable[str]:
+    def _retrieve_video_hashes(self, search_tags: Iterable[str]) -> Iterable[str]:
         all_video_hashes = self.client.search_files(
             tags=search_tags,
+            file_service_keys=self.file_service_keys,
             file_sort_type=hydrus_api.FileSortType.FILE_SIZE,
             return_hashes=True,
             file_sort_asc=True,

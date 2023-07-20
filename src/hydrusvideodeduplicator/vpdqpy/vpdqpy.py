@@ -14,10 +14,9 @@ from ..pdqhashing.hasher.pdq_hasher import PDQHasher
 from ..pdqhashing.types.hash256 import Hash256
 
 if TYPE_CHECKING:
-    from typing import Annotated
-
-    from fractions import Fraction
     from collections.abc import Iterator
+    from fractions import Fraction
+    from typing import Annotated
 
     from .typing_utils import ValueRange
 
@@ -47,7 +46,7 @@ class VpdqFeature:
         parts = serialized.split(",")
         try:
             pdq_hex, qual_str, time_str = parts  # Wrong count = ValueError
-            return VpdqFeature(Hash256.fromHexString(pdq_hex), float(qual_str), int(time_str)).assert_valid()
+            return VpdqFeature(Hash256.fromHexString(pdq_hex), float(qual_str), int(float(time_str))).assert_valid()
         except ValueError:
             raise ValueError(f"invalid {Vpdq.__name__} serialization: {serialized}")
 
@@ -61,6 +60,9 @@ class Vpdq:
     def get_video_bytes(video_file: Path | str | bytes) -> bytes:
         video = bytes()
         if isinstance(video_file, (Path, str)):
+            if not Path(video_file).is_file():
+                raise ValueError("Failed to get video file bytes. Video does not exist")
+
             try:
                 with open(str(video_file), "rb") as file:
                     video = file.read()

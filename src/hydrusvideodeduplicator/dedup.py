@@ -324,6 +324,12 @@ class HydrusVideoDeduplicator:
 
             except KeyboardInterrupt:
                 print("[yellow] Duplicate search was interrupted!")
+            else:
+                # Set the last element farthest_search_index to the end of the
+                # table since it won't get hashed because of the islice optimization
+                row = hashdb[video1_hash]
+                row["farthest_search_index"] = total
+                hashdb[video1_hash] = row
 
         # Statistics for user
         post_dedupe_count = self.get_potential_duplicate_count_hydrus()

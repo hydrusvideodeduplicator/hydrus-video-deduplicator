@@ -55,9 +55,9 @@ class VpdqFeature:
 
 
 class Vpdq:
-    # Get the bytes of a video
     @staticmethod
     def get_video_bytes(video_file: Path | str | bytes) -> bytes:
+        """Get the bytes of a video"""
         video = bytes()
         if isinstance(video_file, (Path, str)):
             if not Path(video_file).is_file():
@@ -75,9 +75,9 @@ class Vpdq:
 
         return video
 
-    # Filter out the VPDQ feature with exact same hash
     @staticmethod
     def dedupe_features(features: list[VpdqFeature]) -> list[VpdqFeature]:
+        """Filter out vpdq features with the exact same hash"""
         unique_features = set()
         ret = []
         for feature in features:
@@ -86,20 +86,20 @@ class Vpdq:
                 unique_features.add(str(feature.pdq_hash))
         return ret
 
-    # Remove features that are below a certain quality threshold
     @staticmethod
     def filter_features(
         vpdq_features: list[VpdqFeature], threshold: Annotated[float, ValueRange(0.0, 100.0)]
     ) -> list[VpdqFeature]:
+        """Remove features that are below a certain quality threshold""" ""
         return [feature for feature in vpdq_features if feature.quality >= threshold]
 
-    # Get number of matching features for query and target
     @staticmethod
     def feature_match_count(
         query_features: list[VpdqFeature],
         target_features: list[VpdqFeature],
         distance_tolerance: float,
     ) -> int:
+        """Get the number of features that are within a threshold"""
         return sum(
             any(
                 query_feature.pdq_hash.hammingDistanceLE(target_feature.pdq_hash, distance_tolerance)
@@ -115,6 +115,7 @@ class Vpdq:
         quality_tolerance: float = 50.0,
         distance_tolerance: float = 31.0,
     ):
+        """Get the similarity of two videos by comparing their list of features"""
         query_filtered = Vpdq.filter_features(query_features, quality_tolerance)
         target_filtered = Vpdq.filter_features(target_features, quality_tolerance)
 
@@ -127,6 +128,7 @@ class Vpdq:
 
     @staticmethod
     def frame_extract_pyav(video_bytes: bytes) -> Iterator[Image.Image]:
+        """Extract frames from video"""
         with av.open(io.BytesIO(video_bytes), metadata_encoding='utf-8', metadata_errors='ignore') as container:
             # Check for video in video container
             video_streams = container.streams.video
@@ -149,11 +151,11 @@ class Vpdq:
                 if index % average_fps == 0:
                     yield frame
 
-    # Perceptually hash video from a file path or the bytes
     @staticmethod
     def computeHash(
         video_file: Path | str | bytes,
     ) -> list[VpdqFeature]:
+        """Perceptually hash video from a file path or the bytes"""
         video = Vpdq.get_video_bytes(video_file)
         if video is None:
             raise ValueError
@@ -169,14 +171,15 @@ class Vpdq:
         deduped_features = Vpdq.dedupe_features(features)
         return deduped_features
 
-    # Check if video is similar by comparing their list of VpdqFeature's
-    # Threshold is minimum similarity to be considered similar
     @staticmethod
     def is_similar(
         vpdq_features1: list[VpdqFeature],
         vpdq_features2: list[VpdqFeature],
         threshold: Annotated[float, ValueRange(0.0, 100.0)] = 75.0,
     ) -> tuple[bool, float]:
+        """Check if video is similar by comparing their list of features
+        Threshold is minimum similarity to be considered similar
+        """
         similarity = Vpdq.match_hash(query_features=vpdq_features1, target_features=vpdq_features2)
         return similarity >= threshold, similarity
 

@@ -7,8 +7,14 @@ from rich import print
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .__about__ import __version__
-from .config import HYDRUS_API_KEY, HYDRUS_API_URL, HYDRUS_LOCAL_FILE_SERVICE_KEYS, HYDRUS_QUERY, REQUESTS_CA_BUNDLE, \
-    QUEUE_RELATIONSHIP_API_CALLS
+from .config import (
+    HYDRUS_API_KEY,
+    HYDRUS_API_URL,
+    HYDRUS_LOCAL_FILE_SERVICE_KEYS,
+    HYDRUS_QUERY,
+    REQUESTS_CA_BUNDLE,
+    QUEUE_RELATIONSHIP_API_CALLS,
+)
 from .dedup import HydrusVideoDeduplicator
 
 """
@@ -45,10 +51,12 @@ def main(
         Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared")
     ] = False,
     job_count: Annotated[Optional[int], typer.Option(help="Number of CPUs to use. Default is all but one core.")] = -2,
-    queue_potential_dupes: Annotated[Optional[bool], typer.Option(
-        help="Queues any potential dupes found for batch sending later")] = QUEUE_RELATIONSHIP_API_CALLS,
+    queue_potential_dupes: Annotated[
+        Optional[bool], typer.Option(help="Queues any potential dupes found for batch sending later")
+    ] = QUEUE_RELATIONSHIP_API_CALLS,
     only_send_queued_dupes: Annotated[
-        Optional[bool], typer.Option(help="No dupe searching, only sends dupes already queued")] = False,
+        Optional[bool], typer.Option(help="No dupe searching, only sends dupes already queued")
+    ] = False,
     verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
 ):
@@ -100,7 +108,7 @@ def main(
             hydrus_client,
             file_service_keys=file_service_key,
             job_count=job_count,
-            queue_potential_dupes=(queue_potential_dupes or only_send_queued_dupes)
+            queue_potential_dupes=(queue_potential_dupes or only_send_queued_dupes),
         )
     except hydrus_api.InsufficientAccess as exc:
         error_connecting_exception_msg = "Invalid Hydrus API key."

@@ -36,7 +36,7 @@ class HydrusVideoDeduplicator:
         verify_connection: bool = True,
         file_service_keys: Sequence[str] | None = None,
         job_count: int = -2,
-        queue_potential_dupes: bool = False
+        queue_potential_dupes: bool = False,
     ):
         self.client = client
         if verify_connection:
@@ -326,7 +326,7 @@ class HydrusVideoDeduplicator:
                             # so update farthest_search_index to the current length of the table
                             row["farthest_search_index"] = total
                             hashdb[video1_hash] = row
-                            
+
                             if self.queue_potential_duplicates and len(new_relationships) > 0:
                                 self.enqueue_potential_dupes(pdq, new_relationships)
 
@@ -486,12 +486,12 @@ class HydrusVideoDeduplicator:
             if row_key not in potential_dupe_queue:
                 potential_dupe_queue[row_key] = new_relationship
         potential_dupe_queue.commit()
-    
+
     def send_queued_potential_duplicates(self):
         if not database_accessible(PDQ_DATABASE_FILE, PDQ_TABLE_NAME, True):
             print("[red] Could not access potential duplicates queue for sending.")
             return
-    
+
         CHUNK_SIZE = 32
         with SqliteDict(str(PDQ_DATABASE_FILE), tablename=PDQ_TABLE_NAME, flag="c") as pdq:
             total = len(pdq)
@@ -499,7 +499,7 @@ class HydrusVideoDeduplicator:
             failed_to_send_count = 0
             try:
                 with tqdm(
-                        dynamic_ncols=True, total=total, desc="Sending potential duplicates", unit="dupe", colour="BLUE"
+                    dynamic_ncols=True, total=total, desc="Sending potential duplicates", unit="dupe", colour="BLUE"
                 ) as pbar:
                     for batched_dupe_keys in self.batched(pdq, CHUNK_SIZE):
                         relationships_to_send = [pdq[dupe_key] for dupe_key in batched_dupe_keys]
@@ -519,8 +519,10 @@ class HydrusVideoDeduplicator:
                 pass
             finally:
                 pdq.commit()
-    
+
             print(f"[green] Sent {sent_count}/{total} potential duplicates to Hydrus successfully")
             if failed_to_send_count > 0:
-                print(f"[yellow] Failed to send {failed_to_send_count} potential duplicates due to API errors. "
-                       f"Duplicates not sent remain in the queue for later retry.")
+                print(
+                    f"[yellow] Failed to send {failed_to_send_count} potential duplicates due to API errors. "
+                    f"Duplicates not sent remain in the queue for later retry."
+                )

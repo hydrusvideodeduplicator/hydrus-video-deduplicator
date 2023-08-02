@@ -89,15 +89,3 @@ def database_accessible(db_file: Path | str, tablename: str, verbose: bool = Fal
             print("[red] Could not access database.")
         logging.error(str(exc))
     return False
-
-
-def get_pd_table_key(hash_a: str, hash_b: str):
-    if hash_a > hash_b:
-        return hash(hash(hash_a) + hash(hash_b))
-    elif hash_a < hash_b:
-        return hash(hash(hash_b) + hash(hash_a))
-    else:
-        raise Exception(
-            "hash_a is the same as hash_b, which means we're comparing a file with itself - something's not "
-            "right here."
-        )

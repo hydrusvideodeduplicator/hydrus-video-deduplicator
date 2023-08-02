@@ -16,6 +16,7 @@ from .config import (
     QUEUE_RELATIONSHIP_API_CALLS,
 )
 from .dedup import HydrusVideoDeduplicator
+from .pdq import PotentialDuplicatesQueue
 
 """
 Parameters:
@@ -149,16 +150,20 @@ def main(
         superdeduper.hydlog.setLevel(logging.DEBUG)
         superdeduper._DEBUG = True
 
+    if only_send_queued_dupes:
+        PotentialDuplicatesQueue(hydrus_client).flush_to_client_api()
+        raise typer.Exit()
+
+    if queue_potential_dupes:
+        potential_dupe_queue = PotentialDuplicatesQueue(hydrus_client)
+        superdeduper.potential_dupe_queue = potential_dupe_queue
+
     if threshold < 0:
         print("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
         raise typer.Exit(code=1)
     superdeduper.threshold = threshold
 
     superdeduper.clear_trashed_files_from_db()
-
-    if only_send_queued_dupes:
-        superdeduper.send_queued_potential_duplicates()
-        raise typer.Exit(1)
 
     # Run all deduplicate functionality
     superdeduper.deduplicate(

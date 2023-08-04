@@ -13,7 +13,8 @@ from .config import (
     HYDRUS_LOCAL_FILE_SERVICE_KEYS,
     HYDRUS_QUERY,
     REQUESTS_CA_BUNDLE,
-    QUEUE_RELATIONSHIP_API_CALLS,
+    USE_POTENTIAL_DUPES_QUEUE,
+    ONLY_SEND_QUEUED_DUPES,
 )
 from .dedup import HydrusVideoDeduplicator
 from .pdq import PotentialDuplicatesQueue
@@ -52,12 +53,6 @@ def main(
         Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared")
     ] = False,
     job_count: Annotated[Optional[int], typer.Option(help="Number of CPUs to use. Default is all but one core.")] = -2,
-    queue_potential_dupes: Annotated[
-        Optional[bool], typer.Option(help="Queues any potential dupes found for batch sending later")
-    ] = QUEUE_RELATIONSHIP_API_CALLS,
-    only_send_queued_dupes: Annotated[
-        Optional[bool], typer.Option(help="No dupe searching, only sends dupes already queued")
-    ] = False,
     verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
 ):
@@ -149,20 +144,19 @@ def main(
         superdeduper.hydlog.setLevel(logging.DEBUG)
         superdeduper._DEBUG = True
 
-    if only_send_queued_dupes:
+    if ONLY_SEND_QUEUED_DUPES:
         PotentialDuplicatesQueue(hydrus_client, superdeduper.file_service_keys).flush_to_client_api()
         raise typer.Exit()
 
-    if queue_potential_dupes:
+    if USE_POTENTIAL_DUPES_QUEUE:
         potential_dupe_queue = PotentialDuplicatesQueue(hydrus_client, superdeduper.file_service_keys)
         superdeduper.potential_dupe_queue = potential_dupe_queue
-        print(f"[purple] {potential_dupe_queue.get_pdq_size()} videos loaded from db back into the queue")
+        print(f"Queueing potential dupes. {potential_dupe_queue.get_pdq_size()} videos loaded from db into the queue")
 
     if threshold < 0 or threshold > 100:
         print("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
         raise typer.Exit(code=1)
     superdeduper.threshold = threshold
-    print(f"[blue] Threshold set to: {threshold}")
 
     superdeduper.clear_trashed_files_from_db()
 

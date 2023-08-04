@@ -84,6 +84,10 @@ class PotentialDuplicatesQueue:
             new_pd_count = final_pd_count - initial_pd_count
             print(f"[green] Finished sending potential duplicates to Hydrus. {new_pd_count} new potential dupes added.")
         except Exception as e:
+            print(
+                "[yellow] Error while sending dupe relationships to hydrus! Dupe relationships saved to db - "
+                "retry by re-running with --only-send-queued-dupes argument"
+            )
             # preserve any popped dupes in the payload by adding them back to the queue
             for relationship in payload:
                 self._queue.append(relationship)
@@ -106,7 +110,7 @@ class PotentialDuplicatesQueue:
     def _get_pdq_db_conn(flag: str = 'c') -> SqliteDict:
         return SqliteDict(
             str(PDQ_DATABASE_FILE),
-            tablename=PDQ_TABLE_NAME,
+            tablename=str(PDQ_TABLE_NAME),
             flag=flag,
             autocommit=True,
             outer_stack=False,

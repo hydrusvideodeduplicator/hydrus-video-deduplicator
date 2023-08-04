@@ -231,7 +231,7 @@ class HydrusVideoDeduplicator:
             finally:
                 print(f"[green] Added {hash_count} new videos to the database.")
 
-    def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str):
+    def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> None:
         """Compare videos and mark them as potential duplicates in Hydrus if they are similar."""
         vpdq_hash1 = Vpdq.json_to_vpdq(video1_phash)
         vpdq_hash2 = Vpdq.json_to_vpdq(video2_phash)
@@ -308,7 +308,7 @@ class HydrusVideoDeduplicator:
                                 delayed(self.compare_videos)(
                                     video1_hash,
                                     video2_hash,
-                                    hashdb[video1_hash]["perceptual_hash"],
+                                    row["perceptual_hash"],
                                     hashdb[video2_hash]["perceptual_hash"],
                                 )
                                 for video2_hash in islice(hashdb, row["farthest_search_index"], None)
@@ -319,10 +319,6 @@ class HydrusVideoDeduplicator:
                             row["farthest_search_index"] = total
                             hashdb[video1_hash] = row
 
-                print("[blue] Finished looking for dupes")
-                print(f"[blue] {self.potential_dupe_queue.get_pdq_size()} potential dupes in in-memory queue")
-                print(f"[blue] {self.potential_dupe_queue.get_pdq_db_size()} potential dupes in database")
-
             except KeyboardInterrupt:
                 print("[yellow] Duplicate search was interrupted!")
             else:
@@ -331,19 +327,12 @@ class HydrusVideoDeduplicator:
                 row = hashdb[video1_hash]
                 row["farthest_search_index"] = total
                 hashdb[video1_hash] = row
-            finally:
-                if self.potential_dupe_queue:
-                    self.potential_dupe_queue.flush_to_db()
 
         if self.potential_dupe_queue:
             try:
                 self.potential_dupe_queue.flush_to_client_api()
             except Exception as e:
-                self.hydlog.info(e)
-                print(
-                    "[yellow] Error while sending dupe relationships to hydrus! Dupe relationships saved to db - "
-                    "retry by re-running with --only-send-queued-dupes argument"
-                )
+                self.hydlog.debug(e)
 
         # Statistics for user
         try:

@@ -109,7 +109,6 @@ def main(
             hydrus_client,
             file_service_keys=file_service_key,
             job_count=job_count,
-            queue_potential_dupes=(queue_potential_dupes or only_send_queued_dupes),
         )
     except hydrus_api.InsufficientAccess as exc:
         error_connecting_exception_msg = "Invalid Hydrus API key."
@@ -151,17 +150,19 @@ def main(
         superdeduper._DEBUG = True
 
     if only_send_queued_dupes:
-        PotentialDuplicatesQueue(hydrus_client).flush_to_client_api()
+        PotentialDuplicatesQueue(hydrus_client, superdeduper.file_service_keys).flush_to_client_api()
         raise typer.Exit()
 
     if queue_potential_dupes:
-        potential_dupe_queue = PotentialDuplicatesQueue(hydrus_client)
+        potential_dupe_queue = PotentialDuplicatesQueue(hydrus_client, superdeduper.file_service_keys)
         superdeduper.potential_dupe_queue = potential_dupe_queue
+        print(f"[purple] {potential_dupe_queue.get_pdq_size()} videos loaded from db back into the queue")
 
-    if threshold < 0:
+    if threshold < 0 or threshold > 100:
         print("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
         raise typer.Exit(code=1)
     superdeduper.threshold = threshold
+    print(f"[blue] Threshold set to: {threshold}")
 
     superdeduper.clear_trashed_files_from_db()
 

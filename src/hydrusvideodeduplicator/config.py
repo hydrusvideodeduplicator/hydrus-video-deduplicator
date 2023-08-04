@@ -65,6 +65,7 @@ PDQ_TABLE_NAME = "potential_duplicates_queue"
 REQUESTS_CA_BUNDLE = os.getenv("REQUESTS_CA_BUNDLE")
 
 QUEUE_RELATIONSHIP_API_CALLS = True if os.getenv("QUEUE_RELATIONSHIP_API_CALLS") else False
+PDQ_FLUSH_COUNT = os.getenv("PDQ_FLUSH_COUNT", 16)
 
 # Optional query for selecting files to process
 _HYDRUS_QUERY_ENV = os.getenv("HYDRUS_QUERY")

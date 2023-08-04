@@ -74,12 +74,16 @@ class PotentialDuplicatesQueue:
     def flush_to_client_api(self) -> None:
         payload = list()
         try:
+            self.populate_from_db()  # Fetch everything we've flushed away
             initial_pd_count = get_potential_duplicate_count_hydrus(self._client, self._file_service_keys)
+
             while self._queue:
                 payload.append(self._queue.pop())
                 if len(payload) >= self._flush_count:
                     self._client.set_file_relationships(payload)
                     payload.clear()
+
+            self._client.set_file_relationships(payload)  # send the last batch
             final_pd_count = get_potential_duplicate_count_hydrus(self._client, self._file_service_keys)
             new_pd_count = final_pd_count - initial_pd_count
             print(f"[green] Finished sending potential duplicates to Hydrus. {new_pd_count} new potential dupes added.")

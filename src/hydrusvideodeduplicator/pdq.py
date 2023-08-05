@@ -41,7 +41,6 @@ class PotentialDuplicatesQueue:
         self._queue.append(relationship)
 
         if self._flush_count != 0 and len(self._queue) >= self._flush_count:
-            # Flush something
             self.flush_to_db()
 
     def flush_to_db(self, clear_db_contents_first: bool = False) -> None:
@@ -104,13 +103,6 @@ class PotentialDuplicatesQueue:
         return len(self._queue)
 
     @staticmethod
-    def get_pdq_db_size() -> int:
-        pdq_db = PotentialDuplicatesQueue._get_pdq_db_conn('r')
-        size = len(pdq_db)
-        pdq_db.close()
-        return size
-
-    @staticmethod
     def _get_pdq_db_conn(flag: str = 'c') -> SqliteDict:
         return SqliteDict(
             str(PDQ_DATABASE_FILE),
@@ -124,8 +116,11 @@ class PotentialDuplicatesQueue:
 
     @staticmethod
     def get_pdq_table_key(r: Relationship) -> str:
+        """
+        This function ensures that the key for any given relationship with the same two videos is always the same ,
+        regardless of which is 'hash_a' and which is 'hash_b'
+        """
         if r['hash_a'] > r['hash_b']:
-            # return str(hash(hash(r['hash_a']) + hash(r['hash_b'])))
             return r['hash_a'] + r['hash_b']
         elif r['hash_a'] < r['hash_b']:
             return r['hash_b'] + r['hash_a']

@@ -50,6 +50,8 @@ if in_wsl():
 
 HYDRUS_API_URL = os.getenv("HYDRUS_API_URL", f"https://{_DEFAULT_IP}:{_DEFAULT_PORT}")
 
+PARALLEL_JOB_COUNT = os.getenv("PARALLEL_JOB_COUNT", -2)
+
 # ~/.local/share/hydrusvideodeduplicator/ on Linux
 _DEDUP_DATABASE_DIR_ENV = PlatformDirs("hydrusvideodeduplicator").user_data_dir
 _DEDUP_DATABASE_DIR_ENV = os.getenv("DEDUP_DATABASE_DIR", _DEDUP_DATABASE_DIR_ENV)
@@ -59,6 +61,9 @@ _DEDUP_DATABASE_NAME_ENV = os.getenv("DEDUP_DATABASE_NAME", "videohashes")
 DEDUP_DATABASE_FILE = Path(DEDUP_DATABASE_DIR, f"{_DEDUP_DATABASE_NAME_ENV}.sqlite")
 
 REQUESTS_CA_BUNDLE = os.getenv("REQUESTS_CA_BUNDLE")
+
+_FAILED_VIDEOS_LOG_FILE_NAME = os.getenv("FAILED_VIDEOS_LOG_FILE_NAME", "failed_videos_log.txt")
+FAILED_VIDEOS_LOG_FILE = Path(DEDUP_DATABASE_DIR, _FAILED_VIDEOS_LOG_FILE_NAME)
 
 # Optional query for selecting files to process
 _HYDRUS_QUERY_ENV = os.getenv("HYDRUS_QUERY")

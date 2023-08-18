@@ -21,6 +21,7 @@ import hydrusvideodeduplicator.hydrus_api.utils as hydrus_api_utils
 
 from .config import DEDUP_DATABASE_DIR, DEDUP_DATABASE_FILE
 from .dedup_util import database_accessible
+from .fvl import FailedVideoLogger
 from .vpdqpy.vpdqpy import Vpdq
 
 
@@ -36,11 +37,14 @@ class HydrusVideoDeduplicator:
         verify_connection: bool = True,
         file_service_keys: Sequence[str] | None = None,
         job_count: int = -2,
+        failed_videos_page: str | None = None,
     ):
         self.client = client
         if verify_connection:
             self.verify_api_connection()
         self.job_count = job_count
+
+        self.failed_files = FailedVideoLogger(client, self.hydlog, failed_videos_page)
 
         # Commonly used things from the Hydrus database
         # If any of these are large they should probably be lazily loaded
@@ -138,14 +142,17 @@ class HydrusVideoDeduplicator:
         )["hashes"]
         return all_video_hashes
 
-    def fetch_and_hash_file(self, video_hash: str) -> tuple | None:
+    def fetch_and_hash_file(self, video_hash: str) -> tuple:
         """Retrieves the video from Hydrus and calculates its perceptual hash"""
+
+        PHashedVideo = namedtuple("PHashedVideo", "video_hash perceptual_hash success exception")
+
         try:
             video_response = self.client.get_file(hash_=video_hash)
-        except hydrus_api.HydrusAPIException:
+        except hydrus_api.HydrusAPIException as exc:
             print("[red] Failed to get video from Hydrus.")
-            self.hydlog.error("Error getting video from Hydrus.")
-            return None
+            self.hydlog.error(f"Error getting video hash {video_hash} from Hydrus.")
+            return PHashedVideo(video_hash, None, False, exc)
 
         # Calculate perceptual_hash
         try:
@@ -154,10 +161,9 @@ class HydrusVideoDeduplicator:
             print("[red] Failed to calculate a perceptual hash.")
             self.hydlog.exception(exc)
             self.hydlog.error(f"Errored file hash: {video_hash}")
-            return None
+            return PHashedVideo(video_hash, None, False, exc)
         else:
-            PHashedVideo = namedtuple("PHashedVideo", "video_hash perceptual_hash")
-            return PHashedVideo(video_hash, perceptual_hash)
+            return PHashedVideo(video_hash, perceptual_hash, True, None)
 
     def add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes: Sequence[str]) -> None:
         """
@@ -204,20 +210,22 @@ class HydrusVideoDeduplicator:
 
                 with tqdm(total=len(new_video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
                     # Change to return_as='unordered_generator' when joblib supports it! (should be soon)
+                    # For status check https://github.com/joblib/joblib/issues/1449
                     with Parallel(n_jobs=self.job_count, return_as='generator') as parallel:
                         result_generator = parallel(
                             delayed(self.fetch_and_hash_file)(video_hash) for video_hash in new_video_hashes
                         )
                         for result in result_generator:
-                            if result is None:
-                                continue
-                            video_hash = result.video_hash
-                            perceptual_hash = result.perceptual_hash
-                            row = hashdb.get(video_hash, {})
-                            row["perceptual_hash"] = perceptual_hash
-                            hashdb[video_hash] = row
+                            if result.success is not True:
+                                self.failed_files.log(result.video_hash, result.exception)
+                            else:
+                                video_hash = result.video_hash
+                                perceptual_hash = result.perceptual_hash
+                                row = hashdb.get(video_hash, {})
+                                row["perceptual_hash"] = perceptual_hash
+                                hashdb[video_hash] = row
+                                hash_count += 1
 
-                            hash_count += 1
                             pbar.update(1)
 
             except KeyboardInterrupt:
@@ -228,6 +236,7 @@ class HydrusVideoDeduplicator:
 
             finally:
                 print(f"[green] Added {hash_count} new videos to the database.")
+                self.failed_files.finish()
 
     def get_potential_duplicate_count_hydrus(self) -> int:
         return self.client.get_potentials_count(file_service_keys=self.file_service_keys)["potential_duplicates_count"]

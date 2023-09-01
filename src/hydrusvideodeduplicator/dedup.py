@@ -97,7 +97,7 @@ class HydrusVideoDeduplicator:
         # Add perceptual hashes to video files
         # system:filetype tags are really inconsistent
         search_tags = [
-            'system:filetype=video, gif, apng',
+            'system:filetype=video, animated gif, apng',
             'system:has duration',
             'system:file service is not currently in trash',
         ]

@@ -32,7 +32,7 @@ dependencies = [
     "joblib",
     # Below is for vpdqpy
     "Pillow",
-    "av",
+    "pyav",
 ]
 
 [project.urls]

@@ -21,7 +21,12 @@ import hydrusvideodeduplicator.hydrus_api.utils as hydrus_api_utils
 
 from .config import DEDUP_DATABASE_DIR, DEDUP_DATABASE_FILE
 from .dedup_util import database_accessible
-from .vpdqpy.vpdqpy import Vpdq
+from .hashing import (
+    compute_phash,
+    decode_phash_from_str,
+    encode_phash_to_str,
+    get_phash_similarity,
+)
 
 
 class HydrusVideoDeduplicator:
@@ -119,13 +124,6 @@ class HydrusVideoDeduplicator:
 
         self.hydlog.info("Deduplication done.")
 
-    @staticmethod
-    def calculate_perceptual_hash(video: Path | str | bytes) -> str:
-        """Calculate the perceptual hash of a video using vpdq"""
-        perceptual_hash = Vpdq.vpdq_to_json(Vpdq.computeHash(video))
-        assert perceptual_hash is not None and perceptual_hash != "[]"
-        return perceptual_hash
-
     def retrieve_video_hashes(self, search_tags: Iterable[str]) -> Iterable[str]:
         """Retrieve video hashes from Hydrus"""
         all_video_hashes = self.client.search_files(
@@ -149,15 +147,17 @@ class HydrusVideoDeduplicator:
 
         # Calculate perceptual_hash
         try:
-            perceptual_hash = self.calculate_perceptual_hash(video_response.content)
+            phash = compute_phash(video_response.content)
+            phash_str: str = encode_phash_to_str(phash)
         except Exception as exc:
             print("[red] Failed to calculate a perceptual hash.")
             self.hydlog.exception(exc)
             self.hydlog.error(f"Errored file hash: {video_hash}")
             return None
         else:
+            assert phash_str and phash_str != "[]"
             PHashedVideo = namedtuple("PHashedVideo", "video_hash perceptual_hash")
-            return PHashedVideo(video_hash, perceptual_hash)
+            return PHashedVideo(video_hash, phash_str)
 
     def add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes: Sequence[str]) -> None:
         """
@@ -234,11 +234,11 @@ class HydrusVideoDeduplicator:
 
     def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> None:
         """Compare videos and mark them as potential duplicates in Hydrus if they are similar."""
-        vpdq_hash1 = Vpdq.json_to_vpdq(video1_phash)
-        vpdq_hash2 = Vpdq.json_to_vpdq(video2_phash)
-        similar, similarity = Vpdq.is_similar(vpdq_hash1, vpdq_hash2, self.threshold)
+        hash_a = decode_phash_from_str(video1_phash)
+        hash_b = decode_phash_from_str(video2_phash)
+        similarity = get_phash_similarity(hash_a, hash_b)
 
-        if similar:
+        if similarity >= self.threshold:
             if self._DEBUG:
                 # Getting the file names will be VERY slow because of the API call
                 # file_names = get_file_names_hydrus(self.client, [video1_hash, video2_hash])

@@ -16,7 +16,7 @@ from ..pdqhashing.types.hash256 import Hash256
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from fractions import Fraction
-    from typing import Annotated
+    from typing import Annotated, TypeAlias
 
     from .typing_utils import ValueRange
 
@@ -54,6 +54,9 @@ class VpdqFeature:
         return f"{self.pdq_hash},{self.quality},{self.frame_number}"
 
 
+VpdqHash: TypeAlias = list[VpdqFeature]
+
+
 class Vpdq:
     @staticmethod
     def get_video_bytes(video_file: Path | str | bytes) -> bytes:
@@ -76,7 +79,7 @@ class Vpdq:
         return video
 
     @staticmethod
-    def dedupe_features(features: list[VpdqFeature]) -> list[VpdqFeature]:
+    def dedupe_features(features: VpdqHash) -> VpdqHash:
         """Filter out vpdq features with the exact same hash"""
         unique_features = set()
         ret = []
@@ -87,16 +90,14 @@ class Vpdq:
         return ret
 
     @staticmethod
-    def filter_features(
-        vpdq_features: list[VpdqFeature], threshold: Annotated[float, ValueRange(0.0, 100.0)]
-    ) -> list[VpdqFeature]:
+    def filter_features(vpdq_features: VpdqHash, threshold: Annotated[float, ValueRange(0.0, 100.0)]) -> VpdqHash:
         """Remove features that are below a certain quality threshold""" ""
         return [feature for feature in vpdq_features if feature.quality >= threshold]
 
     @staticmethod
     def feature_match_count(
-        query_features: list[VpdqFeature],
-        target_features: list[VpdqFeature],
+        query_features: VpdqHash,
+        target_features: VpdqHash,
         distance_tolerance: float,
     ) -> int:
         """Get the number of features that are within a threshold"""
@@ -110,8 +111,8 @@ class Vpdq:
 
     @staticmethod
     def match_hash(
-        query_features: list[VpdqFeature],
-        target_features: list[VpdqFeature],
+        query_features: VpdqHash,
+        target_features: VpdqHash,
         quality_tolerance: float = 50.0,
         distance_tolerance: float = 31.0,
     ):
@@ -154,14 +155,14 @@ class Vpdq:
     @staticmethod
     def computeHash(
         video_file: Path | str | bytes,
-    ) -> list[VpdqFeature]:
+    ) -> VpdqHash:
         """Perceptually hash video from a file path or the bytes"""
         video = Vpdq.get_video_bytes(video_file)
         if video is None:
             raise ValueError
 
         pdq = PDQHasher()
-        features: list[VpdqFeature] = []
+        features: VpdqHash = []
 
         for second, frame in enumerate(Vpdq.frame_extract_pyav(video)):
             pdq_hash_and_quality = pdq.fromBufferedImage(frame.to_image())
@@ -173,8 +174,8 @@ class Vpdq:
 
     @staticmethod
     def is_similar(
-        vpdq_features1: list[VpdqFeature],
-        vpdq_features2: list[VpdqFeature],
+        vpdq_features1: VpdqHash,
+        vpdq_features2: VpdqHash,
         threshold: Annotated[float, ValueRange(0.0, 100.0)] = 75.0,
     ) -> tuple[bool, float]:
         """Check if video is similar by comparing their list of features
@@ -184,11 +185,11 @@ class Vpdq:
         return similarity >= threshold, similarity
 
     @staticmethod
-    def vpdq_to_json(vpdq_features: list[VpdqFeature], *, indent: int | None = None) -> str:
+    def vpdq_to_json(vpdq_features: VpdqHash, *, indent: int | None = None) -> str:
         """Convert from VPDQ features to json object and return the json object as a str"""
         return json.dumps([str(f.assert_valid()) for f in vpdq_features], indent=indent)
 
     @staticmethod
-    def json_to_vpdq(json_str: str) -> list[VpdqFeature]:
+    def json_to_vpdq(json_str: str) -> VpdqHash:
         """Load a str as a json object and convert from json object to VPDQ features"""
         return [VpdqFeature.from_str(s) for s in json.loads(json_str or "[]")]

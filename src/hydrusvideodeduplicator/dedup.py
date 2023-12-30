@@ -228,6 +228,7 @@ class HydrusVideoDeduplicator:
         with SqliteDict(
             str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", autocommit=True, outer_stack=False
         ) as hashdb:
+            current_hash = None
             try:
                 total = len(hashdb)
 
@@ -237,6 +238,7 @@ class HydrusVideoDeduplicator:
                     # -1 is all cores, -2 is all cores but one
                     with Parallel(n_jobs=self.job_count) as parallel:
                         for i, video1_hash in enumerate(hashdb):
+                            current_hash = video1_hash
                             video_counter += 1
                             pbar.update(1)
 
@@ -269,11 +271,13 @@ class HydrusVideoDeduplicator:
             except KeyboardInterrupt:
                 print("[yellow] Duplicate search was interrupted!")
             else:
-                # Set the last element farthest_search_index to the end of the
-                # table since it won't get hashed because of the islice optimization
-                row = hashdb[video1_hash]
-                row["farthest_search_index"] = total
-                hashdb[video1_hash] = row
+                # current_hash can be None if Hydrus DB has no files...
+                if current_hash is not None:
+                    # Set the last element farthest_search_index to the end of the
+                    # table since it won't get hashed because of the islice optimization
+                    row = hashdb[current_hash]
+                    row["farthest_search_index"] = total
+                    hashdb[current_hash] = row
 
         # Statistics for user
         post_dedupe_count = self.client.get_potential_duplicate_count_hydrus()

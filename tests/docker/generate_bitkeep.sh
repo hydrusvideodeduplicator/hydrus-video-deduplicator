@@ -10,7 +10,7 @@ script_dir="$(cd "$(dirname "$0")" && pwd)"
 start_dir="$script_dir/db"
 
 # Name of the file you want to create
-file_to_add=".bitkeep"
+file_to_add=".gitkeep"
 
 # Find all subdirectories and create the file if the directory is empty
 find "$start_dir" -type d | while read dir; do

@@ -7,7 +7,14 @@ from rich import print
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .__about__ import __version__
-from .config import HYDRUS_API_KEY, HYDRUS_API_URL, HYDRUS_LOCAL_FILE_SERVICE_KEYS, HYDRUS_QUERY, REQUESTS_CA_BUNDLE
+from .client import HVDClient
+from .config import (
+    HYDRUS_API_KEY,
+    HYDRUS_API_URL,
+    HYDRUS_LOCAL_FILE_SERVICE_KEYS,
+    HYDRUS_QUERY,
+    REQUESTS_CA_BUNDLE,
+)
 from .dedup import HydrusVideoDeduplicator
 
 """
@@ -78,23 +85,18 @@ def main(
         print("Hydrus URL not set. Exiting...")
         raise typer.Exit(code=1)
 
-    print(f"Connecting to {api_url}")
     # Client connection
     # TODO: Try to connect with https first and then fallback to http with a strong warning
-    hydrus_client = hydrus_api.Client(
-        api_url=api_url,
-        access_key=api_key,
-        verify_cert=verify_cert,
-    )
-
+    print(f"Connecting to {api_url}")
     error_connecting = True
     error_connecting_exception_msg = ""
     error_connecting_exception = ""
     try:
-        superdeduper = HydrusVideoDeduplicator(
-            hydrus_client,
+        hvdclient = HVDClient(
             file_service_keys=file_service_key,
-            job_count=job_count,
+            api_url=api_url,
+            access_key=api_key,
+            verify_cert=verify_cert,
         )
     except hydrus_api.InsufficientAccess as exc:
         error_connecting_exception_msg = "Invalid Hydrus API key."
@@ -129,21 +131,29 @@ def main(
         print(f"[red] {error_connecting_exception_msg} ")
         raise typer.Exit(code=1)
 
-    # Deduplication parameters
+    if debug:
+        hvdclient.hydlog.setLevel(logging.DEBUG)
+        hvdclient._DEBUG = True
+
+    # Deduplication
+
+    deduper = HydrusVideoDeduplicator(
+        client=hvdclient,
+        job_count=job_count,
+    )
 
     if debug:
-        superdeduper.hydlog.setLevel(logging.DEBUG)
-        superdeduper._DEBUG = True
+        deduper.hydlog.setLevel(logging.DEBUG)
+        deduper._DEBUG = True
 
     if threshold < 0:
         print("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
         raise typer.Exit(code=1)
-    superdeduper.threshold = threshold
+    deduper.threshold = threshold
 
-    superdeduper.clear_trashed_files_from_db()
+    deduper.clear_trashed_files_from_db()
 
-    # Run all deduplicate functionality
-    superdeduper.deduplicate(
+    deduper.deduplicate(
         overwrite=overwrite,
         custom_query=query,
         skip_hashing=skip_hashing,

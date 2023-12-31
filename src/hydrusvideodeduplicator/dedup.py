@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from typing import Any
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
-import hydrusvideodeduplicator.hydrus_api.utils as hydrus_api_utils
 
+from .client import HVDClient
 from .config import DEDUP_DATABASE_DIR, DEDUP_DATABASE_FILE
 from .dedup_util import database_accessible
 from .hashing import (
@@ -36,54 +36,14 @@ class HydrusVideoDeduplicator:
 
     def __init__(
         self,
-        client: hydrus_api.Client,
+        client: HVDClient,
         verify_connection: bool = True,
-        file_service_keys: Sequence[str] | None = None,
         job_count: int = -2,
     ):
         self.client = client
         if verify_connection:
-            self.verify_api_connection()
+            self.client.verify_api_connection()
         self.job_count = job_count
-
-        # Commonly used things from the Hydrus database
-        # If any of these are large they should probably be lazily loaded
-        self.all_services = self.client.get_services()
-
-        # Set the file service keys to be used for hashing
-        # Default is "all local files"
-        if file_service_keys is None or not file_service_keys:
-            self.file_service_keys = [self.all_services["all_local_files"][0]["service_key"]]
-        else:
-            self.file_service_keys = [x for x in file_service_keys if x.strip()]
-        self.verify_file_service_keys()
-
-    def verify_api_connection(self) -> None:
-        """
-        Verify client connection and permissions.
-
-        Throws hydrus_api.APIError if something is wrong.
-        """
-        self.hydlog.info(
-            (
-                f"Client API version: v{self.client.VERSION} "
-                f"| Endpoint API version: v{self.client.get_api_version()['version']}"
-            )
-        )
-        hydrus_api_utils.verify_permissions(self.client, hydrus_api.utils.Permission)
-
-    def verify_file_service_keys(self) -> None:
-        """Verify that the supplied file_service_key is a valid key for a local file service"""
-        VALID_SERVICE_TYPES = [hydrus_api.ServiceType.ALL_LOCAL_FILES, hydrus_api.ServiceType.FILE_DOMAIN]
-
-        for file_service_key in self.file_service_keys:
-            file_service = self.all_services['services'].get(file_service_key)
-            if file_service is None:
-                raise KeyError(f"Invalid file service key: '{file_service_key}'")
-
-            service_type = file_service.get('type')
-            if service_type not in VALID_SERVICE_TYPES:
-                raise KeyError("File service key must be a local file service")
 
     def deduplicate(
         self,
@@ -116,29 +76,17 @@ class HydrusVideoDeduplicator:
         if skip_hashing:
             print("[yellow] Skipping perceptual hashing")
         else:
-            video_hashes = list(self.retrieve_video_hashes(search_tags))
+            video_hashes = list(self.client.retrieve_video_hashes(search_tags))
             self.add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=video_hashes)
 
         self._find_potential_duplicates()
 
         self.hydlog.info("Deduplication done.")
 
-    def retrieve_video_hashes(self, search_tags: Iterable[str]) -> Iterable[str]:
-        """Retrieve video hashes from Hydrus"""
-        all_video_hashes = self.client.search_files(
-            tags=search_tags,
-            file_service_keys=self.file_service_keys,
-            file_sort_type=hydrus_api.FileSortType.FILE_SIZE,
-            return_hashes=True,
-            file_sort_asc=True,
-            return_file_ids=False,
-        )["hashes"]
-        return all_video_hashes
-
     def fetch_and_hash_file(self, video_hash: str) -> tuple | None:
         """Retrieves the video from Hydrus and calculates its perceptual hash"""
         try:
-            video_response = self.client.get_file(hash_=video_hash)
+            video_response = self.client.client.get_file(hash_=video_hash)
         except hydrus_api.HydrusAPIException:
             print("[red] Failed to get video from Hydrus.")
             self.hydlog.error("Error getting video from Hydrus.")
@@ -228,9 +176,6 @@ class HydrusVideoDeduplicator:
             finally:
                 print(f"[green] Added {hash_count} new videos to the database.")
 
-    def get_potential_duplicate_count_hydrus(self) -> int:
-        return self.client.get_potentials_count(file_service_keys=self.file_service_keys)["potential_duplicates_count"]
-
     def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> None:
         """Compare videos and mark them as potential duplicates in Hydrus if they are similar."""
         hash_a = decode_phash_from_str(video1_phash)
@@ -240,7 +185,7 @@ class HydrusVideoDeduplicator:
         if similarity >= self.threshold:
             if self._DEBUG:
                 # Getting the file names will be VERY slow because of the API call
-                # file_names = get_file_names_hydrus(self.client, [video1_hash, video2_hash])
+                # file_names = get_file_names_hydrus(self.client.client, [video1_hash, video2_hash])
                 # self.hydlog.info(f"Duplicates filenames: {file_names}")
                 self.hydlog.info(f"\"Similar {similarity}%: {video1_hash}\" and \"{video2_hash}\"")
 
@@ -251,7 +196,7 @@ class HydrusVideoDeduplicator:
                 "do_default_content_merge": True,
             }
 
-            self.client.set_file_relationships([new_relationship])
+            self.client.client.set_file_relationships([new_relationship])
 
     @staticmethod
     def clear_search_cache() -> None:
@@ -277,7 +222,7 @@ class HydrusVideoDeduplicator:
             return
 
         # Number of potential duplicates before adding more. Just for user info.
-        pre_dedupe_count = self.get_potential_duplicate_count_hydrus()
+        pre_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
 
         video_counter = 0
         with SqliteDict(
@@ -331,7 +276,7 @@ class HydrusVideoDeduplicator:
                 hashdb[video1_hash] = row
 
         # Statistics for user
-        post_dedupe_count = self.get_potential_duplicate_count_hydrus()
+        post_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
         new_dedupes_count = post_dedupe_count - pre_dedupe_count
         if new_dedupes_count > 0:
             print(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
@@ -375,7 +320,7 @@ class HydrusVideoDeduplicator:
         Check if files are trashed or deleted in Hydrus
         Returns a dictionary of hash : trashed_or_not
         """
-        videos_metadata = self.client.get_file_metadata(hashes=file_hashes, only_return_basic_information=False)[
+        videos_metadata = self.client.client.get_file_metadata(hashes=file_hashes, only_return_basic_information=False)[
             "metadata"
         ]
 
@@ -414,7 +359,6 @@ class HydrusVideoDeduplicator:
     def clear_trashed_files_from_db(self) -> None:
         """
         Delete trashed and deleted files from Hydrus from the database
-        TODO: This doesn't have to run everytime. Run it every couple startups or something.
         """
         if not database_accessible(DEDUP_DATABASE_FILE, tablename="videos"):
             return

@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqFeature
+from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqHash
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -80,7 +80,7 @@ class TestVpdq(unittest.TestCase):
 
     # Hash videos
     # Several other functions call this, so it needs to be correct and catch all bad hashes.
-    def calc_hashes(self, vids: list[Path]) -> dict[Path, list[VpdqFeature]]:
+    def calc_hashes(self, vids: list[Path]) -> dict[Path, VpdqHash]:
         vids_hashes = {}
         for vid in vids:
             perceptual_hash = Vpdq.computeHash(vid)
@@ -103,13 +103,17 @@ class TestVpdq(unittest.TestCase):
         self.generate_known_good_hashes(vids=vids, overwrite=False)
         vids_hashes = self.calc_hashes(vids)
 
-        for vid in vids_hashes.items():
-            with open(self.video_hashes_dir / f"{vid[0].name}.txt", "r") as hashes_file:
-                perceptual_hash_json = Vpdq.vpdq_to_json(vid[1])
-                known_good_hash = hashes_file.readline()
-                self.log.error(known_good_hash)
+        for phash_path, phash in vids_hashes.items():
+            with open(self.video_hashes_dir / f"{phash_path.name}.txt", "r") as hashes_file:
+                phash_str = Vpdq.vpdq_to_json(phash)
+                expected_hash = hashes_file.readline()
+                self.log.error(phash_path.name)  # Needs to be error to show up in log
+                similar, similarity = Vpdq.is_similar(phash, Vpdq.json_to_vpdq(expected_hash))
+                self.assertTrue((0.0 <= similarity) and (similarity <= 100.0))
                 self.assertEqual(
-                    known_good_hash, perceptual_hash_json, msg=f"{known_good_hash} \n {perceptual_hash_json}"
+                    expected_hash,
+                    phash_str,
+                    msg=f"Hashes not identical for file {phash_path.name}. \n {expected_hash} \n {phash_str}",
                 )
 
     # Compare similar videos. They should be similar if they're in the same similarity group.

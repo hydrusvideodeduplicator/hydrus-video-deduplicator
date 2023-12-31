@@ -11,10 +11,11 @@ Blender Foundation | www.blender.org
 
 from __future__ import annotations
 
+import logging
 import unittest
 from pathlib import Path
 from typing import TYPE_CHECKING
-import logging
+
 from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqFeature
 
 if TYPE_CHECKING:
@@ -120,7 +121,7 @@ class TestVpdq(unittest.TestCase):
                     continue
 
                 similar, similarity = Vpdq.is_similar(vid1[1], vid2[1])
-                self.assertTrue(0 <= similarity <= 100)
+                self.assertTrue((0.0 <= similarity) and (similarity <= 100.0))
 
                 with self.subTest(msg=f"Similar: {similar}", vid1=vid1[0].name, vid2=vid2[0].name):
                     if self.similar_group(vid1[0], vid2[0]):

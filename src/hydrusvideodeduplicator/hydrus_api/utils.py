@@ -14,9 +14,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import collections
+import collections.abc as abc
 import os
 import typing as T
-import collections.abc as abc
 
 from hydrusvideodeduplicator.hydrus_api import (
     DEFAULT_API_URL,

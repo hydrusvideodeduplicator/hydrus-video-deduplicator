@@ -21,7 +21,7 @@ import typing as T
 
 import requests
 
-__version__ = "5.0.0"
+__version__ = "5.0.1"
 
 DEFAULT_API_URL = "http://127.0.0.1:45869/"
 HYDRUS_METADATA_ENCODING = "utf-8"
@@ -846,10 +846,9 @@ class Client:
         response = self._api_request("GET", self._GET_RANDOM_POTENTIALS_PATH, params=params)
         return response.json()
 
-    def set_file_relationships(self, relationships: abc.Iterable[abc.Mapping[str, T.Any]]) -> requests.Response:
+    def set_file_relationships(self, relationships: abc.Iterable[abc.Mapping[str, T.Any]]) -> None:
         payload = {"relationships": relationships}
-        response = self._api_request("POST", self._SET_FILE_RELATIONSHIPS_PATH, json=payload)
-        return response
+        self._api_request("POST", self._SET_FILE_RELATIONSHIPS_PATH, json=payload)
 
     def set_kings(
         self, file_ids: T.Optional[abc.Iterable[int]] = None, hashes: T.Optional[abc.Iterable[str]] = None

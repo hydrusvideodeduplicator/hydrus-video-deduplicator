@@ -4,13 +4,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-    from fractions import Fraction
-    from typing import Annotated, TypeAlias
+    from typing import Annotated
 
     from .typing_utils import ValueRange
 
-from .vpdqpy.vpdqpy import Vpdq, VpdqFeature, VpdqHash
+from .vpdqpy.vpdqpy import Vpdq, VpdqHash
 
 """TODO: Rework this with into a hashing interface that is used by hashers."""
 

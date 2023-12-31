@@ -4,7 +4,6 @@ import logging
 import os
 from collections import namedtuple
 from itertools import islice
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from joblib import Parallel, delayed

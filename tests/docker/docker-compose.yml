@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   hydrusclient:
-    image: ghcr.io/hydrusnetwork/hydrus:v534
+    image: ghcr.io/hydrusnetwork/hydrus:latest
     container_name: hydrusclient
     restart: unless-stopped
     environment:

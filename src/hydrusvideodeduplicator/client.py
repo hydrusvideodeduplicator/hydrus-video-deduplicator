@@ -8,7 +8,8 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
     FileServiceKeys: TypeAlias = list[str]
-    FileHashes: TypeAlias = Iterable[str]
+    FileHash: TypeAlias = str
+    FileHashes: TypeAlias = Iterable[FileHash]
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils as hydrus_api_utils
@@ -122,3 +123,15 @@ class HVDClient:
             result[video_hash] = is_deleted
 
         return result
+
+    def set_file_pair_as_potential_duplicates(self, file_hash_pair: tuple[FileHash, FileHash]) -> None:
+        """Set file pair as potential duplicates in Hydrus."""
+        assert file_hash_pair[0] is not None and file_hash_pair[1] is not None
+        new_relationship = {
+            "hash_a": str(file_hash_pair[0]),
+            "hash_b": str(file_hash_pair[1]),
+            "relationship": int(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES),
+            "do_default_content_merge": True,
+        }
+
+        self.client.set_file_relationships([new_relationship])

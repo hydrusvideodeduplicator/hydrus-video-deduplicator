@@ -5,6 +5,7 @@ import time
 import unittest
 from typing import TYPE_CHECKING
 
+import hydrusvideodeduplicator.hydrus_api as hydrus_api
 from hydrusvideodeduplicator.client import HVDClient
 from hydrusvideodeduplicator.dedup import HydrusVideoDeduplicator
 
@@ -58,16 +59,70 @@ class TestDedupe(unittest.TestCase):
             # job_count=-2,  # TODO: Do tests for single and multi-threaded.
         )
 
+    def test_temp(self):
+        self.assertTrue(True)
+
+    def test_set_similar_files_duplicates(self):
+        """
+        Check two files are not set as potential duplicates.
+
+        Set two files as potential duplicates using the Hydrus API.
+
+        Check those two files are now potential duplicates.
+        """
         initial_dedupe_count = self.hvdclient.get_potential_duplicate_count_hydrus()
         self.assertEqual(
             initial_dedupe_count,
             0,
-            f"Initial potential duplicates must be 0."
-            f"Potential duplicates: {initial_dedupe_count}. Reset the database before running tests.",
+            "Initial potential duplicates must be 0."
+            f" Potential duplicates: {initial_dedupe_count}. Reset the database before running tests.",
         )
 
-    def test_temp(self):
-        self.assertTrue(True)
+        file_hash_pair = tuple(
+            [
+                "3011a3d7dc742d6c0f37194ba8273e6b09b90fe768d5f11386ff140bc6745d52",
+                "e131ad42621442758a3acb899bfbdfeeab0b40c7e2f7c7e66683f58a09a99aee",
+            ]
+        )
+
+        # Check two files are not set as potential duplicates
+        before_relationships = self.hvdclient.client.get_file_relationships(hashes=file_hash_pair)
+        if file_hash_pair[0] in before_relationships["file_relationships"]:
+            self.assertFalse(
+                file_hash_pair[1]
+                in before_relationships["file_relationships"][file_hash_pair[0]][
+                    str(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES)
+                ]
+            )
+        if file_hash_pair[1] in before_relationships["file_relationships"]:
+            self.assertFalse(
+                file_hash_pair[0]
+                in before_relationships["file_relationships"][file_hash_pair[1]][
+                    str(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES)
+                ]
+            )
+
+        # Set two files as potential duplicates using the Hydrus API
+        self.hvdclient.set_file_pair_as_potential_duplicates(file_hash_pair)
+
+        # Check those two files are now potential duplicates
+        # Check filehash is in potential duplicates for other file
+        file_relationships_0 = self.hvdclient.client.get_file_relationships(hashes=[file_hash_pair[0]])
+        self.assertEqual(
+            file_hash_pair[1],
+            file_relationships_0["file_relationships"][file_hash_pair[0]][
+                str(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES)
+            ][0],
+        )
+
+        # Check other filehash is in potential duplicates for file
+        file_relationships_1 = self.hvdclient.client.get_file_relationships(hashes=[file_hash_pair[1]])
+        self.assertEqual(
+            file_hash_pair[0],
+            file_relationships_1["file_relationships"][file_hash_pair[1]][
+                str(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES)
+            ][0],
+        )
 
 
 if __name__ == "__main__":

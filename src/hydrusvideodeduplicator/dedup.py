@@ -180,15 +180,7 @@ class HydrusVideoDeduplicator:
                 # file_names = get_file_names_hydrus(self.client.client, [video1_hash, video2_hash])
                 # self.hydlog.info(f"Duplicates filenames: {file_names}")
                 self.hydlog.info(f"\"Similar {similarity}%: {video1_hash}\" and \"{video2_hash}\"")
-
-            new_relationship = {
-                "hash_a": str(video1_hash),
-                "hash_b": str(video2_hash),
-                "relationship": int(hydrus_api.DuplicateStatus.POTENTIAL_DUPLICATES),
-                "do_default_content_merge": True,
-            }
-
-            self.client.client.set_file_relationships([new_relationship])
+            self.client.set_file_pair_as_potential_duplicates(([video1_hash, video2_hash]))
 
     def _find_potential_duplicates(
         self,

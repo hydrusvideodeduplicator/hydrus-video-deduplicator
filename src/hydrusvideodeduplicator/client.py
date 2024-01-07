@@ -8,21 +8,22 @@ if TYPE_CHECKING:
     from typing import TypeAlias
 
     FileServiceKeys: TypeAlias = list[str]
+    FileHashes: TypeAlias = Iterable[str]
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils as hydrus_api_utils
 
-hvdclientlog = logging.getLogger("hvdclient")
-hvdclientlog.setLevel(logging.INFO)
-
 
 class HVDClient:
+    _log = logging.getLogger("HVDClient")
+    _log.setLevel(logging.INFO)
+
     def __init__(
         self,
-        file_service_keys: FileServiceKeys,
+        file_service_keys: FileServiceKeys | None,
         api_url: str,
         access_key: str,
-        verify_cert: bool = False,
+        verify_cert: str | None,  # None means do not verify SSL.
     ):
         self.client = hydrus_api.Client(access_key=access_key, api_url=api_url, verify_cert=verify_cert)
         self.file_service_keys = (
@@ -55,7 +56,10 @@ class HVDClient:
 
     def verify_file_service_keys(self) -> None:
         """Verify that the supplied file_service_key is a valid key for a local file service."""
-        VALID_SERVICE_TYPES = [hydrus_api.ServiceType.ALL_LOCAL_FILES, hydrus_api.ServiceType.FILE_DOMAIN]
+        valid_service_types = [
+            hydrus_api.ServiceType.ALL_LOCAL_FILES,
+            hydrus_api.ServiceType.FILE_DOMAIN,
+        ]
         services = self.client.get_services()
 
         for file_service_key in self.file_service_keys:
@@ -64,7 +68,7 @@ class HVDClient:
                 raise KeyError(f"Invalid file service key: '{file_service_key}'")
 
             service_type = file_service.get('type')
-            if service_type not in VALID_SERVICE_TYPES:
+            if service_type not in valid_service_types:
                 raise KeyError("File service key must be a local file service")
 
     def verify_api_connection(self) -> bool:
@@ -73,7 +77,7 @@ class HVDClient:
 
         Throws hydrus_api.APIError if something is wrong.
         """
-        hvdclientlog.info(
+        self._log.info(
             (
                 f"Client API version: v{self.client.VERSION} "
                 f"| Endpoint API version: v{self.client.get_api_version()['version']}"
@@ -81,11 +85,11 @@ class HVDClient:
         )
         return hydrus_api_utils.verify_permissions(self.client, hydrus_api.utils.Permission)
 
-    def retrieve_video_hashes(self, search_tags: Iterable[str]) -> Iterable[str]:
+    def get_video_hashes(self, search_tags: Iterable[str]) -> Iterable[str]:
         """
-        Retrieve video hashes from Hydrus from a list of search tags.
+        Get video hashes from Hydrus from a list of search tags.
 
-        Returns video hashes that have those tags.
+        Get video hashes that have the given search tags.
         """
         all_video_hashes = self.client.search_files(
             tags=search_tags,
@@ -96,3 +100,25 @@ class HVDClient:
             return_file_ids=False,
         )["hashes"]
         return all_video_hashes
+
+    def are_files_deleted_hydrus(self, file_hashes: FileHashes) -> dict[str, bool]:
+        """
+        Check if files are trashed or deleted in Hydrus
+
+        Returns a dictionary of {hash, trashed_or_not}
+        """
+        videos_metadata = self.client.get_file_metadata(hashes=file_hashes, only_return_basic_information=False)[
+            "metadata"
+        ]
+
+        result: dict[str, bool] = {}
+        for video_metadata in videos_metadata:
+            # This should never happen, but it shouldn't break the program if it does
+            if "hash" not in video_metadata:
+                self._log.error("Hash not found for potentially trashed file.")
+                continue
+            video_hash = video_metadata["hash"]
+            is_deleted: bool = video_metadata.get("is_deleted", False)
+            result[video_hash] = is_deleted
+
+        return result

@@ -50,6 +50,16 @@ exclude = [
 [tool.hatch.version]
 path = "src/hydrusvideodeduplicator/__about__.py"
 
+[tool.hatch.envs.benchmark]
+dependencies = [
+    "pytest",
+    "pytest-benchmark",
+]
+
+[tool.hatch.envs.benchmark.scripts]
+# pytest-benchmark is a plugin for pytest that allows for benchmarking
+vpdq = "python -m pytest tests/test_benchmark_vpdqpy.py {args}"
+
 [tool.hatch.envs.lint]
 dependencies = [
   "black",

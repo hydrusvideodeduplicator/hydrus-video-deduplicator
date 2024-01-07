@@ -7,8 +7,9 @@ if TYPE_CHECKING:
     from typing import Annotated
 
     from .typing_utils import ValueRange
+    from .vpdqpy.vpdqpy import VpdqHash
 
-from .vpdqpy.vpdqpy import Vpdq, VpdqHash
+from .vpdqpy.vpdqpy import Vpdq
 
 """TODO: Rework this with into a hashing interface that is used by hashers."""
 

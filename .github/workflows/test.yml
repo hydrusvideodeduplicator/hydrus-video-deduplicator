@@ -33,33 +33,6 @@ jobs:
     - name: Format check with black
       run: hatch run lint:format
 
-  benchmark:
-    name: Benchmark
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.10', '3.11', '3.12']
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        lfs: 'true'
-        submodules: 'recursive'
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install hatch
-      run: pip install hatch
-
-    - name: Benchmark
-      run: |
-        hatch env create benchmark
-        hatch run benchmark:vpdq --benchmark-json "${{ matrix.python-version }}.json"
-
   tests:
     name: Tests
     runs-on: ubuntu-latest
@@ -86,3 +59,30 @@ jobs:
       run: |
         hatch env create tests
         hatch run benchmark:tests
+
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        lfs: 'true'
+        submodules: 'recursive'
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install hatch
+      run: pip install hatch
+
+    - name: Benchmark
+      run: |
+        hatch env create benchmark
+        hatch run benchmark:vpdq --benchmark-json "${{ matrix.python-version }}.json"

@@ -58,7 +58,7 @@ jobs:
     - name: Run tests
       run: |
         hatch env create tests
-        hatch run benchmark:tests
+        hatch run tests:tests
 
   benchmark:
     name: Benchmark

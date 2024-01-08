@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 import unittest
 from typing import TYPE_CHECKING
@@ -15,8 +16,58 @@ if TYPE_CHECKING:
 TEST_API_URL = "https://localhost:45869"
 TEST_API_ACCESS_KEY = "3b3cf10cc13862818ea95ddecfe434bed0828fb319b1ff56413917b471b566ab"
 
+import docker
+from docker.models.containers import Container
 
-@unittest.skip("Skipped Hydrus dedupe: implementation not finished")
+
+def get_health(container: Container):
+    api_client = docker.APIClient(tls=False)
+    inspect_results = api_client.inspect_container(container.name)
+    return inspect_results["State"]["Health"]["Status"]
+
+
+def start_hydrus(client: docker.DockerClient) -> Container:
+    """
+    Start Hydrus
+
+    Note: This resets any changes to the database during testing.
+    """
+    # Have to get absolute DB path due to a limitation of Docker SDK
+    from pathlib import Path
+
+    db_path = str(Path.absolute(Path((__file__))).parent) + "/db"
+    container = client.containers.run(
+        "ghcr.io/hydrusnetwork/hydrus:latest",
+        environment={'UID': '1000', "GID": "1000"},
+        volumes={db_path: {"bind": "/opt/hydrus/db", "mode": "rw"}},
+        # tmpfs={"/tmpfs": "/tmp"},
+        ports={"5800": "5800", "5900": "5900", "45868": "45868", "45869": "45869"},
+        detach=True,
+        remove=True,
+    )
+    return container
+
+
+def wait_for_hydrus(timeout: int = 20):
+    """Wait until Hydrus is running or the timeout is reached."""
+    time.sleep(20)
+    return True
+    # global container
+    # while get_health(container) != 'healthy' or timeout > 0:
+    #    if timeout <= 0:
+    #        return False
+    #    print(get_health(container))
+    #    time.sleep(1)
+    #    timeout -= 1
+    # return True
+
+
+def stop_hydrus(container: Container) -> None:
+    """Stop Hydrus."""
+    container.kill()
+
+
+# @unittest.skip("Skipped Hydrus dedupe: implementation not finished")
 class TestDedupe(unittest.TestCase):
     log = logging.getLogger(__name__)
     log.setLevel(logging.WARNING)
@@ -25,10 +76,16 @@ class TestDedupe(unittest.TestCase):
     def setUp(self):
         """TODO: Check if Hydrus Docker container is accessible before this."""
         """TODO: Clear database before this for repeated runs."""
+        self.dockerclient = docker.DockerClient(tls=False)
+        self.container = start_hydrus(self.dockerclient)
+
+        if not wait_for_hydrus():
+            stop_hydrus(self.container)
+            self.assertFalse(True)
 
         # Try to connect to Hydrus
         connect_attempts = 0
-        max_attempts = 3
+        max_attempts = 20
         while connect_attempts < max_attempts:
             TestDedupe.log.info(f"Attempting connection to Hydrus... {connect_attempts}/{max_attempts}")
             try:
@@ -37,11 +94,11 @@ class TestDedupe(unittest.TestCase):
                     file_service_keys=None,
                     api_url=TEST_API_URL,
                     access_key=TEST_API_ACCESS_KEY,
-                    verify_cert=False,
+                    verify_cert=None,
                 )
             except Exception as exc:
                 connect_attempts += 1
-                time.sleep(0.5)
+                time.sleep(1)
                 TestDedupe.log.warning(exc)
 
             else:
@@ -58,9 +115,6 @@ class TestDedupe(unittest.TestCase):
             self.hvdclient,
             # job_count=-2,  # TODO: Do tests for single and multi-threaded.
         )
-
-    def test_temp(self):
-        self.assertTrue(True)
 
     def test_set_similar_files_duplicates(self):
         """

@@ -50,6 +50,15 @@ exclude = [
 [tool.hatch.version]
 path = "src/hydrusvideodeduplicator/__about__.py"
 
+[tool.hatch.envs.tests]
+dependencies = [
+    "pytest",
+    "docker",
+]
+
+[tool.hatch.envs.tests.scripts]
+tests = "python -m pytest tests/test_dedupe.py"
+
 [tool.hatch.envs.benchmark]
 dependencies = [
     "pytest",

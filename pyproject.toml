@@ -53,7 +53,6 @@ path = "src/hydrusvideodeduplicator/__about__.py"
 [tool.hatch.envs.tests]
 dependencies = [
     "pytest",
-    "docker",
 ]
 
 [tool.hatch.envs.tests.scripts]

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import time
 import unittest
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
@@ -16,55 +18,32 @@ if TYPE_CHECKING:
 TEST_API_URL = "https://localhost:45869"
 TEST_API_ACCESS_KEY = "3b3cf10cc13862818ea95ddecfe434bed0828fb319b1ff56413917b471b566ab"
 
-import docker
-from docker.models.containers import Container
+
+docker_dir = Path((__file__)).parent / Path("docker")
+db_path = docker_dir / Path("db")
+docker_compose_file = docker_dir / Path("docker-compose.yml")
 
 
-def get_health(container: Container):
-    api_client = docker.APIClient(tls=False)
-    inspect_results = api_client.inspect_container(container.name)
-    return inspect_results["State"]["Health"]["Status"]
-
-
-def start_hydrus(client: docker.DockerClient) -> Container:
+def start_hydrus():
     """
     Start Hydrus
 
     Note: This resets any changes to the database during testing.
     """
     # Have to get absolute DB path due to a limitation of Docker SDK
-    from pathlib import Path
-
-    db_path = str(Path.absolute(Path((__file__))).parent) + "/db"
-    container = client.containers.run(
-        "ghcr.io/hydrusnetwork/hydrus:latest",
-        environment={'UID': '1000', "GID": "1000"},
-        volumes={db_path: {"bind": "/opt/hydrus/db", "mode": "rw"}},
-        # tmpfs={"/tmpfs": "/tmp"},
-        ports={"5800": "5800", "5900": "5900", "45868": "45868", "45869": "45869"},
-        detach=True,
-        remove=True,
-    )
-    return container
+    subprocess.run(["docker-compose", "-f", docker_compose_file, "up", "-d"], cwd=docker_dir, check=False)
 
 
-def wait_for_hydrus(timeout: int = 20):
+def wait_for_hydrus(timeout: int = 25):
     """Wait until Hydrus is running or the timeout is reached."""
-    time.sleep(20)
+    # TODO: Make this smarter.
+    time.sleep(timeout)
     return True
-    # global container
-    # while get_health(container) != 'healthy' or timeout > 0:
-    #    if timeout <= 0:
-    #        return False
-    #    print(get_health(container))
-    #    time.sleep(1)
-    #    timeout -= 1
-    # return True
 
 
-def stop_hydrus(container: Container) -> None:
+def stop_hydrus() -> None:
     """Stop Hydrus."""
-    container.kill()
+    subprocess.run(["docker-compose", "-f", docker_compose_file, "down"], cwd=docker_dir, check=False)
 
 
 # @unittest.skip("Skipped Hydrus dedupe: implementation not finished")
@@ -76,16 +55,15 @@ class TestDedupe(unittest.TestCase):
     def setUp(self):
         """TODO: Check if Hydrus Docker container is accessible before this."""
         """TODO: Clear database before this for repeated runs."""
-        self.dockerclient = docker.DockerClient(tls=False)
-        self.container = start_hydrus(self.dockerclient)
+        start_hydrus()
 
         if not wait_for_hydrus():
-            stop_hydrus(self.container)
-            self.assertFalse(True)
+            stop_hydrus()
+            self.fail("Hydrus connection timeout reached.")
 
         # Try to connect to Hydrus
         connect_attempts = 0
-        max_attempts = 20
+        max_attempts = 5
         while connect_attempts < max_attempts:
             TestDedupe.log.info(f"Attempting connection to Hydrus... {connect_attempts}/{max_attempts}")
             try:
@@ -181,3 +159,4 @@ class TestDedupe(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(module="test_dedupe")
+    stop_hydrus()

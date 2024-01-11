@@ -42,10 +42,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        lfs: 'true'
-        submodules: 'recursive'
+      uses: nschloe/action-checkout-with-lfs-cache@v1
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -69,11 +66,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        lfs: 'true'
-        submodules: 'recursive'
-
+      uses: nschloe/action-checkout-with-lfs-cache@v1
     - name: Set up Python
       uses: actions/setup-python@v5
       with:

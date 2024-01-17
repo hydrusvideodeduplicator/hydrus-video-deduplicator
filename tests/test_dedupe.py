@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 import time
 import unittest
@@ -19,8 +18,7 @@ TEST_API_URL = "https://localhost:45869"
 TEST_API_ACCESS_KEY = "3b3cf10cc13862818ea95ddecfe434bed0828fb319b1ff56413917b471b566ab"
 
 
-docker_dir = Path((__file__)).parent / Path("docker")
-db_path = docker_dir / Path("db")
+docker_dir = Path((__file__)).parent / Path("testdb/docker")
 docker_compose_file = docker_dir / Path("docker-compose.yml")
 
 

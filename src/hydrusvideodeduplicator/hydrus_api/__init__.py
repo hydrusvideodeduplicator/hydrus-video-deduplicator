@@ -48,8 +48,7 @@ class _ABCJSONEncoder(json.JSONEncoder):
 
 # This is public so other code can import it to annotate their own types
 class BinaryFileLike(T.Protocol):
-    def read(self) -> bytes:
-        ...
+    def read(self) -> bytes: ...
 
 
 class HydrusAPIException(Exception):

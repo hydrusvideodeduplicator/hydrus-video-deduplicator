@@ -32,8 +32,7 @@ _X = T.TypeVar("_X")
 
 # This is public so other code can import it to annotate their own types
 class TextFileLike(T.Protocol):
-    def read(self) -> str:
-        ...
+    def read(self) -> str: ...
 
 
 def verify_permissions(

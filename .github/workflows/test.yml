@@ -34,7 +34,7 @@ jobs:
       run: hatch run lint:format
   
   unittest:
-    name: Benchmark
+    name: Unit Test
     runs-on: ubuntu-latest
     strategy:
       matrix:

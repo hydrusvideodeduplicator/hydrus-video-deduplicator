@@ -1,3 +1,0 @@
-the docker container can take an extremely long time to connect to vnc for some reason.
-
-the docker container is for running hydrus to run tests on. it's not for running tests inside a container.

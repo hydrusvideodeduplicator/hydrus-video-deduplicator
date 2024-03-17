@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 def test_vpdq_hashing(benchmark):
     """Benchmark VPDQ hashing"""
     """Currently around 7.5 seconds on my PC"""
-    all_vids_dir = Path(__file__).parent / "videos"
+    all_vids_dir = Path(__file__).parent / "testdb" / "videos"
 
     vids_dirs = ["sintel"]
     similarity_vids: list[Path] = []

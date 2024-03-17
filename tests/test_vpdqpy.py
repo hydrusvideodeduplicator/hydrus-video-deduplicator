@@ -28,8 +28,10 @@ class TestVpdq(unittest.TestCase):
     logging.basicConfig()
 
     def setUp(self):
-        all_vids_dir = Path(__file__).parent / "videos"
-        self.video_hashes_dir = Path(__file__).parent / "video hashes"
+        all_vids_dir = Path(__file__).parent / "testdb" / "videos"
+        self.video_hashes_dir = Path(__file__).parent / "testdb" / "video hashes"
+        assert all_vids_dir.is_dir()
+        assert self.video_hashes_dir.is_dir()
 
         # Similarity videos should be checked for similarity.
         # They should be similar to other videos in the same group, but not to videos in other groups.
@@ -66,9 +68,9 @@ class TestVpdq(unittest.TestCase):
                 hashes_file.write(Vpdq.vpdq_to_json(vid[1]))
 
     # Return if two videos are supposed to be similar
-    # This uses the prefix SXX where XX is an abitrary group number
-    # If two videos have the same SXX they should be similar
-    # If they don't they should NOT be similar
+    # This uses the prefix SXX where XX is an arbitrary group number.
+    # If two videos have the same SXX they should be similar,
+    # if they don't they should NOT be similar.
     def similar_group(self, vid1: Path, vid2: Path) -> bool:
         # If either video doesn't have a group, they're not similar
         if vid1.name.split("_")[0][0] != "S" or vid2.name.split("_")[0][0] != "S":

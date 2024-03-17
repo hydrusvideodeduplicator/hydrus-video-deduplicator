@@ -32,6 +32,33 @@ jobs:
 
     - name: Format check with black
       run: hatch run lint:format
+  
+  unittest:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        lfs: 'false'
+        submodules: 'recursive'
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install hatch
+      run: pip install hatch
+
+    - name: Unit test
+      run: |
+        hatch env create test
+        hatch run test:all
 
   benchmark:
     name: Benchmark
@@ -44,7 +71,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        lfs: 'true'
+        lfs: 'false'
         submodules: 'recursive'
 
     - name: Set up Python

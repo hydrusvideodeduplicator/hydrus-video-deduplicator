@@ -60,6 +60,14 @@ dependencies = [
 # pytest-benchmark is a plugin for pytest that allows for benchmarking
 vpdq = "python -m pytest tests/test_benchmark_vpdqpy.py {args}"
 
+[tool.hatch.envs.test]
+dependencies = [
+    "pytest",
+]
+
+[tool.hatch.envs.test.scripts]
+all = "python -m pytest tests/test_dedupe.py tests/test_vpdqpy.py {args}"
+
 [tool.hatch.envs.lint]
 dependencies = [
   "black",

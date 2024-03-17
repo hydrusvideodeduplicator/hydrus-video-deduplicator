@@ -112,12 +112,11 @@ class TestVpdq(unittest.TestCase):
                 self.log.error(phash_path.name)  # Needs to be error to show up in log
                 similar, similarity = Vpdq.is_similar(phash, Vpdq.json_to_vpdq(expected_hash))
                 self.assertTrue((0.0 <= similarity) and (similarity <= 100.0))
-                if expected_hash != phash_str:
-                    self.assertEqual(
-                        expected_hash,
-                        phash_str,
-                        msg=f"Hashes not identical for file {phash_path.name}. \n {expected_hash} \n {phash_str}. Similarity: {similarity}",
-                    )
+                self.assertEqual(
+                    expected_hash,
+                    phash_str,
+                    msg=f"Hashes not identical for file {phash_path.name}. \n {expected_hash} \n {phash_str}. Similarity: {similarity}",
+                )
 
     # Compare similar videos. They should be similar if they're in the same similarity group.
     def test_compare_similarity_true(self):

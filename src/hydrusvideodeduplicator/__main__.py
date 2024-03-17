@@ -7,7 +7,15 @@ from rich import print
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .__about__ import __version__
-from .config import HYDRUS_API_KEY, HYDRUS_API_URL, HYDRUS_LOCAL_FILE_SERVICE_KEYS, HYDRUS_QUERY, REQUESTS_CA_BUNDLE
+from .client import HVDClient
+from .config import (
+    HYDRUS_API_KEY,
+    HYDRUS_API_URL,
+    HYDRUS_LOCAL_FILE_SERVICE_KEYS,
+    HYDRUS_QUERY,
+    REQUESTS_CA_BUNDLE,
+)
+from .db import DedupeDB
 from .dedup import HydrusVideoDeduplicator
 
 """
@@ -47,6 +55,9 @@ def main(
     verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
 ):
+    # Fix mypy errors from optional parameters
+    assert overwrite is not None and threshold is not None and skip_hashing is not None and job_count is not None
+
     # CLI debug parameter sets log level to info or debug
     loglevel = logging.WARNING
     if debug:
@@ -63,7 +74,7 @@ def main(
 
     # Clear cache
     if clear_search_cache:
-        HydrusVideoDeduplicator.clear_search_cache()
+        DedupeDB.clear_search_cache()
 
     # CLI overwrites env vars with no default value
     if not api_key:
@@ -78,36 +89,31 @@ def main(
         print("Hydrus URL not set. Exiting...")
         raise typer.Exit(code=1)
 
-    print(f"Connecting to {api_url}")
     # Client connection
     # TODO: Try to connect with https first and then fallback to http with a strong warning
-    hydrus_client = hydrus_api.Client(
-        api_url=api_url,
-        access_key=api_key,
-        verify_cert=verify_cert,
-    )
-
+    print(f"Connecting to {api_url}")
     error_connecting = True
     error_connecting_exception_msg = ""
     error_connecting_exception = ""
     try:
-        superdeduper = HydrusVideoDeduplicator(
-            hydrus_client,
+        hvdclient = HVDClient(
             file_service_keys=file_service_key,
-            job_count=job_count,
+            api_url=api_url,
+            access_key=api_key,
+            verify_cert=verify_cert,
         )
     except hydrus_api.InsufficientAccess as exc:
         error_connecting_exception_msg = "Invalid Hydrus API key."
-        error_connecting_exception = exc
+        error_connecting_exception = str(exc)
     except hydrus_api.DatabaseLocked as exc:
         error_connecting_exception_msg = "Hydrus database is locked. Try again later."
-        error_connecting_exception = exc
+        error_connecting_exception = str(exc)
     except hydrus_api.ServerError as exc:
         error_connecting_exception_msg = "Unknown Server Error."
-        error_connecting_exception = exc
+        error_connecting_exception = str(exc)
     except hydrus_api.APIError as exc:
         error_connecting_exception_msg = "API Error"
-        error_connecting_exception = exc
+        error_connecting_exception = str(exc)
     except hydrus_api.ConnectionError as exc:
         # Probably SSL error
         if "SSL" in str(exc):
@@ -119,31 +125,38 @@ def main(
             )
         else:
             error_connecting_exception_msg = "Failed to connect to Hydrus. Is your Hydrus instance running?"
-        error_connecting_exception = exc
+        error_connecting_exception = str(exc)
     else:
         error_connecting = False
 
     if error_connecting:
         logging.fatal("FATAL ERROR HAS OCCURRED")
-        logging.fatal(error_connecting_exception)
-        print(f"[red] {error_connecting_exception_msg} ")
+        logging.fatal(str(error_connecting_exception))
+        print(f"[red] {str(error_connecting_exception_msg)} ")
         raise typer.Exit(code=1)
-
-    # Deduplication parameters
 
     if debug:
-        superdeduper.hydlog.setLevel(logging.DEBUG)
-        superdeduper._DEBUG = True
+        HVDClient._log.setLevel(logging.DEBUG)
 
-    if threshold < 0:
+    # Deduplication
+
+    deduper = HydrusVideoDeduplicator(
+        client=hvdclient,
+        job_count=job_count,
+    )
+
+    if debug:
+        deduper.hydlog.setLevel(logging.DEBUG)
+        deduper._DEBUG = True
+
+    if threshold < 0.0 or threshold > 100.0:
         print("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
         raise typer.Exit(code=1)
-    superdeduper.threshold = threshold
+    HydrusVideoDeduplicator.threshold = threshold
 
-    superdeduper.clear_trashed_files_from_db()
+    DedupeDB.clear_trashed_files_from_db(hvdclient)
 
-    # Run all deduplicate functionality
-    superdeduper.deduplicate(
+    deduper.deduplicate(
         overwrite=overwrite,
         custom_query=query,
         skip_hashing=skip_hashing,

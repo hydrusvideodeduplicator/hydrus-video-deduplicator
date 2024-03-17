@@ -3,7 +3,7 @@
  # Hydrus Video Deduplicator
   <img src="https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/assets/104981058/e65383e8-1978-46aa-88b6-6fdda9767367">
   
-Hydrus Video Deduplicator finds potential duplicate videos through the Hydrus API
+Hydrus Video Deduplicator finds potential duplicate videos through the Hydrus API and marks them as potential duplicates to allow manual filtering through the Hydrus Client GUI.
 
 
 [![PyPI - Version](https://img.shields.io/pypi/v/hydrusvideodeduplicator.svg)](https://pypi.org/project/hydrusvideodeduplicator)
@@ -15,16 +15,11 @@ Hydrus Video Deduplicator finds potential duplicate videos through the Hydrus AP
 
 ---
 
-## How It Works:
-The deduplicator works by comparing videos similarity by their [perceptual hash](https://en.wikipedia.org/wiki/Perceptual_hashing).
+Hydrus Video Deduplicator **does not modify your files**. It only marks videos as "potential duplicates" through the Hydrus API so that you can filter them manually in the duplicates processing page.
 
-Potential duplicates can be processed through the Hydrus duplicates processing page just like images.
+[See the Hydrus documentation for how duplicates are managed in Hydrus](https://hydrusnetwork.github.io/hydrus/duplicates.html).
 
-You can choose to process only a subset of videos with `--query` using Hydrus tags, e.g. `--query="character:edward"` will only process videos with the tag `character:edward`.
-
-For more information check out the [wiki](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/wiki) and the [FAQ](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/wiki/faq)
-
----
+This program contains no telemetry. It only makes requests to the Hydrus API URL.
 
 ## [Installation:](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/wiki/Installation)
 #### Dependencies:
@@ -38,23 +33,17 @@ python3 -m pip install hydrusvideodeduplicator
 
 ## [Usage:](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/wiki/Usage)
 
+Simplest usage:
+
 ```sh
-python3 -m hydrusvideodeduplicator --api-key="<your key>"
+python3 -m hydrusvideodeduplicator --api-key="put your Hydrus api key in these quotes here"
 ```
 
-For full list of options see `--help` or the [usage page.](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/wiki/Usage)
+You should now see all potential video duplicates in the Hydrus duplicates processing page.
 
----
+For many users, it should be as simple as the Usage command above.
 
-## TODO:
-- [ ] Option to rollback and remove potential duplicates
-- [ ] OR predicates for --query
-- [x] Parallelize hashing and duplicate search
-- [ ] Automatically generate access key with Hydrus API
-- [x] Docker container
-- [ ] Upload Docker container to Docker Hub (GitHub Action)
-- [x] Pure Python port of vpdq
-- [x] Windows compatibility without WSL or Docker
+For more information, see the [Usage](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/wiki/Usage) and [FAQ](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/wiki/faq). 
 
 ---
 
@@ -62,7 +51,7 @@ For full list of options see `--help` or the [usage page.](https://github.com/hy
 
 Create an issue on GitHub for any problems/concerns. Provide as much detail as possible in your issue.
 
-Message @applenanner on the [Hydrus Discord](https://discord.gg/wPHPCUZ) for other general questions/concerns
+Message @applenanner on the [Hydrus Discord](https://discord.gg/wPHPCUZ) for other general questions/concerns.
 
 ---
 

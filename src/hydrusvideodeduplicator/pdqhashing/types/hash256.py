@@ -201,8 +201,7 @@ class Hash256:
             return False
 
     def __gt__(self, other) -> bool:
-        # pyre-fixme[16]: `int` has no attribute `__iter__`.
-        for i in self.HASH256_NUM_SLOTS:
+        for i in range(self.HASH256_NUM_SLOTS):
             if self.w[i] > other.w[i]:
                 return True
             elif self.w[i] < other.w[i]:
@@ -210,8 +209,7 @@ class Hash256:
         return False
 
     def __lt__(self, other) -> bool:
-        # pyre-fixme[16]: `int` has no attribute `__iter__`.
-        for i in self.HASH256_NUM_SLOTS:
+        for i in range(self.HASH256_NUM_SLOTS):
             if self.w[i] < other.w[i]:
                 return True
             elif self.w[i] > other.w[i]:

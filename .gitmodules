@@ -1,0 +1,3 @@
+[submodule "testdb"]
+    path = tests/testdb
+    url = https://github.com/hydrusvideodeduplicator/testdb.git

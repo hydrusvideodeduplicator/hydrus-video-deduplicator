@@ -1,10 +1,25 @@
-import logging
-from pathlib import Path
+from __future__ import annotations
 
-from rich import print
-from sqlitedict import SqliteDict
+import logging
+from itertools import islice
+from typing import TYPE_CHECKING
 
 from hydrusvideodeduplicator.hydrus_api import Client
+
+if TYPE_CHECKING:
+    from collections.abc import Generator, Iterable
+    from typing import Any
+
+
+def batched(iterable: Iterable, batch_size: int) -> Generator[tuple, Any, None]:
+    """
+    Batch data into tuples of length batch_size. The last batch may be shorter."
+    batched('ABCDEFG', 3) --> ABC DEF G
+    """
+    assert batch_size >= 1
+    it = iter(iterable)
+    while batch := tuple(islice(it, batch_size)):
+        yield batch
 
 
 # Given a lexicographically SORTED list of tags, find the tag given a namespace
@@ -72,20 +87,3 @@ def get_file_import_time(file_metadata: dict):
         except KeyError:
             continue
     raise KeyError
-
-
-def database_accessible(db_file: Path | str, tablename: str, verbose: bool = False):
-    try:
-        with SqliteDict(str(db_file), tablename=tablename, flag="r"):
-            return True
-    except OSError:
-        if verbose:
-            print("[red] Database does not exist.")
-    except RuntimeError:  # SqliteDict error when trying to create a table for a DB in read-only mode
-        if verbose:
-            print("[red] Database does not exist.")
-    except Exception as exc:
-        if verbose:
-            print("[red] Could not access database.")
-        logging.error(str(exc))
-    return False

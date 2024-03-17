@@ -11,11 +11,12 @@ Blender Foundation | www.blender.org
 
 from __future__ import annotations
 
+import logging
 import unittest
 from pathlib import Path
 from typing import TYPE_CHECKING
-import logging
-from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqFeature
+
+from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqHash
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -27,8 +28,10 @@ class TestVpdq(unittest.TestCase):
     logging.basicConfig()
 
     def setUp(self):
-        all_vids_dir = Path(__file__).parent / "videos"
-        self.video_hashes_dir = Path(__file__).parent / "video hashes"
+        all_vids_dir = Path(__file__).parent / "testdb" / "videos"
+        self.video_hashes_dir = Path(__file__).parent / "testdb" / "video hashes"
+        assert all_vids_dir.is_dir()
+        assert self.video_hashes_dir.is_dir()
 
         # Similarity videos should be checked for similarity.
         # They should be similar to other videos in the same group, but not to videos in other groups.
@@ -65,9 +68,9 @@ class TestVpdq(unittest.TestCase):
                 hashes_file.write(Vpdq.vpdq_to_json(vid[1]))
 
     # Return if two videos are supposed to be similar
-    # This uses the prefix SXX where XX is an abitrary group number
-    # If two videos have the same SXX they should be similar
-    # If they don't they should NOT be similar
+    # This uses the prefix SXX where XX is an arbitrary group number.
+    # If two videos have the same SXX they should be similar,
+    # if they don't they should NOT be similar.
     def similar_group(self, vid1: Path, vid2: Path) -> bool:
         # If either video doesn't have a group, they're not similar
         if vid1.name.split("_")[0][0] != "S" or vid2.name.split("_")[0][0] != "S":
@@ -79,7 +82,7 @@ class TestVpdq(unittest.TestCase):
 
     # Hash videos
     # Several other functions call this, so it needs to be correct and catch all bad hashes.
-    def calc_hashes(self, vids: list[Path]) -> dict[Path, list[VpdqFeature]]:
+    def calc_hashes(self, vids: list[Path]) -> dict[Path, VpdqHash]:
         vids_hashes = {}
         for vid in vids:
             perceptual_hash = Vpdq.computeHash(vid)
@@ -102,14 +105,25 @@ class TestVpdq(unittest.TestCase):
         self.generate_known_good_hashes(vids=vids, overwrite=False)
         vids_hashes = self.calc_hashes(vids)
 
-        for vid in vids_hashes.items():
-            with open(self.video_hashes_dir / f"{vid[0].name}.txt", "r") as hashes_file:
-                perceptual_hash_json = Vpdq.vpdq_to_json(vid[1])
-                known_good_hash = hashes_file.readline()
-                self.log.error(known_good_hash)
-                self.assertEqual(
-                    known_good_hash, perceptual_hash_json, msg=f"{known_good_hash} \n {perceptual_hash_json}"
-                )
+        for phash_path, phash in vids_hashes.items():
+            with open(self.video_hashes_dir / f"{phash_path.name}.txt", "r") as hashes_file:
+                phash_str = Vpdq.vpdq_to_json(phash)
+                expected_hash = hashes_file.readline()
+                self.log.error(phash_path.name)  # Needs to be error to show up in log
+                similar, similarity = Vpdq.is_similar(phash, Vpdq.json_to_vpdq(expected_hash))
+                self.assertTrue((0.0 <= similarity) and (similarity <= 100.0))
+                if expected_hash != phash_str:
+                    # Hashes must be within similarity of 1, even if environmental factors differ (ex. FFmpeg version)
+                    # This heuristic of course depends on similarity to be fully working.
+                    SIMILARITY_DIFFERENCE_THRESHOLD = 1.0
+                    self.log.warning(
+                        f"Video hashes not identical for file {phash_path.name}. \n {expected_hash} \n {phash_str}. Similarity: {similarity}"
+                    )
+                    self.assertGreater(
+                        SIMILARITY_DIFFERENCE_THRESHOLD,
+                        (100.0 - similarity),
+                        msg=f"Hash similarity below threshold. Similarity: {similarity}",
+                    )
 
     # Compare similar videos. They should be similar if they're in the same similarity group.
     def test_compare_similarity_true(self):
@@ -120,7 +134,7 @@ class TestVpdq(unittest.TestCase):
                     continue
 
                 similar, similarity = Vpdq.is_similar(vid1[1], vid2[1])
-                self.assertTrue(0 <= similarity <= 100)
+                self.assertTrue((0.0 <= similarity) and (similarity <= 100.0))
 
                 with self.subTest(msg=f"Similar: {similar}", vid1=vid1[0].name, vid2=vid2[0].name):
                     if self.similar_group(vid1[0], vid2[0]):

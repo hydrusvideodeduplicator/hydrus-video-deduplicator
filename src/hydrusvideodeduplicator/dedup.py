@@ -194,7 +194,7 @@ class HydrusVideoDeduplicator:
         self,
     ) -> None:
         """Find potential duplicates in the database and mark them in Hydrus."""
-        if not DedupeDB.is_db_accessible():
+        if not DedupeDB.is_db_accessible(verbose=True):
             print("[red] Could not search for duplicates.")
             return
 

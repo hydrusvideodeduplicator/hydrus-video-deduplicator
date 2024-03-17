@@ -37,18 +37,17 @@ def database_accessible(db_file: Path | str, tablename: str, verbose: bool = Fal
             print("[red] Database does not exist.")
     except Exception as exc:
         if verbose:
-            print("[red] Could not access database.")
-        logging.error(str(exc))
+            print(f"[red] Could not access database. Exception: {exc}")
     return False
 
 
-def is_db_accessible() -> bool:
+def is_db_accessible(verbose: bool = False) -> bool:
     """
     Check DB exists and is accessible.
 
     Return DB exists and is accessible.
     """
-    return database_accessible(get_db_file_path(), tablename="videos", verbose=True)
+    return database_accessible(get_db_file_path(), tablename="videos", verbose=verbose)
 
 
 def clear_search_cache() -> None:

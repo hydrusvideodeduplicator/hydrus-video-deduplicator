@@ -13,11 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import collections.abc as abc
 import enum
 import json
 import os
 import typing as T
+import collections.abc as abc
+import warnings
 
 import requests
 
@@ -81,6 +82,10 @@ class ServerError(APIError):
     pass
 
 
+class DeleteLocked(APIError):
+    pass
+
+
 @enum.unique
 class Permission(_StringableIntEnum):
     IMPORT_URLS = 0
@@ -92,6 +97,7 @@ class Permission(_StringableIntEnum):
     MANAGE_DATABASE = 6
     ADD_NOTES = 7
     MANAGE_FILE_RELATIONSHIPS = 8
+    EDIT_FILE_RATINGS = 9
 
 
 @enum.unique
@@ -212,7 +218,7 @@ class DuplicateStatus(_StringableIntEnum):
 
 
 class Client:
-    VERSION = 42
+    VERSION = 56
 
     # Access Management
     _GET_API_VERSION_PATH = "/api_version"
@@ -228,11 +234,13 @@ class Client:
     _UNDELETE_FILES_PATH = "/add_files/undelete_files"
     _ARCHIVE_FILES_PATH = "/add_files/archive_files"
     _UNARCHIVE_FILES_PATH = "/add_files/unarchive_files"
+    _GENERATE_HASHES_PATH = "/add_files/generate_hashes"
 
     # Adding Tags
     _CLEAN_TAGS_PATH = "/add_tags/clean_tags"
     _SEARCH_TAGS_PATH = "/add_tags/search_tags"
     _ADD_TAGS_PATH = "/add_tags/add_tags"
+    _GET_SIBLINGS_AND_PARENTS_PATH = "/add_tags/get_siblings_and_parents"
 
     # Adding URLs
     _GET_URL_FILES_PATH = "/add_urls/get_url_files"
@@ -247,7 +255,8 @@ class Client:
     # Managing Cookies and HTTP Headers
     _GET_COOKIES_PATH = "/manage_cookies/get_cookies"
     _SET_COOKIES_PATH = "/manage_cookies/set_cookies"
-    _SET_USER_AGENT_PATH = "/manage_headers/set_user_agent"
+    _SET_HEADERS_PATH = "/manage_headers/set_headers"
+    _SET_USER_AGENT_PATH = "/manage_headers/set_user_agent"  # Deprecated
 
     # Managing Pages
     _GET_PAGES_PATH = "/manage_pages/get_pages"
@@ -262,11 +271,13 @@ class Client:
     _GET_FILE_METADATA_PATH = "/get_files/file_metadata"
     _GET_FILE_PATH = "/get_files/file"
     _GET_THUMBNAIL_PATH = "/get_files/thumbnail"
+    _GET_RENDER_PATH = "/get_files/render"
 
     # Managing the Database
     _LOCK_DATABASE_PATH = "/manage_database/lock_on"
     _UNLOCK_DATABASE_PATH = "/manage_database/lock_off"
     _MR_BONES_PATH = "/manage_database/mr_bones"
+    _GET_CLIENT_OPTIONS_PATH = "/manage_database/get_client_options"
 
     # Managing File Relationships
     _GET_FILE_RELATIONSHIPS_PATH = "/manage_file_relationships/get_file_relationships"
@@ -275,6 +286,9 @@ class Client:
     _GET_RANDOM_POTENTIALS_PATH = "/manage_file_relationships/get_random_potentials"
     _SET_FILE_RELATIONSHIPS_PATH = "/manage_file_relationships/set_file_relationships"
     _SET_KINGS_PATH = "/manage_file_relationships/set_kings"
+
+    # Editing File Ratings
+    _SET_RATING_PATH = "/edit_ratings/set_rating"
 
     def __init__(
         self,
@@ -332,6 +346,9 @@ class Client:
                 raise DatabaseLocked(response)
             elif response.status_code == requests.codes.server_error:
                 raise ServerError(response)
+            elif response.status_code == requests.codes.conflict:
+                raise DeleteLocked(response)
+
             raise APIError(response)
 
         return response
@@ -465,6 +482,13 @@ class Client:
 
         self._api_request("POST", self._UNARCHIVE_FILES_PATH, json=payload)
 
+    def generate_hashes(self, path: str | os.PathLike) -> dict[str, T.Any]:
+        if isinstance(path, os.PathLike):
+            path = str(path)
+
+        response = self._api_request("POST", self._GENERATE_HASHES_PATH, json={"path": path})
+        return response.json()
+
     def get_url_files(self, url: str, doublecheck_file_system: T.Optional[bool] = None) -> dict[str, T.Any]:
         payload = {"url": url}
         if doublecheck_file_system is not None:
@@ -581,6 +605,29 @@ class Client:
 
         self._api_request("POST", self._ADD_TAGS_PATH, json=payload)
 
+    def set_rating(
+        self,
+        rating_service_key: str,
+        rating: bool | int | None,
+        hashes: T.Optional[abc.Iterable[str]] = None,
+        file_ids: T.Optional[abc.Iterable[int]] = None,
+    ) -> None:
+        if hashes is None and file_ids is None:
+            raise ValueError("At least one of hashes, file_ids is required")
+
+        payload: dict[str, T.Any] = {"rating_service_key": rating_service_key, "rating": rating}
+        if hashes is not None:
+            payload["hashes"] = hashes
+        if file_ids is not None:
+            payload["file_ids"] = file_ids
+
+        self._api_request("POST", self._SET_RATING_PATH, json=payload)
+
+    def get_siblings_and_parents(self, tags: abc.Iterable[str]) -> dict[str, T.Any]:
+        params = {"tags": json.dumps(tags, cls=_ABCJSONEncoder)}
+        response = self._api_request("GET", self._GET_SIBLINGS_AND_PARENTS_PATH, params=params)
+        return response.json()
+
     def set_notes(
         self,
         notes: dict[str, str],
@@ -670,6 +717,8 @@ class Client:
         only_return_basic_information: T.Optional[bool] = None,
         detailed_url_information: T.Optional[bool] = None,
         include_notes: T.Optional[bool] = None,
+        include_services_object: T.Optional[bool] = None,
+        include_blurhash: T.Optional[bool] = None,
     ) -> dict[str, T.Any]:
         if hashes is None and file_ids is None:
             raise ValueError("At least one of hashes, file_ids is required")
@@ -689,11 +738,17 @@ class Client:
             params["detailed_url_information"] = json.dumps(detailed_url_information)
         if include_notes is not None:
             params["include_notes"] = json.dumps(include_notes)
+        if include_services_object is not None:
+            params["include_services_object"] = json.dumps(include_services_object)
+        if include_blurhash is not None:
+            params["include_blurhash"] = json.dumps(include_blurhash)
 
         response = self._api_request("GET", self._GET_FILE_METADATA_PATH, params=params)
         return response.json()
 
-    def get_file(self, hash_: T.Optional[str] = None, file_id: T.Optional[int] = None) -> requests.Response:
+    def get_file(
+        self, hash_: T.Optional[str] = None, file_id: T.Optional[int] = None, download: T.Optional[bool] = None
+    ) -> requests.Response:
         if (hash_ is None and file_id is None) or (hash_ is not None and file_id is not None):
             raise ValueError("Exactly one of hash_, file_id is required")
 
@@ -702,6 +757,8 @@ class Client:
             params["hash"] = hash_
         if file_id is not None:
             params["file_id"] = file_id
+        if download is not None:
+            params["download"] = download
 
         return self._api_request("GET", self._GET_FILE_PATH, params=params, stream=True)
 
@@ -876,6 +933,22 @@ class Client:
 
         return self._api_request("GET", self._GET_THUMBNAIL_PATH, params=params, stream=True)
 
+    def get_render(
+        self, hash_: T.Optional[str] = None, file_id: T.Optional[int] = None, download: T.Optional[bool] = None
+    ) -> requests.Response:
+        if (hash_ is None and file_id is None) or (hash_ is not None and file_id is not None):
+            raise ValueError("Exactly one of hash_, file_id is required")
+
+        params: dict[str, T.Union[str, int]] = {}
+        if hash_ is not None:
+            params["hash"] = hash_
+        if file_id is not None:
+            params["file_id"] = file_id
+        if download is not None:
+            params["download"] = download
+
+        return self._api_request("GET", self._GET_RENDER_PATH, params=params, stream=True)
+
     def get_cookies(self, domain: str) -> dict[str, T.Any]:
         response = self._api_request("GET", self._GET_COOKIES_PATH, params={"domain": domain})
         return response.json()
@@ -883,7 +956,16 @@ class Client:
     def set_cookies(self, cookies: abc.Iterable[abc.Iterable[T.Union[str, int]]]) -> None:
         self._api_request("POST", self._SET_COOKIES_PATH, json={"cookies": cookies})
 
+    def set_headers(self, headers: T.Mapping[str, T.Mapping[str, str | None]], domain: str | None = None) -> None:
+        payload: dict[str, T.Any] = {"headers": headers}
+        if domain is not None:
+            payload["domain"] = domain
+
+        self._api_request("POST", self._SET_HEADERS_PATH, json=payload)
+
     def set_user_agent(self, user_agent: str) -> None:
+        # https://hydrusnetwork.github.io/hydrus/developer_api.html#manage_headers_set_user_agent
+        warnings.warn("set_user_agent() is deprecated, please use set_headers() instead", DeprecationWarning)
         self._api_request("POST", self._SET_USER_AGENT_PATH, json={"user-agent": user_agent})
 
     def get_pages(self) -> dict[str, T.Any]:
@@ -927,5 +1009,24 @@ class Client:
     def unlock_database(self) -> None:
         self._api_request("POST", self._UNLOCK_DATABASE_PATH)
 
-    def get_mr_bones(self) -> dict[str, T.Any]:
-        return self._api_request("GET", self._MR_BONES_PATH).json()
+    def get_mr_bones(
+        self,
+        tags: T.Optional[abc.Iterable[str]] = None,
+        file_service_keys: T.Optional[abc.Iterable[str]] = None,
+        deleted_file_service_keys: T.Optional[abc.Iterable[str]] = None,
+        tag_service_key: T.Optional[str] = None,
+    ) -> dict[str, T.Any]:
+        params: dict[str, str] = {}
+        if tags is not None:
+            params["tags"] = json.dumps(tags, cls=_ABCJSONEncoder)
+        if file_service_keys is not None:
+            params["file_service_keys"] = json.dumps(file_service_keys, cls=_ABCJSONEncoder)
+        if deleted_file_service_keys is not None:
+            params["deleted_file_service_keys"] = json.dumps(deleted_file_service_keys, cls=_ABCJSONEncoder)
+        if tag_service_key is not None:
+            params["tag_service_key"] = tag_service_key
+
+        return self._api_request("GET", self._MR_BONES_PATH, params=params).json()
+
+    def get_client_options(self) -> dict[str, T.Any]:
+        return self._api_request("GET", self._GET_CLIENT_OPTIONS_PATH).json()

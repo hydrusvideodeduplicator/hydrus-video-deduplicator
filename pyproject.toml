@@ -76,7 +76,7 @@ dependencies = [
 
 [tool.hatch.envs.lint.scripts]
 format = "black --check src"
-lint = "ruff src"
+lint = "ruff check src"
 
 [tool.black]
 target-version = ["py310", "py311"]
@@ -87,12 +87,12 @@ skip-string-normalization = true
 # Enable the pycodestyle (`E`) and Pyflakes (`F`) rules by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
 # McCabe complexity (`C901`) by default.
-select = ["E", "F"]
-ignore = []
+lint.select = ["E", "F"]
+lint.ignore = []
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.
-fixable = ["ALL"]
-unfixable = []
+lint.fixable = ["ALL"]
+lint.unfixable = []
 
 # Exclude a variety of commonly ignored directories.
 exclude = [
@@ -118,13 +118,13 @@ exclude = [
     "node_modules",
     "venv",
 ]
-per-file-ignores = {"tests/**/*" = ["PLR2004", "S101", "TID252"]}
+lint.per-file-ignores = {"tests/**/*" = ["PLR2004", "S101", "TID252"]}
 
 # Same as Black.
 line-length = 120
 
 # Allow unused variables when underscore-prefixed.
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 # Assume Python 3.10.
 target-version = "py310"

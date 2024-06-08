@@ -67,7 +67,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="lime" data-md-color-accent="lime">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -125,7 +125,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="lime" data-md-color-accent="lime"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
     
       <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 6H7c-3.31 0-6 2.69-6 6s2.69 6 6 6h10c3.31 0 6-2.69 6-6s-2.69-6-6-6zm0 10H7c-2.21 0-4-1.79-4-4s1.79-4 4-4h10c2.21 0 4 1.79 4 4s-1.79 4-4 4zM7 9c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
@@ -135,7 +135,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="lime"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
     
       <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3Z"/></svg>
@@ -413,6 +413,24 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#git-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      git workflow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#release-process-project-maintainer-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      Release process (project maintainer only)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -520,6 +538,24 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#git-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      git workflow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#release-process-project-maintainer-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      Release process (project maintainer only)
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -586,8 +622,36 @@ pip install -e .
 <li>Now if you run <code>python3 -m hydrusvideodeduplicator</code> there should be no errors.</li>
 </ol>
 <hr />
-<p>TODO: Add information how to release new versions</p>
-<p>TODO: Add information about git dev branch workflow</p>
+<h2 id="git-workflow">git workflow</h2>
+<p>main is for releases. It must be committed to through a PR from develop by the project maintainer.</p>
+<p>develop should have the same history as main unless it has newer commits that have not been merged. When a PR is approved to develop, changes should be squash-merged.</p>
+<p>Make PRs against develop if you want to submit changes.</p>
+<h2 id="release-process-project-maintainer-only">Release process (project maintainer only)</h2>
+<ol>
+<li>On <code>main</code>, apply all the commits from <code>develop</code>:</li>
+</ol>
+<pre><code class="language-sh">git rebase develop
+</code></pre>
+<ol>
+<li>Then update the version in <code>__about__.py</code> with the new version following semantic versioning. Make a commit from this change:</li>
+</ol>
+<pre><code class="language-sh">git add src/hydrusvideodeduplicator/__about__.py
+git commit -m &quot;Release x.y.z&quot;
+</code></pre>
+<ol>
+<li>Add tag to the commit:</li>
+</ol>
+<pre><code class="language-sh">git tag -a vx.y.z -m &quot;Release x.y.z&quot;
+</code></pre>
+<ol>
+<li>Push changes, including the tag:</li>
+</ol>
+<pre><code class="language-sh">git push origin main --follow-tags
+</code></pre>
+<ol>
+<li>Make sure all the CI passes. Then make a release on Github on the <a href="https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/releases">Releases page</a>. Look at past releases for more info.</li>
+</ol>
+<p>Most of these steps should probably be automated at some point.</p>
 
 
 

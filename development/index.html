@@ -422,15 +422,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#release-process-project-maintainer-only" class="md-nav__link">
-    <span class="md-ellipsis">
-      Release process (project maintainer only)
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -547,15 +538,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#release-process-project-maintainer-only" class="md-nav__link">
-    <span class="md-ellipsis">
-      Release process (project maintainer only)
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -580,78 +562,54 @@
 <p>It is used for packaging and environment management for development.</p>
 <p>There are hatch commands for this project are defined in the [pyproject.toml]. They are just aliases for other commands that run in specific environments.</p>
 <p>For example, to run the command to generate the documentation and serve it locally:</p>
-<pre><code class="language-sh">hatch run docs:serve
-</code></pre>
+<div class="highlight"><pre><span></span><code>hatch<span class="w"> </span>run<span class="w"> </span>docs:serve
+</code></pre></div>
 <p><code>docs</code> is the environment and <code>build</code> is the command to run.</p>
 <p>For more information, see the Hatch <a href="https://hatch.pypa.io/latest/environment/">environment documentation</a></p>
 <h3 id="useful-commands">Useful commands</h3>
 <p>Run all tests:</p>
-<pre><code class="language-sh">hatch run test:all
-</code></pre>
+<div class="highlight"><pre><span></span><code>hatch<span class="w"> </span>run<span class="w"> </span>test:all
+</code></pre></div>
 <p>Serve documentation locally:</p>
-<pre><code class="language-sh">hatch run docs:serve
-</code></pre>
+<div class="highlight"><pre><span></span><code>hatch<span class="w"> </span>run<span class="w"> </span>docs:serve
+</code></pre></div>
 <p>Build documentation:</p>
-<pre><code class="language-sh">hatch run docs:build
-</code></pre>
+<div class="highlight"><pre><span></span><code>hatch<span class="w"> </span>run<span class="w"> </span>docs:build
+</code></pre></div>
 <p>Format code:</p>
-<pre><code class="language-sh">hatch run lint:format
-</code></pre>
+<div class="highlight"><pre><span></span><code>hatch<span class="w"> </span>run<span class="w"> </span>lint:format
+</code></pre></div>
 <p>Lint code:</p>
-<pre><code class="language-sh">hatch run lint:lint
-</code></pre>
+<div class="highlight"><pre><span></span><code>hatch<span class="w"> </span>run<span class="w"> </span>lint:lint
+</code></pre></div>
 <p>Benchmark vpdq:</p>
-<pre><code class="language-sh">hatch run benchmark:vpdq
-</code></pre>
+<div class="highlight"><pre><span></span><code>hatch<span class="w"> </span>run<span class="w"> </span>benchmark:vpdq
+</code></pre></div>
 <h3 id="developing-without-hatch-not-recommended">Developing without Hatch (not recommended)</h3>
 <p>Alternatively, if you don't want to use hatch and you know what you're doing, you can install and do development the general way.</p>
 <ol>
-<li>Clone or download the repository:</li>
-</ol>
-<pre><code class="language-sh">git clone https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator.git
-</code></pre>
-<ol>
-<li>Install local editable package with pip and venv:</li>
-</ol>
-<pre><code class="language-sh">cd hydrus-video-deduplicator
-python3 -m venv venv
-source venv/bin/activate
-pip install -e .
-</code></pre>
-<ol>
-<li>Now if you run <code>python3 -m hydrusvideodeduplicator</code> there should be no errors.</li>
+<li>
+<p>Clone or download the repository:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator.git
+</code></pre></div>
+</li>
+<li>
+<p>Install local editable package with pip and venv:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>hydrus-video-deduplicator
+python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>venv
+<span class="nb">source</span><span class="w"> </span>venv/bin/activate
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</code></pre></div>
+</li>
+<li>
+<p>Now if you run <code>python3 -m hydrusvideodeduplicator</code> there should be no errors.</p>
+</li>
 </ol>
 <hr />
 <h2 id="git-workflow">git workflow</h2>
-<p>main is for releases. It must be committed to through a PR from develop by the project maintainer.</p>
-<p>develop should have the same history as main unless it has newer commits that have not been merged. When a PR is approved to develop, changes should be squash-merged.</p>
-<p>Make PRs against develop if you want to submit changes.</p>
-<h2 id="release-process-project-maintainer-only">Release process (project maintainer only)</h2>
-<ol>
-<li>On <code>main</code>, apply all the commits from <code>develop</code>:</li>
-</ol>
-<pre><code class="language-sh">git rebase develop
-</code></pre>
-<ol>
-<li>Then update the version in <code>__about__.py</code> with the new version following semantic versioning. Make a commit from this change:</li>
-</ol>
-<pre><code class="language-sh">git add src/hydrusvideodeduplicator/__about__.py
-git commit -m &quot;Release x.y.z&quot;
-</code></pre>
-<ol>
-<li>Add tag to the commit:</li>
-</ol>
-<pre><code class="language-sh">git tag -a vx.y.z -m &quot;Release x.y.z&quot;
-</code></pre>
-<ol>
-<li>Push changes, including the tag:</li>
-</ol>
-<pre><code class="language-sh">git push origin main --follow-tags
-</code></pre>
-<ol>
-<li>Make sure all the CI passes. Then make a release on Github on the <a href="https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/releases">Releases page</a>. Look at past releases for more info.</li>
-</ol>
-<p>Most of these steps should probably be automated at some point.</p>
+<p><code>main</code> is for releases. It must be committed to through a PR from <code>develop</code> by the project maintainer.</p>
+<p><code>develop</code> should have the same history as main unless it has newer commits that have not been merged. When a PR is approved to develop, changes should be squash-merged.</p>
+<p>Create PRs for <code>develop</code> if you want to submit changes.</p>
 
 
 

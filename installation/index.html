@@ -611,8 +611,8 @@
 <li><a href="https://www.python.org/downloads/">Python</a> &gt;=3.10</li>
 </ul>
 <p>Run in PowerShell:</p>
-<pre><code class="language-Powershell">python3 -m pip install hydrusvideodeduplicator
-</code></pre>
+<div class="highlight"><pre><span></span><code><span class="n">python3</span> <span class="n">-m</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">hydrusvideodeduplicator</span>
+</code></pre></div>
 <p>You should now be good to go. Proceed to <a href="../usage/">usage.</a></p>
 <hr />
 <h2 id="linux">Linux</h2>
@@ -623,20 +623,22 @@
 </ul>
 <h3 id="steps">Steps</h3>
 <ol>
-<li>Update</li>
+<li>
+<p>Update system packages:</p>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>apt-get<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>apt-get<span class="w"> </span>upgrade
+</code></pre></div>
+</li>
+<li>
+<p>Install dependencies:</p>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>apt-get<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>python3-pip
+</code></pre></div>
+</li>
+<li>
+<p>Install the program:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>hydrusvideodeduplicator
+</code></pre></div>
+</li>
 </ol>
-<pre><code class="language-sh">sudo apt-get update &amp;&amp; sudo apt-get upgrade
-</code></pre>
-<ol>
-<li>Install dependencies:</li>
-</ol>
-<pre><code class="language-sh">sudo apt-get install -y python3-pip
-</code></pre>
-<ol>
-<li>Install program:</li>
-</ol>
-<pre><code class="language-sh">pip install hydrusvideodeduplicator
-</code></pre>
 <p>You should now be good to go. Proceed to <a href="../usage/">usage.</a></p>
 <h2 id="macos">macos</h2>
 <p>Same directions as Linux and Windows but using your preferred package manager for dependencies e.g. <a href="https://brew.sh/">brew</a>.</p>

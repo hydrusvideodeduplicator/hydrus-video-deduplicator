@@ -379,6 +379,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#where-are-the-video-hashes-stored" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where are the video hashes stored?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#i-have-a-big-library-how-do-i-test-this-on-just-a-few-files" class="md-nav__link">
     <span class="md-ellipsis">
       I have a big library. How do I test this on just a few files?
@@ -554,6 +563,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#where-are-the-video-hashes-stored" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where are the video hashes stored?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#i-have-a-big-library-how-do-i-test-this-on-just-a-few-files" class="md-nav__link">
     <span class="md-ellipsis">
       I have a big library. How do I test this on just a few files?
@@ -636,8 +654,8 @@
 
 <h1 id="faq">FAQ</h1>
 <h2 id="how-to-update">How to update</h2>
-<pre><code class="language-sh">pip3 install hydrusvideodeduplicator --upgrade
-</code></pre>
+<div class="highlight"><pre><span></span><code>pip3<span class="w"> </span>install<span class="w"> </span>hydrusvideodeduplicator<span class="w"> </span>--upgrade
+</code></pre></div>
 <hr />
 <h2 id="how-does-this-work">How does this work?</h2>
 <ol>
@@ -652,8 +670,13 @@
 </li>
 </ol>
 <p>You can run the program again when you add more files to find more duplicates.</p>
-<p>Note:</p>
-<p>Hashes are stored in an sqlite database created in <code>~/.local/share/hydrusvideodeduplicator</code> (Linux) to speed up processing.</p>
+<hr />
+<h2 id="where-are-the-video-hashes-stored">Where are the video hashes stored?</h2>
+<p>Hashes are stored in an sqlite database created in an app dir to speed up processing on subsequent runs.</p>
+<p>On Linux, this directory is likely <code>~/.local/share/hydrusvideodeduplicator</code></p>
+<p>On Windows, this directory is likely <code>%USERPROFILE%\AppData\Local\hydrusvideodeduplicator</code> or <code>%USERPROFILE%\AppData\Roaming\hydrusvideodeduplicator</code></p>
+<p>On macos, this directory is likely <code>/Users/&lt;yourusername&gt;/Library/Application Support/hydrusvideodeduplicator</code></p>
+<p>The database directory can be set with <code>DEDUP_DATABASE_DIR</code> environment variable.</p>
 <hr />
 <h2 id="i-have-a-big-library-how-do-i-test-this-on-just-a-few-files">I have a big library. How do I test this on just a few files?</h2>
 <p>You can use <a href="https://hydrusnetwork.github.io/hydrus/developer_api.html#get_files_search_files">system predicates</a> and <a href="https://hydrusnetwork.github.io/hydrus/getting_started_searching.html">queries</a> to limit your search.</p>
@@ -687,10 +710,8 @@
 <summary>Example</summary>
 <br>
 
-
-<pre><code class="language-sh">--query=&quot;system:import time &gt; 1 day&quot;
-</code></pre>
-
+<div class="highlight"><pre><span></span><code>--query<span class="o">=</span><span class="s2">&quot;system:import time &gt; 1 day&quot;</span>
+</code></pre></div>
 
 </details>
 

@@ -1,9 +1,19 @@
 #!/usr/bin/env python
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
-from random import randint
+from __future__ import annotations
 
 from ..types.exceptions import PDQHashFormatException
+
+BIT_COUNTS = [bin(i).count('1') for i in range(256)]
+
+
+def hammingNorm16(h: int):
+    return BIT_COUNTS[h & 0xFF] + BIT_COUNTS[(h >> 8) & 0xFF]
+
+
+def bitCount(x: Hash256):
+    return bin(x).count('1')
 
 
 class Hash256:
@@ -49,7 +59,7 @@ class Hash256:
         return self.__str__()
 
     @classmethod
-    def fromHexString(cls, s):
+    def fromHexString(cls, s: str):
         if len(s) != cls.HASH256_HEX_NUM_NYBBLES:
             raise PDQHashFormatException("Incorrect length", s)
 
@@ -63,19 +73,6 @@ class Hash256:
                 raise PDQHashFormatException("Incorrect format", s)
         return rv
 
-    @classmethod
-    def hammingNorm16(cls, h):
-        return cls.bitCount((int(h)) & 0xFFFF)
-
-    @classmethod
-    def bitCount(cls, x):
-        x -= (x >> 1) & 0x55555555
-        x = ((x >> 2) & 0x33333333) + (x & 0x33333333)
-        x = ((x >> 4) + x) & 0x0F0F0F0F
-        x += x >> 8
-        x += x >> 16
-        return x & 0x0000003F
-
     def clearAll(self):
         for i in range(self.HASH256_NUM_SLOTS):
             self.w[i] = 0
@@ -88,51 +85,51 @@ class Hash256:
         n = 0
         i = 0
         while i < self.HASH256_NUM_SLOTS:
-            n += self.hammingNorm16(self.w[i])
+            n += hammingNorm16(self.w[i])
             i += 1
         return n
 
-    def hammingDistance(self, that):
+    def hammingDistance(self, that: Hash256):
         n = 0
         for w1, w2 in zip(self.w, that.w):
-            n += self.hammingNorm16(int(w1 ^ w2))
+            n += hammingNorm16(w1 ^ w2)
         return n
 
-    def hammingDistanceLE(self, that, d) -> bool:
+    def hammingDistanceLE(self, that: Hash256, d: int) -> bool:
         e = 0
         for w1, w2 in zip(self.w, that.w):
-            e += self.hammingNorm16(int(w1 ^ w2))
+            e += hammingNorm16(w1 ^ w2)
             if e > d:
                 return False
         return True
 
-    def setBit(self, k):
+    def setBit(self, k: int):
         self.w[(k & 255) >> 4] |= 1 << (k & 15)
 
-    def flipBit(self, k):
+    def flipBit(self, k: int):
         self.w[(k & 255) >> 4] ^= 1 << (k & 15)
 
-    def bitwiseXOR(self, that):
+    def bitwiseXOR(self, that: Hash256):
         rv = Hash256()
         i = 0
         while i < self.HASH256_NUM_SLOTS:
-            rv.w[i] = int((self.w[i] ^ that.w[i]))
+            rv.w[i] = self.w[i] ^ that.w[i]
             i += 1
         return rv
 
-    def bitwiseAND(self, that):
+    def bitwiseAND(self, that: Hash256):
         rv = Hash256()
         i = 0
         while i < self.HASH256_NUM_SLOTS:
-            rv.w[i] = int((self.w[i] & that.w[i]))
+            rv.w[i] = self.w[i] & that.w[i]
             i += 1
         return rv
 
-    def bitwiseOR(self, that):
+    def bitwiseOR(self, that: Hash256):
         rv = Hash256()
         i = 0
         while i < self.HASH256_NUM_SLOTS:
-            rv.w[i] = int((self.w[i] | that.w[i]))
+            rv.w[i] = self.w[i] | that.w[i]
             i += 1
         return rv
 
@@ -140,7 +137,7 @@ class Hash256:
         rv = Hash256()
         i = 0
         while i < self.HASH256_NUM_SLOTS:
-            rv.w[i] = int((~self.w[i])) & 0xFFFF
+            rv.w[i] = (~self.w[i]) & 0xFFFF
             i += 1
         return rv
 
@@ -179,19 +176,7 @@ class Hash256:
     def dumpWords(self):
         return ",".join(str(v) for v in list(reversed(self.w)))
 
-    def fuzz(self, numErrorBits):
-        """Flips some number of bits randomly, with replacement.  (I.e. not all
-        flipped bits are guaranteed to be in different positions; if you pass
-        argument of 10 then maybe 2 bits will be flipped and flipped back, and
-        only 6 flipped once.)"""
-        rv = self.clone()
-        i = 0
-        while i < numErrorBits:
-            rv.flipBit(randint(0, 255))
-            i += 1
-        return rv
-
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: Hash256) -> bool:
         if isinstance(other, (Hash256,)):
             for i in range(self.HASH256_NUM_SLOTS):
                 if self.w[i] != other.w[i]:
@@ -200,7 +185,7 @@ class Hash256:
         else:
             return False
 
-    def __gt__(self, other) -> bool:
+    def __gt__(self, other: Hash256) -> bool:
         for i in range(self.HASH256_NUM_SLOTS):
             if self.w[i] > other.w[i]:
                 return True
@@ -208,7 +193,7 @@ class Hash256:
                 return False
         return False
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: Hash256) -> bool:
         for i in range(self.HASH256_NUM_SLOTS):
             if self.w[i] < other.w[i]:
                 return True

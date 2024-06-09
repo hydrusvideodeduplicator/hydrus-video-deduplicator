@@ -1,0 +1,31 @@
+name: Publish Docs 
+
+on:
+  push:
+    branches:
+      - main 
+  workflow_dispatch:
+
+concurrency: 
+  group: publish-docs
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Setup python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.x
+    - name: Setup hatch and deploy documentation
+      run: |
+        pip install hatch
+        hatch run docs:gh-deploy

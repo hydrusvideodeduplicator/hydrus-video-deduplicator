@@ -1,0 +1,34 @@
+site_name: Hydrus Video Deduplicator
+site_description: "Video Deduplicator for the Hydrus Network."
+repo_name: hydrusvideodeduplicator/hydrus-video-deduplicator
+repo_url: https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Usage: usage.md
+  - FAQ: faq.md
+  - Development: development.md
+  - Contact: contact.md
+  - Credits: credits.md
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)" 
+      scheme: default
+      primary: lime
+      accent: lime
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)" 
+      scheme: slate
+      primary: black
+      accent: lime
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+
+markdown_extensions:
+  - pymdownx.superfences # Allow codeblock nested in list

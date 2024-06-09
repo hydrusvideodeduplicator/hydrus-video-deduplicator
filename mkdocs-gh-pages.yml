@@ -1,0 +1,9 @@
+INHERIT: mkdocs.yml
+
+site_url: https://hydrusvideodeduplicator.github.io/hydrus-video-deduplicator/
+
+plugins:
+  - search
+  - git-revision-date-localized:
+      exclude:
+          - index.md

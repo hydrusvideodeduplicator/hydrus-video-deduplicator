@@ -8,7 +8,10 @@ from hydrusvideodeduplicator.hydrus_api import Client
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
-    from typing import Any
+    from typing import Any, TypeAlias
+
+    # The logging level for logging e.g. CRITICAL or WARNING
+    Severity: TypeAlias = int
 
 from rich import print
 
@@ -89,10 +92,6 @@ def get_file_import_time(file_metadata: dict):
         except KeyError:
             continue
     raise KeyError
-
-
-# The logging level for logging e.g. CRITICAL or WARNING
-Severity = int
 
 
 def severity_to_color(severity: Severity) -> str:

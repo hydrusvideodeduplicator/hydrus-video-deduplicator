@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
 from __future__ import annotations
@@ -10,10 +9,6 @@ BIT_COUNTS = [bin(i).count('1') for i in range(256)]
 
 def hammingNorm16(h: int):
     return BIT_COUNTS[h & 0xFF] + BIT_COUNTS[(h >> 8) & 0xFF]
-
-
-def bitCount(x: Hash256):
-    return bin(x).count('1')
 
 
 class Hash256:
@@ -95,7 +90,7 @@ class Hash256:
             n += hammingNorm16(w1 ^ w2)
         return n
 
-    def hammingDistanceLE(self, that: Hash256, d: int) -> bool:
+    def hammingDistanceLE(self, that: Hash256, d: int | float) -> bool:
         e = 0
         for w1, w2 in zip(self.w, that.w):
             e += hammingNorm16(w1 ^ w2)
@@ -176,7 +171,7 @@ class Hash256:
     def dumpWords(self):
         return ",".join(str(v) for v in list(reversed(self.w)))
 
-    def __eq__(self, other: Hash256) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, (Hash256,)):
             for i in range(self.HASH256_NUM_SLOTS):
                 if self.w[i] != other.w[i]:

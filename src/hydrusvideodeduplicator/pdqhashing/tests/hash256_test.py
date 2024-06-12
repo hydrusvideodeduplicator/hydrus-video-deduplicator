@@ -30,10 +30,6 @@ class Hash256Test(unittest.TestCase):
         hash = Hash256.fromHexString(s)
         self.assertEqual(hash.__str__(), s)
 
-    def test_bit_count(self) -> None:
-        self.assertEqual(Hash256.bitCount(1), 1)
-        self.assertEqual(Hash256.bitCount(100), 3)  # dec(10) = bin(01100100)
-
     def test_hamming_norm(self) -> None:
         hash = Hash256()
         hash.setAll()

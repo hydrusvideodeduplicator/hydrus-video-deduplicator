@@ -10,6 +10,8 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from typing import Any
 
+from rich import print
+
 
 def batched(iterable: Iterable, batch_size: int) -> Generator[tuple, Any, None]:
     """
@@ -87,3 +89,25 @@ def get_file_import_time(file_metadata: dict):
         except KeyError:
             continue
     raise KeyError
+
+
+# The logging level for logging e.g. CRITICAL or WARNING
+Severity = int
+
+
+def severity_to_color(severity: Severity) -> str:
+    if severity > logging.WARNING:
+        return "[red]"
+    elif severity == logging.WARNING:
+        return "[yellow]"
+    elif severity <= logging.INFO:
+        return ""  # No color
+    # No color
+    return ""
+
+
+def print_and_log(logger: logging.Logger, msg: str, severity: Severity = logging.INFO):
+    """Print to the user and log. Changes print color based on the severity."""
+    print(f"{severity_to_color(severity)} {logging._levelToName[severity]}")
+    print(f"{msg}\n")
+    logger.log(severity, msg)

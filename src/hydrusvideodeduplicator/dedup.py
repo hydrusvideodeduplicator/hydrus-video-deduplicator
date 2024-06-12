@@ -152,10 +152,8 @@ class HydrusVideoDeduplicator:
             failed_hash_count = 0
             try:
                 self.hydlog.info("Starting perceptual hash processing")
-
                 with tqdm(total=len(new_video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
-                    # Change to return_as='generator_unordered' when joblib supports it! (should be soon)
-                    with Parallel(n_jobs=self.job_count, return_as='generator') as parallel:
+                    with Parallel(n_jobs=self.job_count, return_as="generator_unordered") as parallel:
                         result_generator = parallel(
                             delayed(self.fetch_and_hash_file)(video_hash) for video_hash in new_video_hashes
                         )

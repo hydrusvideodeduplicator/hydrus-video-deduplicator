@@ -73,12 +73,13 @@ def main(
         verbose = True
 
     logging.basicConfig(format=' %(asctime)s - %(name)s: %(message)s', datefmt='%H:%M:%S', level=loglevel)
-    logging.info("Starting Hydrus Video Deduplicator")
 
     # Verbose sets whether logs are shown to the user at all.
     # Logs are separate from printing in this program.
     if not verbose:
         logging.disable()
+
+    logging.info("Starting Hydrus Video Deduplicator")
 
     # Clear cache
     if clear_search_cache:

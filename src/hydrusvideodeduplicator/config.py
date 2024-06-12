@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 from pathlib import Path
@@ -57,6 +59,8 @@ DEDUP_DATABASE_DIR = Path(_DEDUP_DATABASE_DIR_ENV)
 
 _DEDUP_DATABASE_NAME_ENV = os.getenv("DEDUP_DATABASE_NAME", "videohashes")
 DEDUP_DATABASE_FILE = Path(DEDUP_DATABASE_DIR, f"{_DEDUP_DATABASE_NAME_ENV}.sqlite")
+
+FAILED_PAGE_NAME = os.getenv("FAILED_PAGE_NAME", None)
 
 REQUESTS_CA_BUNDLE = os.getenv("REQUESTS_CA_BUNDLE")
 

@@ -14,6 +14,7 @@ from .config import (
     HYDRUS_LOCAL_FILE_SERVICE_KEYS,
     HYDRUS_QUERY,
     REQUESTS_CA_BUNDLE,
+    FAILED_PAGE_NAME,
 )
 from .db import DedupeDB
 from .dedup import HydrusVideoDeduplicator
@@ -51,7 +52,12 @@ def main(
     clear_search_cache: Annotated[
         Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared")
     ] = False,
-    job_count: Annotated[Optional[int], typer.Option(help="Number of CPUs to use. Default is all but one core.")] = -2,
+    failed_page_name: Annotated[
+        Optional[str], typer.Option(help="The name of the Hydrus page to add failed files to.")
+    ] = FAILED_PAGE_NAME,
+    job_count: Annotated[
+        Optional[int], typer.Option(help="Number of CPU threads to use. Default is all but one core.")
+    ] = -2,
     verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
 ):
@@ -59,7 +65,7 @@ def main(
     assert overwrite is not None and threshold is not None and skip_hashing is not None and job_count is not None
 
     # CLI debug parameter sets log level to info or debug
-    loglevel = logging.WARNING
+    loglevel = logging.INFO
     if debug:
         loglevel = logging.DEBUG
         verbose = True
@@ -140,10 +146,7 @@ def main(
 
     # Deduplication
 
-    deduper = HydrusVideoDeduplicator(
-        client=hvdclient,
-        job_count=job_count,
-    )
+    deduper = HydrusVideoDeduplicator(client=hvdclient, job_count=job_count, failed_page_name=failed_page_name)
 
     if debug:
         deduper.hydlog.setLevel(logging.DEBUG)

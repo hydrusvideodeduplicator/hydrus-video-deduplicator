@@ -29,7 +29,7 @@ dependencies = [
     "sqlitedict",
     "requests",
     "psutil",
-    "joblib",
+    "joblib>=1.4",
     # Below is for vpdqpy
     "pillow",
     "pyav<12",

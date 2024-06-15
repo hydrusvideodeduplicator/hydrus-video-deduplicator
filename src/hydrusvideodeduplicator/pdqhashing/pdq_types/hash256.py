@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from ..types.exceptions import PDQHashFormatException
+from ..pdq_types.exceptions import PDQHashFormatException
 
-BIT_COUNTS = [bin(i).count('1') for i in range(256)]
+BIT_COUNTS = [bin(i).count("1") for i in range(256)]
 
 
 def hammingNorm16(h: int):

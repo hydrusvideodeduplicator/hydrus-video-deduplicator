@@ -1,12 +1,11 @@
 import os
-
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-
-from ..hasher.pdq_hasher import PDQHasher
-from ..types.hash256 import Hash256
 import unittest
 
-SAMPLE_MEDIA = os.path.dirname(__file__) + "/../../../../data/"
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+from ..hasher.pdq_hasher import PDQHasher
+from ..pdq_types.hash256 import Hash256
+
+SAMPLE_MEDIA = os.path.dirname(__file__) + "../../ThreatExchange/pdq/data/"
 
 
 class PdqTest(unittest.TestCase):

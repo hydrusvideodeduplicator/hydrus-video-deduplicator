@@ -2,7 +2,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # isort:skip_file
 from ..hasher.pdq_hasher import PDQHasher
-from ..types.hash256 import Hash256
+from ..pdq_types.hash256 import Hash256
 
 import argparse
 import os

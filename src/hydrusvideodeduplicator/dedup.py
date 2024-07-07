@@ -215,9 +215,14 @@ class HydrusVideoDeduplicator:
                 with tqdm(
                     dynamic_ncols=True, total=total, desc="Finding duplicates", unit="video", colour="BLUE"
                 ) as pbar:
+
+                    hashdb_simple_copy = []
+                    for i, video_hash in enumerate(hashdb):
+                        hashdb_simple_copy.append(video_hash)
+
                     # -1 is all cores, -2 is all cores but one
                     with Parallel(n_jobs=self.job_count) as parallel:
-                        for i, video1_hash in enumerate(hashdb):
+                        for i, video1_hash in enumerate(hashdb_simple_copy):
                             current_hash = video1_hash
                             video_counter += 1
                             pbar.update(1)
@@ -249,7 +254,7 @@ class HydrusVideoDeduplicator:
 
                             inum = 1
                             joined_videos = ""
-                            for video2_hash in islice(hashdb, row["farthest_search_index"], None):
+                            for video2_hash in islice(hashdb_simple_copy, row["farthest_search_index"], None):
                                 joined_videos = joined_videos + f"\t{inum}: {video2_hash}\n"
                                 inum += 1
 
@@ -265,7 +270,7 @@ class HydrusVideoDeduplicator:
                                     row["perceptual_hash"],
                                     hashdb[video2_hash]["perceptual_hash"],
                                 )
-                                for video2_hash in islice(hashdb, row["farthest_search_index"], None)
+                                for video2_hash in islice(hashdb_simple_copy, row["farthest_search_index"], None)
                             )
 
                             self.hydlog.info(

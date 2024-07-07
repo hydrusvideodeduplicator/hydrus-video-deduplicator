@@ -174,6 +174,8 @@ class HydrusVideoDeduplicator:
         hash_b = decode_phash_from_str(video2_phash)
         similarity = get_phash_similarity(hash_a, hash_b)
 
+        self.hydlog.info(f"Similar {similarity}%: \"{video1_hash}\" and \"{video2_hash}\"")
+
         if similarity >= self.threshold:
             if self._DEBUG:
                 # Getting the file names will be VERY slow because of the API call
@@ -181,6 +183,7 @@ class HydrusVideoDeduplicator:
                 # self.hydlog.info(f"Duplicates filenames: {file_names}")
                 self.hydlog.info(f"\"Similar {similarity}%: {video1_hash}\" and \"{video2_hash}\"")
 
+            self.hydlog.info(f"\"Similarity {similarity}% above threshold level, sending potential dupe request")
             new_relationship = {
                 "hash_a": str(video1_hash),
                 "hash_b": str(video2_hash),
@@ -221,14 +224,39 @@ class HydrusVideoDeduplicator:
 
                             row = hashdb[video1_hash]
 
+                            original_fsi = row.get("farthest_search_index", "not set")
+
                             # Store last furthest searched position in the database for each element
                             # This way you only have to start searching at that place instead of at i+1 if it exists
                             farthest_search_index = row.setdefault("farthest_search_index", i + 1)
 
+                            self.hydlog.info(
+                                f"*** Processing video1_hash {video1_hash}: "
+                                f"original fsi is {original_fsi}, "
+                                f"current fsi is {farthest_search_index}, "
+                                f"while total hashdb length is {total}"
+                                )
+
                             assert farthest_search_index <= total
                             if farthest_search_index == total:
                                 # This file has already been searched for dupes against all other videos in the DB
+                                self.hydlog.info(
+                                    f"*** Processing video1_hash {video1_hash}: "
+                                    f"processing skipped as it has already been searched "
+                                    f"against all other videos in the DB."
+                                    )
                                 continue
+
+                            inum = 1
+                            joined_videos = ""
+                            for video2_hash in islice(hashdb, row["farthest_search_index"], None):
+                                joined_videos = joined_videos + f"\t{inum}: {video2_hash}\n"
+                                inum += 1
+
+                            self.hydlog.info(
+                                f"*** Processing video1_hash {video1_hash}: "
+                                f"list of hashes to be searched should be:\n{joined_videos}"
+                            )
 
                             parallel(
                                 delayed(self.compare_videos)(
@@ -238,6 +266,11 @@ class HydrusVideoDeduplicator:
                                     hashdb[video2_hash]["perceptual_hash"],
                                 )
                                 for video2_hash in islice(hashdb, row["farthest_search_index"], None)
+                            )
+
+                            self.hydlog.info(
+                                f"*** Processing video1_hash {video1_hash}: "
+                                f"finished processing."
                             )
 
                             # Video has now been compared against all other videos for dupes,
@@ -252,6 +285,11 @@ class HydrusVideoDeduplicator:
                 if current_hash is not None:
                     # Set the last element farthest_search_index to the end of the
                     # table since it won't get hashed because of the islice optimization
+
+                    self.hydlog.info(
+                        f"Finished processing all videos. Final video hash is {current_hash}"
+                    )
+
                     row = hashdb[current_hash]
                     row["farthest_search_index"] = total
                     hashdb[current_hash] = row

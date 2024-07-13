@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..types.exceptions import PDQHashFormatException
+from ..pdq_types.exceptions import PDQHashFormatException
 
 
 def hammingNorm16(h: int):

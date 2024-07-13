@@ -8,8 +8,8 @@ from typing import List
 
 from PIL import Image
 
-from ..types.containers import HashAndQuality, HashesAndQuality
-from ..types.hash256 import Hash256
+from ..pdq_types.containers import HashAndQuality, HashesAndQuality
+from ..pdq_types.hash256 import Hash256
 from ..utils.matrix import MatrixUtil
 
 

@@ -15,9 +15,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqHash
+from .check_testdb import check_testdb_exists
 
 if TYPE_CHECKING:
     pass
+
+check_testdb_exists()
 
 all_phashes_dir = Path(__file__).parent / "testdb" / "video hashes"
 

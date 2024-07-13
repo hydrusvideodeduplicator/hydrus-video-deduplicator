@@ -1,15 +1,34 @@
-import os
-
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
-from ..hasher.pdq_hasher import PDQHasher
-from ..types.hash256 import Hash256
+import logging
+import subprocess
 import unittest
+from pathlib import Path
 
-SAMPLE_MEDIA = os.path.dirname(__file__) + "/../../../../data/"
+from ..hasher.pdq_hasher import PDQHasher
+from ..pdq_types.hash256 import Hash256
+
+SAMPLE_MEDIA = str(Path(__file__).parents[1] / "ThreatExchange/pdq/data") + "/"
 
 
 class PdqTest(unittest.TestCase):
+    def setUp(self):
+        if not Path(SAMPLE_MEDIA).exists():
+            logging.info("Cloning ThreatExchange repo to get test sample files.")
+            subprocess.run(
+                ["git", "clone", "https://github.com/facebook/ThreatExchange.git", "--depth=1"],
+                cwd=Path(__file__).parents[1],
+                check=True,
+            )
+
+        if not Path(SAMPLE_MEDIA).exists():
+            raise RuntimeError(
+                """
+                PDQ sample folder {SAMPLE_MEDIA} not found. You need to clone ThreatExchange in the
+                pdqhashing tests folder in order to run PDQ tests. See README.md in pdqhashing.
+                """
+            )
+
     def get_data(self):
         return [
             (

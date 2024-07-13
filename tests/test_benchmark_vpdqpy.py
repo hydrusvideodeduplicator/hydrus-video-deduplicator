@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqHash
+from .check_testdb import check_testdb_exists
 
 if TYPE_CHECKING:
     pass
@@ -66,5 +67,6 @@ def test_vpdq_similarity(benchmark):
             similarity = Vpdq.is_similar(pair[0], pair[1], threshold=75)
 
 if __name__ == "__main__":
+    check_testdb_exists()
     test_vpdq_hashing()
     test_vpdq_similarity()

@@ -85,7 +85,8 @@ dependencies = [
 ]
 
 [tool.hatch.envs.test.scripts]
-all = "python -m pytest tests/test_dedupe.py tests/test_vpdqpy.py {args}"
+all = "python -m pytest src/hydrusvideodeduplicator/pdqhashing/tests tests/test_dedupe.py tests/test_vpdqpy.py {args}"
+pdq = "python -m pytest src/hydrusvideodeduplicator/pdqhashing/tests {args}"
 
 # Format environment
 
@@ -149,6 +150,7 @@ exclude = [
     "dist",
     "node_modules",
     "venv",
+    "ThreatExchange",
 ]
 lint.per-file-ignores = {"tests/**/*" = ["PLR2004", "S101", "TID252"]}
 

@@ -11,7 +11,7 @@ import av
 from PIL import Image
 
 from ..pdqhashing.hasher.pdq_hasher import PDQHasher
-from ..pdqhashing.types.hash256 import Hash256
+from ..pdqhashing.pdq_types.hash256 import Hash256
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -130,7 +130,7 @@ class Vpdq:
     @staticmethod
     def frame_extract_pyav(video_bytes: bytes) -> Iterator[Image.Image]:
         """Extract frames from video"""
-        with av.open(io.BytesIO(video_bytes), metadata_encoding='utf-8', metadata_errors='ignore') as container:
+        with av.open(io.BytesIO(video_bytes), metadata_encoding="utf-8", metadata_errors="ignore") as container:
             # Check for video in video container
             video_streams = container.streams.video
             if video_streams is None or len(video_streams) < 1:

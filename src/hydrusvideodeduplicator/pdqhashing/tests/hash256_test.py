@@ -1,8 +1,9 @@
 # pyre-strict
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-from ..types.exceptions import PDQHashFormatException
-from ..types.hash256 import Hash256
 import unittest
+
+from ..pdq_types.exceptions import PDQHashFormatException
+from ..pdq_types.hash256 import Hash256
 
 
 class Hash256Test(unittest.TestCase):
@@ -18,7 +19,7 @@ class Hash256Test(unittest.TestCase):
 
     def test_correct_hex_format(self) -> None:
         hash = Hash256.fromHexString(self.SAMPLE_HASH)
-        self.assertNotEquals(hash, None)
+        self.assertNotEqual(hash, None)
 
     def test_clone(self) -> None:
         hash = Hash256.fromHexString(self.SAMPLE_HASH)

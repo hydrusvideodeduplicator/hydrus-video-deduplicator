@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from ..types.exceptions import PDQHashFormatException
 
-BIT_COUNTS = [bin(i).count('1') for i in range(256)]
-
 
 def hammingNorm16(h: int):
-    return BIT_COUNTS[h & 0xFF] + BIT_COUNTS[(h >> 8) & 0xFF]
+    return h.bit_count()
 
 
 class Hash256:

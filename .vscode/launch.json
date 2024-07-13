@@ -1,0 +1,17 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Module",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "hydrusvideodeduplicator",
+            // You may want to customize these args or use a dotenv.
+            // Below API key may need to be configured to your own. This is the testdb api key.
+            "args": "--api-key='3b3cf10cc13862818ea95ddecfe434bed0828fb319b1ff56413917b471b566ab'"
+        }
+    ]
+}

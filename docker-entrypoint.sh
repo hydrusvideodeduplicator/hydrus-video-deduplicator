@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-Command="python3.11 -m hydrusvideodeduplicator"
+Command="python -m hydrusvideodeduplicator"
 [[ -n "${API_KEY}" ]] && Command="${Command} --api-key='${API_KEY}'"
 [[ -n "${API_URL}" ]] && Command="${Command} --api-url='${API_URL}'"
 [[ -n "${THRESHOLD}" ]] && Command="${Command} --threshold=${THRESHOLD}"

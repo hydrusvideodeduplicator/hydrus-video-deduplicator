@@ -11,15 +11,16 @@ import hydrusvideodeduplicator.hydrus_api as hydrus_api
 from .__about__ import __version__
 from .client import HVDClient
 from .config import (
+    FAILED_PAGE_NAME,
     HYDRUS_API_KEY,
     HYDRUS_API_URL,
     HYDRUS_LOCAL_FILE_SERVICE_KEYS,
     HYDRUS_QUERY,
     REQUESTS_CA_BUNDLE,
-    FAILED_PAGE_NAME,
 )
 from .db import DedupeDB
 from .dedup import HydrusVideoDeduplicator
+from .dedup_util import print_and_log
 
 """
 Parameters:
@@ -72,7 +73,7 @@ def main(
         loglevel = logging.DEBUG
         verbose = True
 
-    logging.basicConfig(format=' %(asctime)s - %(name)s: %(message)s', datefmt='%H:%M:%S', level=loglevel)
+    logging.basicConfig(format=" %(asctime)s - %(name)s: %(message)s", datefmt="%H:%M:%S", level=loglevel)
 
     # Verbose sets whether logs are shown to the user at all.
     # Logs are separate from printing in this program.
@@ -133,15 +134,16 @@ def main(
                 "Failed to connect to Hydrus. Does your Hydrus Client API http/https setting match your --api-url?"
             )
         else:
-            error_connecting_exception_msg = "Failed to connect to Hydrus. Is your Hydrus instance running?"
+            error_connecting_exception_msg = (
+                "Failed to connect to Hydrus. Is your Hydrus instance running? Is the client API enabled?"
+            )
         error_connecting_exception = str(exc)
     else:
         error_connecting = False
 
     if error_connecting:
-        logging.fatal("FATAL ERROR HAS OCCURRED")
-        logging.fatal(str(error_connecting_exception))
-        print(f"[red] {str(error_connecting_exception_msg)} ")
+        print_and_log(logging, str(error_connecting_exception), logging.FATAL)
+        print_and_log(logging, str(error_connecting_exception_msg), logging.FATAL)
         raise typer.Exit(code=1)
 
     if debug:
@@ -160,7 +162,20 @@ def main(
         raise typer.Exit(code=1)
     HydrusVideoDeduplicator.threshold = threshold
 
-    DedupeDB.clear_trashed_files_from_db(hvdclient)
+    if DedupeDB.does_db_exist():
+        db_stats = DedupeDB.get_db_stats()
+        print_and_log(logging, f"Found existing database at {DedupeDB.get_db_file_path()}")
+        print_and_log(
+            logging, f"Database has {db_stats.num_videos} videos already hashed, filesize {db_stats.file_size} bytes."
+        )
+        DedupeDB.clear_trashed_files_from_db(hvdclient)
+    else:
+        print_and_log(logging, f"Database not found. Creating one at '{DedupeDB.get_db_file_path()}'", logging.INFO)
+        DedupeDB.create_db()
+        db_stats = DedupeDB.get_db_stats()
+
+    if overwrite:
+        print(f"[yellow] Overwriting {db_stats.num_videos} existing hashes.")
 
     deduper.deduplicate(
         overwrite=overwrite,

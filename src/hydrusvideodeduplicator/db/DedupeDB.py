@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from itertools import islice
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -19,10 +20,22 @@ if TYPE_CHECKING:
 
     from hydrusvideodeduplicator.client import HVDClient
 
-from hydrusvideodeduplicator.config import DEDUP_DATABASE_DIR, DEDUP_DATABASE_FILE
+from hydrusvideodeduplicator.config import DEDUP_DATABASE_DIR
 
 dedupedblog = logging.getLogger("hvd")
 dedupedblog.setLevel(logging.INFO)
+
+
+def does_db_exist() -> bool:
+    """
+    Check if the database exists.
+    """
+    db_path = get_db_file_path()
+    try:
+        _ = db_path.resolve(strict=True)
+        return True
+    except FileNotFoundError:
+        return False
 
 
 def database_accessible(db_file: Path | str, tablename: str, verbose: bool = False):
@@ -55,7 +68,7 @@ def clear_search_cache() -> None:
     if not is_db_accessible():
         return
 
-    with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c") as hashdb:
+    with SqliteDict(str(get_db_file_path()), tablename="videos", flag="c") as hashdb:
         for key in hashdb:
             row = hashdb[key]
             if "farthest_search_index" in row:
@@ -75,14 +88,14 @@ def update_search_cache(new_total: int | None = None) -> None:
         return
 
     BATCH_SIZE = 256
-    with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", outer_stack=False) as hashdb:
+    with SqliteDict(str(get_db_file_path()), tablename="videos", flag="c", outer_stack=False) as hashdb:
         if new_total is None:
             new_total = len(hashdb)
         for batched_items in batched_and_save_db(hashdb, BATCH_SIZE):
             for video_hash, _ in batched_items.items():
                 row = hashdb[video_hash]
-                if 'farthest_search_index' in row and row['farthest_search_index'] > new_total:
-                    row['farthest_search_index'] = new_total
+                if "farthest_search_index" in row and row["farthest_search_index"] > new_total:
+                    row["farthest_search_index"] = new_total
                     hashdb[video_hash] = row
 
 
@@ -133,22 +146,18 @@ def clear_trashed_files_from_db(client: HVDClient) -> None:
     """
     Delete trashed and deleted Hydrus files from the database.
     """
-    if not is_db_accessible():
-        return
-
     try:
-        with SqliteDict(str(DEDUP_DATABASE_FILE), tablename="videos", flag="c", outer_stack=False) as hashdb:
+        with SqliteDict(str(get_db_file_path()), tablename="videos", flag="c", outer_stack=False) as hashdb:
             # This is EXPENSIVE. sqlitedict gets len by iterating over the entire database!
             if (total := len(hashdb)) < 1:
                 return
 
             delete_count = 0
-            print(f"[blue] Database found with {total} videos already hashed.")
             try:
                 with tqdm(
                     dynamic_ncols=True,
                     total=total,
-                    desc="Searching for trashed videos",
+                    desc="Searching for trashed files to prune",
                     unit="video",
                     colour="BLUE",
                 ) as pbar:
@@ -175,14 +184,45 @@ def clear_trashed_files_from_db(client: HVDClient) -> None:
 
 def create_db_dir() -> None:
     """
-    Create database folder if it does not exist.
+    Create the database folder if it doesn't already exist.
     """
     try:
-        os.makedirs(DEDUP_DATABASE_DIR, exist_ok=False)
+        db_dir = get_db_file_path().parent
+        os.makedirs(db_dir, exist_ok=False)
         # Exception before this log if directory already exists
-        dedupedblog.info(f"Created DB dir {DEDUP_DATABASE_DIR}")
+        dedupedblog.info(f"Created DB dir {db_dir}")
     except OSError:
         pass
+
+
+@dataclass
+class DatabaseStats:
+    num_videos: int
+    file_size: int  # in bytes
+
+
+def get_db_stats() -> DatabaseStats:
+    """Get some database stats."""
+    with SqliteDict(get_db_file_path(), tablename="videos", flag="r", outer_stack=False) as videos_table:
+        return DatabaseStats(len(videos_table), os.path.getsize(get_db_file_path()))
+
+
+def create_tables():
+    """
+    Create the database with the necessary tables.
+    """
+    # videos table
+    with SqliteDict(str(get_db_file_path()), tablename="videos", flag="c", autocommit=True, outer_stack=False):
+        pass
+
+
+def create_db():
+    """
+    Create the database files.
+    """
+    if not get_db_file_path().exists():
+        create_db_dir()
+    create_tables()
 
 
 def get_db_file_path() -> Path:
@@ -191,4 +231,4 @@ def get_db_file_path() -> Path:
 
     Return the database file path.
     """
-    return DEDUP_DATABASE_FILE
+    return DEDUP_DATABASE_DIR / "videohashes.sqlite"

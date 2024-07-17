@@ -39,7 +39,7 @@ HYDRUS_API_KEY = os.getenv("HYDRUS_API_KEY")
 
 
 def in_wsl() -> bool:
-    return 'microsoft-standard' in uname().release
+    return "microsoft-standard" in uname().release
 
 
 _DEFAULT_IP = "localhost"
@@ -56,9 +56,6 @@ HYDRUS_API_URL = os.getenv("HYDRUS_API_URL", f"https://{_DEFAULT_IP}:{_DEFAULT_P
 _DEDUP_DATABASE_DIR_ENV = PlatformDirs("hydrusvideodeduplicator").user_data_dir
 _DEDUP_DATABASE_DIR_ENV = os.getenv("DEDUP_DATABASE_DIR", _DEDUP_DATABASE_DIR_ENV)
 DEDUP_DATABASE_DIR = Path(_DEDUP_DATABASE_DIR_ENV)
-
-_DEDUP_DATABASE_NAME_ENV = os.getenv("DEDUP_DATABASE_NAME", "videohashes")
-DEDUP_DATABASE_FILE = Path(DEDUP_DATABASE_DIR, f"{_DEDUP_DATABASE_NAME_ENV}.sqlite")
 
 FAILED_PAGE_NAME = os.getenv("FAILED_PAGE_NAME", None)
 

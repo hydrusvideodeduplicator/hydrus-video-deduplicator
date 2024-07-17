@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from collections import namedtuple
 from itertools import islice
 from typing import TYPE_CHECKING
@@ -13,6 +12,8 @@ from tqdm import tqdm
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    FileHash = str
 
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
@@ -83,7 +84,10 @@ class HydrusVideoDeduplicator:
             print("[yellow] Skipping perceptual hashing")
         else:
             video_hashes = list(self.client.get_video_hashes(search_tags))
-            self.add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=video_hashes)
+            if not overwrite:
+                video_hashes = self.filter_unhashed(video_hashes)
+            print(f"[blue] Found {len(video_hashes)} videos to perceptually hash.")
+            self.add_perceptual_hashes_to_db(video_hashes)
 
         self._find_potential_duplicates()
 
@@ -115,65 +119,59 @@ class HydrusVideoDeduplicator:
             PHashedVideo = namedtuple("PHashedVideo", "video_hash perceptual_hash")
             return PHashedVideo(video_hash, phash_str)
 
-    def add_perceptual_hashes_to_db(self, overwrite: bool, video_hashes: Sequence[str]) -> None:
+    def filter_unhashed(self, file_hashes: list[FileHash]) -> list[FileHash]:
+        """
+        Get only the files that have not been perceptually hashed in the db from a list of files.
+        """
+        with SqliteDict(
+            str(DedupeDB.get_db_file_path()), tablename="videos", flag="r", outer_stack=False
+        ) as videos_table:
+            return [
+                file_hash
+                for file_hash in file_hashes
+                if file_hash not in videos_table or "perceptual_hash" not in videos_table[file_hash]
+            ]
+
+    def add_perceptual_hashes_to_db(self, video_hashes: Sequence[str]) -> None:
         """
         Retrieves the video from Hydrus,
         calculates the perceptual hash,
         and then add it to the database.
         """
 
-        DedupeDB.create_db_dir()
-
         with SqliteDict(
             str(DedupeDB.get_db_file_path()), tablename="videos", flag="c", autocommit=True, outer_stack=False
         ) as hashdb:
-            dbsize = os.path.getsize(DedupeDB.get_db_file_path())
-
-            # Cache len(hashdb) because it's O(n) to get the length.
-            if (dblen := len(hashdb)) > 0:
-                self.hydlog.info(f"Database found of length {dblen}, size {dbsize} bytes")
-            else:
-                self.hydlog.info(f"Database not found. Creating one at {DedupeDB.get_db_file_path()}")
-
-            if overwrite:
-                new_video_hashes = video_hashes
-                print(f"[yellow] Overwriting {dblen} existing hashes.")
-            else:
-                # Filter existing hashes
-                new_video_hashes = [
-                    video_hash
-                    for video_hash in video_hashes
-                    if video_hash not in hashdb or "perceptual_hash" not in hashdb[video_hash]
-                ]
-
-            print(f"[blue] Found {len(new_video_hashes)} videos to process")
-
             success_hash_count = 0
             failed_hash_count = 0
             try:
                 self.hydlog.info("Starting perceptual hash processing")
-                with tqdm(total=len(new_video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar:
-                    with Parallel(n_jobs=self.job_count, return_as="generator_unordered") as parallel:
-                        result_generator = parallel(
-                            delayed(self.fetch_and_hash_file)(video_hash) for video_hash in new_video_hashes
-                        )
-                        for result in result_generator:
-                            if isinstance(result, FailedVideo):
-                                if self.page_logger:
-                                    # TODO: Is this thread-safe as is?
-                                    # Joblib throws a pickling error if trying to use lock to make it so.
-                                    self.page_logger.add_failed_video(result.video_hash)
-                                failed_hash_count += 1
-                                pbar.update(1)
-                                continue
-                            video_hash = result.video_hash
-                            perceptual_hash = result.perceptual_hash
-                            row = hashdb.get(video_hash, {})
-                            row["perceptual_hash"] = perceptual_hash
-                            hashdb[video_hash] = row
-
-                            success_hash_count += 1
+                with (
+                    tqdm(total=len(video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar,
+                    Parallel(n_jobs=self.job_count, return_as="generator_unordered") as parallel,
+                ):
+                    result_generator = parallel(
+                        delayed(self.fetch_and_hash_file)(video_hash) for video_hash in video_hashes
+                    )
+                    for result in result_generator:
+                        if isinstance(result, FailedVideo):
+                            if self.page_logger:
+                                # TODO: Is this thread-safe as is?
+                                # Joblib throws a pickling error if trying to use lock to make it so.
+                                self.page_logger.add_failed_video(result.video_hash)
+                            failed_hash_count += 1
                             pbar.update(1)
+                            continue
+                        video_hash = result.video_hash
+                        perceptual_hash = result.perceptual_hash
+
+                        # Associate the video with the perceptual hash in the db.
+                        row = hashdb.get(video_hash, {})
+                        row["perceptual_hash"] = perceptual_hash
+                        hashdb[video_hash] = row
+
+                        success_hash_count += 1
+                        pbar.update(1)
 
             except KeyboardInterrupt:
                 print("[yellow] Perceptual hash processing was interrupted!")
@@ -190,7 +188,7 @@ class HydrusVideoDeduplicator:
                             "creating a page with the name 'failed' and "
                             "running the program with '--failed-page-name=failed'\n"
                         )
-                print(f"[green] Added {success_hash_count} new videos to the database.")
+                print(f"[green] Added {success_hash_count} new videos to the perceptual hash database.")
 
     def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> None:
         """Compare videos and mark them as potential duplicates in Hydrus if they are similar."""
@@ -298,6 +296,6 @@ class HydrusVideoDeduplicator:
         post_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
         new_dedupes_count = post_dedupe_count - pre_dedupe_count
         if new_dedupes_count > 0:
-            print(f"[green] {new_dedupes_count} new potential duplicates marked for processing!")
+            print(f"[green] {new_dedupes_count} new potential duplicate pairs marked for further processing in Hydrus!")
         else:
             print("[green] No new potential duplicates found.")

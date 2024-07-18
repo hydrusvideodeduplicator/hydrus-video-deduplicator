@@ -36,11 +36,6 @@ Parameters:
 print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
 
 
-def exit_from_failure() -> NoReturn:
-    print_and_log(logging, "Exiting due to failure...")
-    raise typer.Exit(code=1)
-
-
 def main(
     api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] = None,
     api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = HYDRUS_API_URL,
@@ -80,13 +75,17 @@ def main(
         verbose = True
 
     logging.basicConfig(format=" %(asctime)s - %(name)s: %(message)s", datefmt="%H:%M:%S", level=loglevel)
+    logger = logging.getLogger("main")
+    logger.debug("Starting Hydrus Video Deduplicator.")
+
+    def exit_from_failure() -> NoReturn:
+        print_and_log(logger, "Exiting due to failure...")
+        raise typer.Exit(code=1)
 
     # Verbose sets whether logs are shown to the user at all.
     # Logs are separate from printing in this program.
     if not verbose:
         logging.disable()
-
-    logging.info("Starting Hydrus Video Deduplicator")
 
     # Clear cache
     if clear_search_cache:
@@ -98,15 +97,15 @@ def main(
 
     # Check for necessary variables
     if not api_key:
-        print_and_log(logging, "Hydrus API key is not set. Please set with '--api-key'.")
+        print_and_log(logger, "Hydrus API key is not set. Please set with '--api-key'.")
         exit_from_failure()
     # This should not happen because there's a default val in config.py
     if not api_url:
-        print_and_log(logging, "Hydrus API URL is not set. Please set with '--api-url'.")
+        print_and_log(logger, "Hydrus API URL is not set. Please set with '--api-url'.")
         exit_from_failure()
 
     # Client connection
-    print_and_log(logging, f"Connecting to Hydrus at {api_url}")
+    print_and_log(logger, f"Connecting to Hydrus at {api_url}")
     try:
         hvdclient = create_client(
             file_service_key,
@@ -116,12 +115,12 @@ def main(
         )
         api_version = hvdclient.get_api_version()
         hydrus_api_version = hvdclient.get_hydrus_api_version()
-        print_and_log(logging, f"Dedupe API version: 'v{api_version}'")
-        print_and_log(logging, f"Hydrus API version: 'v{hydrus_api_version}'")
+        print_and_log(logger, f"Dedupe API version: 'v{api_version}'")
+        print_and_log(logger, f"Hydrus API version: 'v{hydrus_api_version}'")
         hvdclient.verify_permissions()
     except (FailedHVDClientConnection, ClientAPIException) as exc:
-        print_and_log(logging, str(exc), logging.FATAL)
-        print_and_log(logging, exc.pretty_msg, logging.FATAL)
+        print_and_log(logger, str(exc), logging.FATAL)
+        print_and_log(logger, exc.pretty_msg, logging.FATAL)
         exit_from_failure()
 
     if debug:
@@ -142,14 +141,18 @@ def main(
 
     if DedupeDB.does_db_exist():
         db_stats = DedupeDB.get_db_stats()
-        print_and_log(logging, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
+        print_and_log(logger, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
         print_and_log(
-            logging,
-            f"Database has {db_stats.num_videos} videos already perceptually hashed, filesize {db_stats.file_size} bytes.",
+            logger,
+            f"Database has {db_stats.num_videos} videos already perceptually hashed.",
+        )
+        print_and_log(
+            logger,
+            f"Database filesize: {db_stats.file_size} bytes.",
         )
         DedupeDB.clear_trashed_files_from_db(hvdclient)
     else:
-        print_and_log(logging, f"Database not found. Creating one at '{DedupeDB.get_db_file_path()}'", logging.INFO)
+        print_and_log(logger, f"Database not found. Creating one at '{DedupeDB.get_db_file_path()}'", logging.INFO)
         DedupeDB.create_db()
         db_stats = DedupeDB.get_db_stats()
 

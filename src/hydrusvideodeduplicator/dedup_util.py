@@ -106,7 +106,11 @@ def severity_to_color(severity: Severity) -> str:
 
 
 def print_and_log(logger: logging.Logger, msg: str, severity: Severity = logging.INFO):
-    """Print to the user and log. Changes print color based on the severity."""
+    """
+    Print to the user and log. Changes print color based on the severity.
+
+    The default logger uses the logging module.
+    """
     print(f"{severity_to_color(severity)}")
     print(f"{msg}")
     logger.log(severity, msg)

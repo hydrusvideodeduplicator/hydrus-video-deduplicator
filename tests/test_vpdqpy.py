@@ -119,7 +119,8 @@ class TestVpdq(unittest.TestCase):
                     # This heuristic of course depends on similarity to be fully working.
                     SIMILARITY_DIFFERENCE_THRESHOLD = 1.0
                     self.log.warning(
-                        f"Video hashes not identical for file {phash_path.name}. \n {expected_hash} \n {phash_str}. Similarity: {similarity}"
+                        f"Video hashes not identical for file {phash_path.name}. \n {expected_hash} \n {phash_str}. \
+                        Similarity: {similarity}"
                     )
                     self.assertGreater(
                         SIMILARITY_DIFFERENCE_THRESHOLD,

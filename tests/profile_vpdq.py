@@ -39,14 +39,18 @@ for i, phash1 in enumerate(video_phashes):
             continue
         pairs.append((phash1, phash2))
 
+
 def profile_vpdq_similarity():
     """Profile VPDQ similarity"""
     for pair in pairs:
         Vpdq.is_similar(pair[0], pair[1], threshold=75)
 
+
 # To use this, run "python -m cProfile tests/profile_vpdq.py"
 if __name__ == '__main__':
-    import cProfile, pstats
+    import cProfile
+    import pstats
+
     profiler = cProfile.Profile()
     profiler.enable()
     profile_vpdq_similarity()

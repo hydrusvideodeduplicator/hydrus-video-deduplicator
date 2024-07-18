@@ -22,6 +22,7 @@ from .check_testdb import check_testdb_exists
 if TYPE_CHECKING:
     pass
 
+
 @pytest.mark.benchmark(group="hashing", min_time=0.1, max_time=0.5, min_rounds=1, disable_gc=False, warmup=False)
 def test_vpdq_hashing(benchmark):
     """Benchmark VPDQ hashing"""
@@ -40,6 +41,7 @@ def test_vpdq_hashing(benchmark):
             perceptual_hash = Vpdq.computeHash(vid)
             vids_hashes[vid] = perceptual_hash
             assert len(perceptual_hash) > 0
+
 
 @pytest.mark.benchmark(group="similarity", min_time=0.1, max_time=0.5, min_rounds=1, disable_gc=False, warmup=False)
 def test_vpdq_similarity(benchmark):
@@ -64,7 +66,8 @@ def test_vpdq_similarity(benchmark):
     @benchmark
     def run():
         for pair in pairs:
-            similarity = Vpdq.is_similar(pair[0], pair[1], threshold=75)
+            _ = Vpdq.is_similar(pair[0], pair[1], threshold=75)
+
 
 if __name__ == "__main__":
     check_testdb_exists()

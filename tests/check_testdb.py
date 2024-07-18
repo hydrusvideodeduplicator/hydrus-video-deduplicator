@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+
 def check_testdb_exists():
     """
     Check if the testdb submodule is pulled.

@@ -144,7 +144,8 @@ def main(
         db_stats = DedupeDB.get_db_stats()
         print_and_log(logging, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
         print_and_log(
-            logging, f"Database has {db_stats.num_videos} videos already hashed, filesize {db_stats.file_size} bytes."
+            logging,
+            f"Database has {db_stats.num_videos} videos already perceptually hashed, filesize {db_stats.file_size} bytes.",
         )
         DedupeDB.clear_trashed_files_from_db(hvdclient)
     else:

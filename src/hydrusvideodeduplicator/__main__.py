@@ -6,12 +6,15 @@ from typing import TYPE_CHECKING, Annotated, List, Optional
 if TYPE_CHECKING:
     from typing import NoReturn
 
+from pathlib import Path
+
 import typer
 from rich import print
 
 from .__about__ import __version__
 from .client import ClientAPIException, FailedHVDClientConnection, HVDClient, create_client
 from .config import (
+    DEDUP_DATABASE_DIR,
     FAILED_PAGE_NAME,
     HYDRUS_API_KEY,
     HYDRUS_API_URL,
@@ -62,6 +65,9 @@ def main(
     job_count: Annotated[
         Optional[int], typer.Option(help="Number of CPU threads to use. Default is all but one core.")
     ] = -2,
+    dedup_database_dir: Annotated[
+        Optional[Path], typer.Option(help="The directory to store the database used for dedupe.")
+    ] = DEDUP_DATABASE_DIR,
     verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
 ):
@@ -86,6 +92,8 @@ def main(
     # Logs are separate from printing in this program.
     if not verbose:
         logging.disable()
+
+    DedupeDB.set_db_dir(dedup_database_dir)
 
     # Clear cache
     if clear_search_cache:

@@ -20,10 +20,11 @@ if TYPE_CHECKING:
 
     from hydrusvideodeduplicator.client import HVDClient
 
-from hydrusvideodeduplicator.config import DEDUP_DATABASE_DIR
-
 dedupedblog = logging.getLogger("hvd")
 dedupedblog.setLevel(logging.INFO)
+
+_db_dir: Path = Path()
+_DB_FILE_NAME: str = "videohashes.sqlite"
 
 
 def does_db_exist() -> bool:
@@ -220,9 +221,20 @@ def create_db():
     """
     Create the database files.
     """
-    if not get_db_file_path().exists():
+    if not get_db_dir().exists():
         create_db_dir()
     create_tables()
+
+
+def set_db_dir(dir: Path):
+    """Set the directory for the database."""
+    global _db_dir
+    _db_dir = dir
+
+
+def get_db_dir():
+    """Get the directory of the database."""
+    return _db_dir
 
 
 def get_db_file_path() -> Path:
@@ -231,4 +243,4 @@ def get_db_file_path() -> Path:
 
     Return the database file path.
     """
-    return DEDUP_DATABASE_DIR / "videohashes.sqlite"
+    return _db_dir / _DB_FILE_NAME

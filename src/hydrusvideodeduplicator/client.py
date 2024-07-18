@@ -10,8 +10,26 @@ if TYPE_CHECKING:
     FileServiceKeys: TypeAlias = list[str]
     FileHashes: TypeAlias = Iterable[str]
 
+from urllib3.connection import NewConnectionError
+
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 import hydrusvideodeduplicator.hydrus_api.utils as hydrus_api_utils
+
+
+class ClientAPIException(Exception):
+    """Base exception for HVDClient failures."""
+
+    def __init__(self, pretty_msg: str = "", real_msg: str = ""):
+        super().__init__(real_msg)
+        self.pretty_msg = pretty_msg
+
+
+class FailedHVDClientConnection(ClientAPIException):
+    """Raise for when HVDClient fails to connect."""
+
+
+class InsufficientPermissions(ClientAPIException):
+    """Raise for when Hydrus API key permissions are insufficient."""
 
 
 class HVDClient:
@@ -63,27 +81,39 @@ class HVDClient:
         services = self.client.get_services()
 
         for file_service_key in self.file_service_keys:
-            file_service = services['services'].get(file_service_key)
+            file_service = services["services"].get(file_service_key)
             if file_service is None:
                 raise KeyError(f"Invalid file service key: '{file_service_key}'")
 
-            service_type = file_service.get('type')
+            service_type = file_service.get("type")
             if service_type not in valid_service_types:
                 raise KeyError("File service key must be a local file service")
 
-    def verify_api_connection(self) -> bool:
-        """
-        Verify client connection and permissions.
-
-        Throws hydrus_api.APIError if something is wrong.
-        """
-        self._log.info(
-            (
-                f"Client API version: v{self.client.VERSION} "
-                f"| Endpoint API version: v{self.client.get_api_version()['version']}"
+    def get_hydrus_api_version(self) -> str:
+        api_version_req = self.client.get_api_version()
+        if "version" not in api_version_req:
+            raise ClientAPIException(
+                "'version' is not in the Hydrus API version response. Something is terribly wrong."
             )
-        )
-        return hydrus_api_utils.verify_permissions(self.client, hydrus_api.utils.Permission)
+        return api_version_req["version"]
+
+    def get_api_version(self) -> int:
+        """Get the API version of the API module used to connect to Hydrus."""
+        return self.client.VERSION
+
+    def verify_permissions(self):
+        """
+        Verify API permissions. Throws InsufficientPermissions if permissions are insufficient, otherwise nothing.
+
+        Throws ClientAPIException on Hydrus API failure.
+        """
+        try:
+            permissions = hydrus_api_utils.verify_permissions(self.client, hydrus_api.utils.Permission)
+        except hydrus_api.HydrusAPIException as exc:
+            raise ClientAPIException("An error has occurred while trying to verify permissions.", str(exc))
+
+        if not permissions:
+            raise ClientAPIException("Insufficient Hydrus permissions.")
 
     def get_video_hashes(self, search_tags: Iterable[str]) -> Iterable[str]:
         """
@@ -122,3 +152,53 @@ class HVDClient:
             result[video_hash] = is_deleted
 
         return result
+
+
+def create_client(*args) -> HVDClient:
+    """
+    Try to create a client and connect to Hydrus.
+
+    Throws FailedHVDClientConnection on failure.
+
+    TODO: Try to connect with https first and then fallback to http with a strong warning (GH #58)
+    """
+    connection_failed = True
+    try:
+        hvdclient = HVDClient(*args)
+    except hydrus_api.InsufficientAccess as exc:
+        pretty_msg = "Invalid Hydrus API key."
+        real_msg = str(exc)
+    except hydrus_api.DatabaseLocked as exc:
+        pretty_msg = "Hydrus database is locked. Try again later."
+        real_msg = str(exc)
+    except hydrus_api.ServerError as exc:
+        pretty_msg = "Unknown Server Error."
+        real_msg = str(exc)
+    except hydrus_api.APIError as exc:
+        pretty_msg = "API Error"
+        real_msg = str(exc)
+    except (NewConnectionError, hydrus_api.ConnectionError, hydrus_api.HydrusAPIException) as exc:
+        # Probably SSL error
+        if "SSL" in str(exc):
+            pretty_msg = "Failed to connect to Hydrus. SSL certificate verification failed."
+        # Probably tried using http instead of https when client is https
+        elif "Connection aborted" in str(exc):
+            pretty_msg = (
+                "Failed to connect to Hydrus.\nDoes your Hydrus Client API 'http/https' setting match your API URL?"
+            )
+        elif "Connection refused" in str(exc):
+            pretty_msg = """Failed to connect to Hydrus.
+Is your Hydrus instance running?
+Is the client API enabled? (hint: services -> manage services -> client api)
+Is your port correct? (hint: default is 45869)
+            """
+        else:
+            pretty_msg = "Failed to connect to Hydrus. Unknown exception occurred."
+        real_msg = str(exc)
+    else:
+        connection_failed = False
+
+    if connection_failed:
+        raise FailedHVDClientConnection(pretty_msg, real_msg)
+
+    return hvdclient

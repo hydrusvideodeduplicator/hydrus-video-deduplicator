@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated, List, Optional
+from typing import TYPE_CHECKING, Annotated, List, Optional
+
+if TYPE_CHECKING:
+    from typing import NoReturn
 
 import typer
 from rich import print
 
-import hydrusvideodeduplicator.hydrus_api as hydrus_api
-
 from .__about__ import __version__
-from .client import HVDClient
+from .client import ClientAPIException, FailedHVDClientConnection, HVDClient, create_client
 from .config import (
     FAILED_PAGE_NAME,
     HYDRUS_API_KEY,
@@ -33,6 +34,11 @@ Parameters:
 - debug turns on logging and sets the logging level to debug
 """
 print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
+
+
+def exit_from_failure() -> NoReturn:
+    print_and_log(logging, "Exiting due to failure...")
+    raise typer.Exit(code=1)
 
 
 def main(
@@ -92,59 +98,31 @@ def main(
 
     # Check for necessary variables
     if not api_key:
-        print("API key not set. Exiting...")
-        raise typer.Exit(code=1)
-    # This should not happen because there's a default val in secret.py
+        print_and_log(logging, "Hydrus API key is not set. Please set with '--api-key'.")
+        exit_from_failure()
+    # This should not happen because there's a default val in config.py
     if not api_url:
-        print("Hydrus URL not set. Exiting...")
-        raise typer.Exit(code=1)
+        print_and_log(logging, "Hydrus API URL is not set. Please set with '--api-url'.")
+        exit_from_failure()
 
     # Client connection
-    # TODO: Try to connect with https first and then fallback to http with a strong warning
-    print(f"Connecting to {api_url}")
-    error_connecting = True
-    error_connecting_exception_msg = ""
-    error_connecting_exception = ""
+    print_and_log(logging, f"Connecting to Hydrus at {api_url}")
     try:
-        hvdclient = HVDClient(
-            file_service_keys=file_service_key,
-            api_url=api_url,
-            access_key=api_key,
-            verify_cert=verify_cert,
+        hvdclient = create_client(
+            file_service_key,
+            api_url,
+            api_key,
+            verify_cert,
         )
-    except hydrus_api.InsufficientAccess as exc:
-        error_connecting_exception_msg = "Invalid Hydrus API key."
-        error_connecting_exception = str(exc)
-    except hydrus_api.DatabaseLocked as exc:
-        error_connecting_exception_msg = "Hydrus database is locked. Try again later."
-        error_connecting_exception = str(exc)
-    except hydrus_api.ServerError as exc:
-        error_connecting_exception_msg = "Unknown Server Error."
-        error_connecting_exception = str(exc)
-    except hydrus_api.APIError as exc:
-        error_connecting_exception_msg = "API Error"
-        error_connecting_exception = str(exc)
-    except hydrus_api.ConnectionError as exc:
-        # Probably SSL error
-        if "SSL" in str(exc):
-            error_connecting_exception_msg = "Failed to connect to Hydrus. SSL certificate verification failed."
-        # Probably tried using http instead of https when client is https
-        elif "Connection aborted" in str(exc):
-            error_connecting_exception_msg = (
-                "Failed to connect to Hydrus. Does your Hydrus Client API http/https setting match your --api-url?"
-            )
-        else:
-            error_connecting_exception_msg = (
-                "Failed to connect to Hydrus. Is your Hydrus instance running? Is the client API enabled?"
-            )
-        error_connecting_exception = str(exc)
-    else:
-        error_connecting = False
-
-    if error_connecting:
-        print_and_log(logging, str(error_connecting_exception), logging.FATAL)
-        print_and_log(logging, str(error_connecting_exception_msg), logging.FATAL)
-        raise typer.Exit(code=1)
+        api_version = hvdclient.get_api_version()
+        hydrus_api_version = hvdclient.get_hydrus_api_version()
+        print_and_log(logging, f"Dedupe API version: 'v{api_version}'")
+        print_and_log(logging, f"Hydrus API version: 'v{hydrus_api_version}'")
+        hvdclient.verify_permissions()
+    except (FailedHVDClientConnection, ClientAPIException) as exc:
+        print_and_log(logging, str(exc), logging.FATAL)
+        print_and_log(logging, exc.pretty_msg, logging.FATAL)
+        exit_from_failure()
 
     if debug:
         HVDClient._log.setLevel(logging.DEBUG)
@@ -164,7 +142,7 @@ def main(
 
     if DedupeDB.does_db_exist():
         db_stats = DedupeDB.get_db_stats()
-        print_and_log(logging, f"Found existing database at {DedupeDB.get_db_file_path()}")
+        print_and_log(logging, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
         print_and_log(
             logging, f"Database has {db_stats.num_videos} videos already hashed, filesize {db_stats.file_size} bytes."
         )

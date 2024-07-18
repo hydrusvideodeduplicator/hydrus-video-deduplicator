@@ -42,13 +42,10 @@ class HydrusVideoDeduplicator:
     def __init__(
         self,
         client: HVDClient,
-        verify_connection: bool = True,
         job_count: int = -2,
         failed_page_name: str | None = None,
     ):
         self.client = client
-        if verify_connection:
-            self.client.verify_api_connection()
         self.job_count = job_count
         self.page_logger = None if failed_page_name is None else HydrusPageLogger(self.client, failed_page_name)
 

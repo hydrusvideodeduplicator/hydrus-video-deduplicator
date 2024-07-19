@@ -27,6 +27,10 @@ _db_dir: Path = Path()
 _DB_FILE_NAME: str = "videohashes.sqlite"
 
 
+class DedupeDbException(Exception):
+    """Base class for DedupeDb exceptions."""
+
+
 def does_db_exist() -> bool:
     """
     Check if the database exists.
@@ -244,3 +248,24 @@ def get_db_file_path() -> Path:
     Return the database file path.
     """
     return _db_dir / _DB_FILE_NAME
+
+
+def associate_file_with_perceptual_hash(file_hash: str, perceptual_hash: str):
+    """
+    Associate a file with a perceptual hash in the database. If the file already has a perceptual hash, it will be
+    overwritten.
+
+    Note:
+    Perceptual hashes are not unique.
+    Files can have identical perceptual hashes.
+    This would not even be that rare, e.g. a video that is all the same color.
+    """
+    if not is_db_accessible():
+        raise DedupeDbException("db is not accessible while trying to associate file with perceptual hash.")
+
+    with SqliteDict(
+        get_db_file_path(), tablename="videos", flag="c", autocommit=True, outer_stack=False
+    ) as videos_table:
+        row = videos_table[file_hash] if file_hash in videos_table else {}
+        row["perceptual_hash"] = perceptual_hash
+        videos_table[file_hash] = row

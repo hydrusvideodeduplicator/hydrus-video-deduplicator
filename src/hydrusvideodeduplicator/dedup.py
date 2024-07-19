@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections import namedtuple
+from dataclasses import dataclass
 from itertools import islice
 from typing import TYPE_CHECKING
 
@@ -29,9 +29,27 @@ from .hashing import (
 from .page_logger import HydrusPageLogger
 
 
-class FailedVideo:
-    def __init__(self, video_hash: str):
-        self.video_hash = video_hash
+@dataclass
+class PerceptuallyHashedFile:
+    """Class for perceptually hashed files."""
+
+    file_hash: FileHash
+    perceptual_hash: str
+
+
+@dataclass
+class FailedPerceptuallyHashedFile:
+    """Class for failed perceptually hashed files."""
+
+    file_hash: FileHash
+
+
+class FailedPerceptualHashException(Exception):
+    """Exception for when files are failed to be perceptually hashed."""
+
+    def __init__(self, file_hash: FileHash):
+        super().__init__()
+        self.file_hash = file_hash
 
 
 class HydrusVideoDeduplicator:
@@ -108,14 +126,30 @@ class HydrusVideoDeduplicator:
 
         self.hydlog.info("Deduplication done.")
 
-    def fetch_and_hash_file(self, video_hash: str) -> tuple | FailedVideo:
-        """Retrieves the video from Hydrus and calculates its perceptual hash"""
+    def fetch_and_hash_file_exception_safe(
+        self, file_hash: str
+    ) -> PerceptuallyHashedFile | FailedPerceptuallyHashedFile:
+        """
+        Joblib can't handle exceptions, so this is used to wrap fetch_and_hash_file and
+        convert any exceptions to the failed file class.
+        """
+        try:
+            return self.fetch_and_hash_file(file_hash)
+        except FailedPerceptualHashException as exc:
+            return FailedPerceptuallyHashedFile(exc.file_hash)
+
+    def fetch_and_hash_file(self, video_hash: str) -> PerceptuallyHashedFile | FailedPerceptualHashException:
+        """
+        Retrieves the video from Hydrus and calculates its perceptual hash.
+
+        Throws FailedPerceptualHashException with the failed video hash if there's any errors.
+        """
         try:
             video_response = self.client.client.get_file(hash_=video_hash)
         except hydrus_api.HydrusAPIException:
             print("[red] Failed to get video from Hydrus.")
             self.hydlog.error("Error getting video from Hydrus.")
-            return FailedVideo(video_hash)
+            raise FailedPerceptualHashException(video_hash)
 
         # Calculate perceptual_hash
         try:
@@ -125,14 +159,13 @@ class HydrusVideoDeduplicator:
             print("[red] Failed to calculate a perceptual hash.")
             self.hydlog.exception(exc)
             self.hydlog.error(f"Errored file hash: {video_hash}")
-            return FailedVideo(video_hash)
+            raise FailedPerceptualHashException(video_hash)
         else:
             # "just in case" error checking
             if phash_str is None or phash_str == "[]":
-                return FailedVideo(video_hash)
+                raise FailedPerceptualHashException(video_hash)
 
-            PHashedVideo = namedtuple("PHashedVideo", "video_hash perceptual_hash")
-            return PHashedVideo(video_hash, phash_str)
+            return PerceptuallyHashedFile(video_hash, phash_str)
 
     def filter_unhashed(self, file_hashes: list[FileHash]) -> list[FileHash]:
         """
@@ -153,57 +186,45 @@ class HydrusVideoDeduplicator:
         calculates the perceptual hash,
         and then add it to the database.
         """
-
-        with SqliteDict(
-            str(DedupeDB.get_db_file_path()), tablename="videos", flag="c", autocommit=True, outer_stack=False
-        ) as hashdb:
-            success_hash_count = 0
-            failed_hash_count = 0
-            try:
-                self.hydlog.info("Starting perceptual hash processing")
-                with (
-                    tqdm(total=len(video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar,
-                    Parallel(n_jobs=self.job_count, return_as="generator_unordered") as parallel,
-                ):
-                    result_generator = parallel(
-                        delayed(self.fetch_and_hash_file)(video_hash) for video_hash in video_hashes
-                    )
-                    for result in result_generator:
-                        if isinstance(result, FailedVideo):
-                            if self.page_logger:
-                                # TODO: Is this thread-safe as is?
-                                # Joblib throws a pickling error if trying to use lock to make it so.
-                                self.page_logger.add_failed_video(result.video_hash)
-                            failed_hash_count += 1
-                            pbar.update(1)
-                            continue
-                        video_hash = result.video_hash
-                        perceptual_hash = result.perceptual_hash
-
-                        # Associate the video with the perceptual hash in the db.
-                        row = hashdb.get(video_hash, {})
-                        row["perceptual_hash"] = perceptual_hash
-                        hashdb[video_hash] = row
-
-                        success_hash_count += 1
+        success_hash_count = 0
+        failed_hash_count = 0
+        try:
+            self.hydlog.info("Starting perceptual hash processing")
+            with (
+                tqdm(total=len(video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar,
+                Parallel(n_jobs=self.job_count, return_as="generator_unordered") as parallel,
+            ):
+                result_generator = parallel(
+                    delayed(self.fetch_and_hash_file_exception_safe)(video_hash) for video_hash in video_hashes
+                )
+                for result in result_generator:
+                    if isinstance(result, FailedPerceptuallyHashedFile):
+                        if self.page_logger:
+                            self.page_logger.add_failed_video(result.file_hash)
+                        failed_hash_count += 1
                         pbar.update(1)
+                        continue
+                    DedupeDB.associate_file_with_perceptual_hash(result.file_hash, result.perceptual_hash)
 
-            except KeyboardInterrupt:
-                print("[yellow] Perceptual hash processing was interrupted!")
+                    success_hash_count += 1
+                    pbar.update(1)
 
-            else:
-                print("[green] Finished perceptual hash processing.")
+        except KeyboardInterrupt:
+            print("[yellow] Perceptual hash processing was interrupted!")
 
-            finally:
-                if failed_hash_count > 0:
-                    print(f"[yellow] Perceptual hash processing had {failed_hash_count} failed files.")
-                    if self.page_logger is None:
-                        print(
-                            "\nTip: You can see what files failed directly in Hydrus by "
-                            "creating a page with the name 'failed' and "
-                            "running the program with '--failed-page-name=failed'\n"
-                        )
-                print(f"[green] Added {success_hash_count} new videos to the perceptual hash database.")
+        else:
+            print("[green] Finished perceptual hash processing.")
+
+        finally:
+            if failed_hash_count > 0:
+                print(f"[yellow] Perceptual hash processing had {failed_hash_count} failed files.")
+                if self.page_logger is None:
+                    print(
+                        "\nTip: You can see what files failed directly in Hydrus by "
+                        "creating a page with the name 'failed' and "
+                        "running the program with '--failed-page-name=failed'\n"
+                    )
+            print(f"[green] Added {success_hash_count} new videos to the perceptual hash database.")
 
     def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> None:
         """Compare videos and mark them as potential duplicates in Hydrus if they are similar."""

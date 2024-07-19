@@ -85,9 +85,9 @@ dependencies = [
 ]
 
 [tool.hatch.envs.test.scripts]
-all = "python -m pytest src/hydrusvideodeduplicator/pdqhashing/tests tests/test_dedupe.py tests/test_vpdqpy.py {args}"
-pdq = "python -m pytest src/hydrusvideodeduplicator/pdqhashing/tests {args}"
-db = "python -m pytest tests/test_db.py {args}"
+all = "python -m pytest src/hydrusvideodeduplicator/pdqhashing/tests tests/test_dedupe.py tests/test_vpdqpy.py --verbose {args}"
+pdq = "python -m pytest src/hydrusvideodeduplicator/pdqhashing/tests --verbose {args}"
+db = "python -m pytest tests/test_db.py --verbose {args}"
 
 # Format environment
 

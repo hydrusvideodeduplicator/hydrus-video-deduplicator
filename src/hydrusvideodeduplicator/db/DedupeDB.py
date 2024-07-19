@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sqlite3
 from dataclasses import dataclass
 from itertools import islice
 from pathlib import Path
@@ -10,6 +11,8 @@ from typing import TYPE_CHECKING
 from rich import print
 from sqlitedict import SqliteDict
 from tqdm import tqdm
+
+from ..__about__ import __version__
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -208,17 +211,27 @@ class DatabaseStats:
 
 def get_db_stats() -> DatabaseStats:
     """Get some database stats."""
-    with SqliteDict(get_db_file_path(), tablename="videos", flag="r", outer_stack=False) as videos_table:
-        return DatabaseStats(len(videos_table), os.path.getsize(get_db_file_path()))
+    con = sqlite3.connect(get_db_file_path())
+    (num_videos,) = con.execute("SELECT COUNT(*) FROM videos").fetchone()
+    con.close()
+    file_size = os.path.getsize(get_db_file_path())
+    return DatabaseStats(num_videos, file_size)
 
 
 def create_tables():
     """
     Create the database with the necessary tables.
     """
-    # videos table
-    with SqliteDict(str(get_db_file_path()), tablename="videos", flag="c", autocommit=True, outer_stack=False):
-        pass
+    # videos table (this is the sqlitedict schema)
+    con = sqlite3.connect(get_db_file_path())
+    con.execute("CREATE TABLE IF NOT EXISTS videos (key TEXT PRIMARY KEY, value BLOB)")
+
+    # version table
+    con.execute("CREATE TABLE IF NOT EXISTS version (version TEXT)")
+    con.execute("INSERT INTO version (version) VALUES (:version)", {"version": __version__})
+
+    con.commit()
+    con.close()
 
 
 def create_db():
@@ -241,13 +254,117 @@ def get_db_dir():
     return _db_dir
 
 
+def get_db_name() -> str:
+    """Get the db file name, e.g. videohashes.sqlite."""
+    return _DB_FILE_NAME
+
+
 def get_db_file_path() -> Path:
     """
     Get database file path.
 
     Return the database file path.
     """
-    return _db_dir / _DB_FILE_NAME
+    return get_db_dir() / get_db_name()
+
+
+class DedupeDb:
+    def __init__(self, db_dir: Path, db_name: str):
+        self.db_dir = db_dir
+        self.db_name = db_name
+
+        self.conn = None
+        self.cur = None
+
+    """
+    Main functions
+    """
+
+    def execute(self, query, *query_args) -> sqlite3.Cursor:
+        return self.cur.execute(query, *query_args)
+
+    def set_cursor(self, cur: sqlite3.Cursor):
+        self.cur = cur
+
+    def close_cursor(self):
+        if self.cur is not None:
+            self.cur.close()
+            del self.cur
+            self.cur = None
+
+    def init_connection(self):
+        db_path = self.db_dir / self.db_name
+        self.conn = sqlite3.connect(db_path)
+        cur = self.conn.cursor()
+        self.set_cursor(cur)
+
+    def commit(self):
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()
+
+    """
+    Utility
+    """
+
+    def get_version(self) -> str:
+        if self.does_table_exist("version"):
+            (version,) = self.execute("SELECT version FROM version;").fetchone()
+        else:
+            # Old versions of the database did not have a version table. We will assume it's the most recent version
+            # that had no version table.
+            version = "0.6.0"
+        return version
+
+    def set_version(self, version: str):
+        self.execute("UPDATE version SET version = :version", {"version": version})
+
+    def does_table_exist(self, table: str) -> bool:
+        # pls no injection. named placeholders don't work for tables.
+        res = self.execute(f"SELECT * FROM pragma_table_list WHERE name='{table}'")
+        return bool(res.fetchall())
+
+    """
+    Misc
+    """
+
+    def does_need_upgrade(self) -> bool:
+        db_version = SemanticVersion(self.get_version())
+        dedupe_version = SemanticVersion(__version__)
+        return db_version < dedupe_version
+
+    def upgrade_db(self):
+        """Upgrade the db."""
+
+        def print_upgrade(version: str, new_version: str):
+            print(f"Upgrading db from {version} to version {new_version}")
+
+        version = self.get_version()
+        if __version__ < version:
+            raise DedupeDbException(
+                f"""
+Database version {version} is newer than the installed hydrusvideodeduplicator version {__version__}.\
+\nPlease upgrade and try again. \
+\nSee documentation for how to upgrade: https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/blob/main/docs/faq.md#how-to-update
+                """
+            )
+
+        if not self.does_need_upgrade():
+            return
+
+        # Note: We need to keep re-running get_version so that we can progressively upgrade.
+        if SemanticVersion(version) < SemanticVersion("0.6.0"):
+            print_upgrade(version, "0.6.0")
+            self.set_version("0.6.0")
+            version = self.get_version()
+
+        if SemanticVersion(version) < SemanticVersion("0.7.0"):
+            print_upgrade(version, "0.7.0")
+            self.set_version("0.7.0")
+            version = self.get_version()
+
+        self.set_version(__version__)
 
 
 def associate_file_with_perceptual_hash(file_hash: str, perceptual_hash: str):
@@ -269,3 +386,34 @@ def associate_file_with_perceptual_hash(file_hash: str, perceptual_hash: str):
         row = videos_table[file_hash] if file_hash in videos_table else {}
         row["perceptual_hash"] = perceptual_hash
         videos_table[file_hash] = row
+
+
+class SemanticVersion:
+    """Simple semantic version class. Supports MAJOR.MINOR.PATCH, e.g. 1.2.3"""
+
+    def __init__(self, version: str):
+        self.version = version
+        try:
+            self.parts = list(map(int, version.split(".")))
+            if len(self.parts) != 3:
+                raise DedupeDbException("len != 3")
+        except Exception as exc:
+            raise DedupeDbException(f"Bad semantic version: {self.version}.\nFull exception: {exc}")
+
+    def __eq__(self, other):
+        return self.parts == other.parts
+
+    def __lt__(self, other):
+        return self.parts < other.parts
+
+    def __le__(self, other):
+        return self.parts <= other.parts
+
+    def __gt__(self, other):
+        return self.parts > other.parts
+
+    def __ge__(self, other):
+        return self.parts >= other.parts
+
+    def __repr__(self):
+        return f"SemanticVersion('{self.version}')"

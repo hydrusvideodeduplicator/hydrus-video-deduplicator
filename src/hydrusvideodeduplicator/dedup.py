@@ -19,7 +19,6 @@ import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .client import HVDClient
 from .db import DedupeDB
-from .dedup_util import print_and_log
 from .hashing import (
     compute_phash,
     decode_phash_from_str,
@@ -105,24 +104,21 @@ class HydrusVideoDeduplicator:
             print(f"[blue] Found {len(video_hashes)} eligible files to perceptually hash.")
             self.add_perceptual_hashes_to_db(video_hashes)
 
-        if not DedupeDB.is_db_accessible(verbose=True):
-            print_and_log(self.hydlog, "Database is not accessible. Could not search for duplicates.", logging.ERROR)
+        # Number of potential duplicates before adding more.
+        # This is just to print info for the user.
+        # Note: This will be inaccurate if the user searches for duplicates in the Hydrus client
+        #       while this is running.
+        pre_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
+
+        self.find_potential_duplicates()
+
+        # Statistics for user
+        post_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
+        new_dedupes_count = post_dedupe_count - pre_dedupe_count
+        if new_dedupes_count > 0:
+            print(f"[green] {new_dedupes_count} new potential duplicate pairs marked for manual processing!")
         else:
-            # Number of potential duplicates before adding more.
-            # This is just to print info for the user.
-            # Note: This will be inaccurate if the user searches for duplicates in the Hydrus client
-            #       while this is running.
-            pre_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
-
-            self.find_potential_duplicates()
-
-            # Statistics for user
-            post_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
-            new_dedupes_count = post_dedupe_count - pre_dedupe_count
-            if new_dedupes_count > 0:
-                print(f"[green] {new_dedupes_count} new potential duplicate pairs marked for manual processing!")
-            else:
-                print("[green] No new potential duplicate pairs found.")
+            print("[green] No new potential duplicate pairs found.")
 
         self.hydlog.info("Deduplication done.")
 
@@ -256,10 +252,6 @@ class HydrusVideoDeduplicator:
         self,
     ) -> None:
         """Find potential duplicates in the database and mark them in Hydrus."""
-        # We early return here because we don't want to accidently create the videos table.
-        if not DedupeDB.is_db_accessible(verbose=True):
-            return
-
         with SqliteDict(
             str(DedupeDB.get_db_file_path()), tablename="videos", flag="c", autocommit=True, outer_stack=False
         ) as videos_table:

@@ -158,6 +158,13 @@ def main(
             logger,
             f"Database filesize: {db_stats.file_size} bytes.",
         )
+        # Upgrade the database before doing anything.
+        db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
+        db.init_connection()
+        db.upgrade_db()
+        db.commit()
+        db.close()
+
         DedupeDB.clear_trashed_files_from_db(hvdclient)
     else:
         print_and_log(logger, f"Database not found. Creating one at '{DedupeDB.get_db_file_path()}'", logging.INFO)

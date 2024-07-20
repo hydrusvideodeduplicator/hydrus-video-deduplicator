@@ -200,6 +200,8 @@ class HydrusVideoDeduplicator:
                         failed_hash_count += 1
                         pbar.update(1)
                         continue
+                    DedupeDB.add_file(result.file_hash)
+                    DedupeDB.add_perceptual_hash(result.perceptual_hash)
                     DedupeDB.associate_file_with_perceptual_hash(result.file_hash, result.perceptual_hash)
 
                     success_hash_count += 1

@@ -333,9 +333,7 @@ class DedupeDb:
         self.execute(
             "CREATE TABLE IF NOT EXISTS shape_vptree ( phash_id INTEGER PRIMARY KEY, parent_id INTEGER, radius INTEGER, inner_id INTEGER, inner_population INTEGER, outer_id INTEGER, outer_population INTEGER )"  # noqa: E501
         )
-        self.execute(
-            "CREATE TABLE IF NOT EXISTS shape_maintenance_branch_regen ( phash_id INTEGER PRIMARY KEY )"
-        )  # noqa: E501
+        self.execute("CREATE TABLE IF NOT EXISTS shape_maintenance_branch_regen ( phash_id INTEGER PRIMARY KEY )")  # noqa: E501
         self.execute(
             "CREATE TABLE IF NOT EXISTS shape_search_cache ( hash_id INTEGER PRIMARY KEY, searched_distance INTEGER )"
         )
@@ -531,15 +529,60 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
         if not self.does_need_upgrade():
             return
 
-        # Note: We need to keep re-running get_version so that we can progressively upgrade.
-        if SemanticVersion(version) < SemanticVersion("0.6.0"):
-            print_upgrade(version, "0.6.0")
-            self.set_version("0.6.0")
-            version = self.get_version()
-
         if SemanticVersion(version) < SemanticVersion("0.7.0"):
             print_upgrade(version, "0.7.0")
+
+            # Create version table
+            self.execute("CREATE TABLE IF NOT EXISTS version (version TEXT)")
+            self.execute("INSERT INTO version (version) VALUES (:version)", {"version": "0.6.0"})
+
+            # Create the vptree tables
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS files ( hash_id INTEGER PRIMARY KEY, file_hash BLOB_BYTES UNIQUE )"
+            )
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS shape_perceptual_hashes ( phash_id INTEGER PRIMARY KEY, phash BLOB_BYTES UNIQUE )"  # noqa: E501
+            )
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS shape_perceptual_hash_map ( phash_id INTEGER, hash_id INTEGER, PRIMARY KEY ( phash_id, hash_id ) )"  # noqa: E501
+            )
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS shape_vptree ( phash_id INTEGER PRIMARY KEY, parent_id INTEGER, radius INTEGER, inner_id INTEGER, inner_population INTEGER, outer_id INTEGER, outer_population INTEGER )"  # noqa: E501
+            )
+            self.execute("CREATE TABLE IF NOT EXISTS shape_maintenance_branch_regen ( phash_id INTEGER PRIMARY KEY )")  # noqa: E501
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS shape_search_cache ( hash_id INTEGER PRIMARY KEY, searched_distance INTEGER )"  # noqa: E501
+            )
+
+            # Insert the files from the old videos table into the DB and the newly added vptree.
+            old_videos_data = []
+            with SqliteDict(
+                get_db_file_path(), tablename="videos", flag="c", autocommit=False, outer_stack=False
+            ) as videos_table:
+                video_hashes = [video_hash for video_hash in videos_table]
+                for video_hash in video_hashes:
+                    row = videos_table[video_hash]
+                    if "perceptual_hash" in row:
+                        old_videos_data.append((video_hash, row["perceptual_hash"]))
+                        # TODO: Should we move the farthest search index as well?
+
+            with tqdm(
+                dynamic_ncols=True,
+                total=len(old_videos_data),
+                desc="Migrating phashes to vptree...",
+                unit="file",
+                colour="BLUE",
+            ) as pbar:
+                for video_hash, perceptual_hash in old_videos_data:
+                    # TODO: If these functions change this upgrade may not work! We need to be careful about updating them. # noqa: E501
+                    #       An upgrade cutoff at some point to prevent bitrot is a good idea, which is what Hydrus does.
+                    self.add_file(video_hash)
+                    self.add_perceptual_hash(perceptual_hash)
+                    self.associate_file_with_perceptual_hash(video_hash, perceptual_hash)
+                    pbar.update(1)
+
             self.set_version("0.7.0")
+            # Note: We need to keep re-running get_version so that we can progressively upgrade.
             version = self.get_version()
 
         self.set_version(__version__)

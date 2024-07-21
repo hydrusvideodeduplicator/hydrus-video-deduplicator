@@ -301,6 +301,7 @@ class HydrusVideoDeduplicator:
                 for similar_hash_id, distance in result:
                     file_hash_b = self.db.get_file_hash(similar_hash_id)
                     if hash_id != similar_hash_id:
+                        # self.hydlog.info(f'Similar files found. "{file_hash_a}" and "{file_hash_b}"')
                         self.mark_videos_as_duplicates(file_hash_a, file_hash_b)
 
                 # TODO:

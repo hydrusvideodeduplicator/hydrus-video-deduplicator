@@ -294,7 +294,7 @@ class HydrusVideoDeduplicator:
             for hash_id in files:
                 hash_id = hash_id[0]
                 # print(f"Searching for duplicates for hash_id: '{hash_id}'")
-                result = tree.SearchFile(hash_id, max_hamming_distance=2)
+                result = tree.SearchFile(hash_id, max_hamming_distance=search_threshold)
                 # print(f"File Hash: '{file_hash}'")
                 # print(result)
                 file_hash_a = self.db.get_file_hash(hash_id)

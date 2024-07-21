@@ -106,6 +106,9 @@ class HydrusVideoDeduplicator:
             print(f"[blue] Found {len(video_hashes)} eligible files to perceptually hash.")
             self.add_perceptual_hashes_to_db(video_hashes)
 
+        # Insert the perceptual hashed files into the vptree.
+        self.process_phashed_file_queue()
+
         # Number of potential duplicates before adding more.
         # This is just to print info for the user.
         # Note: This will be inaccurate if the user searches for duplicates in the Hydrus client
@@ -173,25 +176,8 @@ class HydrusVideoDeduplicator:
         """
         Get only the files that have not been perceptually hashed in the db from a list of files.
         """
-
-        # new:
-        all_phashed_files = self.db.execute(
-            "SELECT file_hash FROM files WHERE hash_id IN (SELECT hash_id FROM shape_perceptual_hash_map)"
-        ).fetchall()
-
-        all_phashed_files = [row[0] for row in all_phashed_files]
-
+        all_phashed_files = self.db.get_phashed_files()
         return [file_hash for file_hash in file_hashes if file_hash not in all_phashed_files]
-
-        # old:
-        # with SqliteDict(
-        #    str(DedupeDB.get_db_file_path()), tablename="videos", flag="r", outer_stack=False
-        # ) as videos_table:
-        #    return [
-        #        file_hash
-        #        for file_hash in file_hashes
-        #        if file_hash not in videos_table or "perceptual_hash" not in videos_table[file_hash]
-        #    ]
 
     def add_perceptual_hashes_to_db(self, video_hashes: Sequence[str]) -> None:
         """
@@ -204,7 +190,13 @@ class HydrusVideoDeduplicator:
         self.hydlog.info("Starting perceptual hash processing")
         try:
             with (
-                tqdm(total=len(video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar,
+                tqdm(
+                    total=len(video_hashes),
+                    desc="Perceptually hashing files",
+                    dynamic_ncols=True,
+                    unit="video",
+                    colour="BLUE",
+                ) as pbar,
                 Parallel(n_jobs=self.job_count, return_as="generator_unordered") as parallel,
             ):
                 result_generator = parallel(
@@ -217,12 +209,7 @@ class HydrusVideoDeduplicator:
                         failed_hash_count += 1
                         pbar.update(1)
                         continue
-                    self.db.add_file(result.file_hash)
-                    self.db.add_perceptual_hash(result.perceptual_hash)
-                    self.db.associate_file_with_perceptual_hash(result.file_hash, result.perceptual_hash)
-                    # We don't want files to exist in the database without a perceptual hash because we don't
-                    # have proper error checking right now for this in vptree.
-                    # So we need to wait to commit until after all the above is done.
+                    self.db.add_to_phashed_files_queue(result.file_hash, result.perceptual_hash)
                     self.db.commit()
 
                     success_hash_count += 1
@@ -270,6 +257,24 @@ class HydrusVideoDeduplicator:
         }
 
         self.client.client.set_file_relationships([new_relationship])
+
+    def process_phashed_file_queue(self):
+        """
+        Process the files in the phashed files queue.
+        This inserts the queue entries into their respective tables and then inserts the file into the vptree.
+        """
+        results = self.db.execute("SELECT file_hash, phash FROM phashed_file_queue").fetchall()
+        for file_hash, perceptual_hash in tqdm(
+            results, dynamic_ncols=True, total=len(results), desc="Building vptree", unit="file", colour="BLUE"
+        ):
+            self.db.add_file(file_hash)
+            self.db.add_perceptual_hash(perceptual_hash)
+            self.db.associate_file_with_perceptual_hash(file_hash, perceptual_hash)
+            self.db.execute(
+                "DELETE FROM phashed_file_queue WHERE file_hash = :file_hash AND phash = :phash",
+                {"file_hash": file_hash, "phash": perceptual_hash},
+            )
+            self.db.commit()
 
     def find_potential_duplicates(
         self,

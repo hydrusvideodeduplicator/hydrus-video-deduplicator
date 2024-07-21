@@ -221,11 +221,8 @@ def get_db_stats_old() -> DatabaseStats:
 
 def get_db_stats(db: DedupeDb) -> DatabaseStats:
     """Get some database stats."""
-    num_videos = len(
-        db.execute(
-            "SELECT hash_id FROM files WHERE hash_id IN (SELECT hash_id FROM shape_perceptual_hash_map)"
-        ).fetchall()
-    )
+    # TODO: We don't need to get the file hashes. We just need the length.
+    num_videos = len(db.get_phashed_files())
     file_size = os.path.getsize(get_db_file_path())
     return DatabaseStats(num_videos, file_size)
 
@@ -312,6 +309,7 @@ class DedupeDb:
         # old:
 
         # videos table (this is the sqlitedict schema)
+        # TODO: Remove this table.
         self.execute("CREATE TABLE IF NOT EXISTS videos (key TEXT PRIMARY KEY, value BLOB)")
 
         # new:
@@ -339,6 +337,16 @@ class DedupeDb:
         self.execute(
             "CREATE TABLE IF NOT EXISTS shape_search_cache ( hash_id INTEGER PRIMARY KEY, searched_distance INTEGER )"
         )
+
+        # vptree insert queue. this is the list of files and their phashes that need to be inserted into the vptree.
+        # when entries are added to this queue they don't exist at all in the other tables. they don't have a hash_id
+        # or phash_id yet, unless those already exist from other files.
+        # this is just a table to store the phashes until they are properly inserted into the vptree, since inserting
+        # can take a while.
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS phashed_file_queue ( file_hash BLOB_BYTES NOT NULL UNIQUE, phash BLOB_BYTES NOT NULL, PRIMARY KEY ( file_hash, phash ) )"  # noqa: E501
+        )
+
         # TODO: We don't need this I don't think.
         # self.conn.execute(
         #     "CREATE TABLE IF NOT EXISTS pixel_hash_map ( hash_id INTEGER, pixel_hash_id INTEGER, PRIMARY KEY ( hash_id, pixel_hash_id ) )"  # noqa: E501
@@ -388,10 +396,25 @@ class DedupeDb:
         assert isinstance(result, int)
         return result
 
+    def add_to_phashed_files_queue(self, file_hash: str, perceptual_hash: str):
+        """
+        Add a file and its corresponding perceptual hash to the queue to be inserted into the vptree.
+
+        We keep the queue of files to be inserted in the vptree in a separate table to avoid any potential issues
+        with assumptions of what needs to exist when/where for vptree operations.
+
+        If the file hash is already in the queue, it will be replaced with the new perceptual hash.
+        """
+        self.execute(
+            "REPLACE INTO phashed_file_queue ( file_hash, phash ) VALUES ( :file_hash, :phash )",
+            {"file_hash": file_hash, "phash": perceptual_hash},
+        )
+
     def associate_file_with_perceptual_hash(self, file_hash: str, perceptual_hash: str):
         """
-        Associate a file with a perceptual hash in the database. If the file already has a perceptual hash, it will be
-        overwritten.
+        Associate a file with a perceptual hash in the database.
+        This will insert the file into the VpTree.
+        If the file already has a perceptual hash, it will be overwritten.
 
         Note:
         Perceptual hashes are not unique for each file.
@@ -503,6 +526,18 @@ class DedupeDb:
             (file_hash,) = result
         return file_hash
 
+    def get_phashed_files(self) -> list[str]:
+        """Get the file hashes of all files that are phashed. This includes the files in the phashed_file_queue."""
+        all_phashed_files_query = (
+            "SELECT file_hash FROM files "
+            "WHERE hash_id IN (SELECT hash_id FROM shape_perceptual_hash_map) "
+            "UNION "
+            "SELECT file_hash FROM phashed_file_queue"
+        )
+        all_phashed_files = self.execute(all_phashed_files_query)
+        all_phashed_files = [row[0] for row in all_phashed_files]
+        return all_phashed_files
+
     """
     Misc
     """
@@ -558,6 +593,10 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
                 "CREATE TABLE IF NOT EXISTS shape_search_cache ( hash_id INTEGER PRIMARY KEY, searched_distance INTEGER )"  # noqa: E501
             )
 
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS phashed_file_queue ( file_hash BLOB_BYTES NOT NULL UNIQUE, phash BLOB_BYTES NOT NULL, PRIMARY KEY ( file_hash, phash ) )"  # noqa: E501
+            )
+
             # Insert the files from the old videos table into the DB and the newly added vptree.
             old_videos_data = []
             with SqliteDict(
@@ -580,9 +619,7 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
                 for video_hash, perceptual_hash in old_videos_data:
                     # TODO: If these functions change this upgrade may not work! We need to be careful about updating them. # noqa: E501
                     #       An upgrade cutoff at some point to prevent bitrot is a good idea, which is what Hydrus does.
-                    self.add_file(video_hash)
-                    self.add_perceptual_hash(perceptual_hash)
-                    self.associate_file_with_perceptual_hash(video_hash, perceptual_hash)
+                    self.add_to_phashed_files_queue(video_hash, perceptual_hash)
                     pbar.update(1)
 
             self.set_version("0.6.9")

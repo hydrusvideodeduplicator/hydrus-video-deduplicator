@@ -13,6 +13,7 @@ from sqlitedict import SqliteDict
 from tqdm import tqdm
 
 from ..__about__ import __version__
+from .vptree import VpTreeManager
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 
     from hydrusvideodeduplicator.client import HVDClient
 
-dedupedblog = logging.getLogger("hvd")
+dedupedblog = logging.getLogger("db")
 dedupedblog.setLevel(logging.INFO)
 
 _db_dir: Path = Path()
@@ -209,8 +210,8 @@ class DatabaseStats:
     file_size: int  # in bytes
 
 
-def get_db_stats() -> DatabaseStats:
-    """Get some database stats."""
+def get_db_stats_old() -> DatabaseStats:
+    """OLD Get some database stats."""
     con = sqlite3.connect(get_db_file_path())
     (num_videos,) = con.execute("SELECT COUNT(*) FROM videos").fetchone()
     con.close()
@@ -218,20 +219,15 @@ def get_db_stats() -> DatabaseStats:
     return DatabaseStats(num_videos, file_size)
 
 
-def create_tables():
-    """
-    Create the database with the necessary tables.
-    """
-    # videos table (this is the sqlitedict schema)
-    con = sqlite3.connect(get_db_file_path())
-    con.execute("CREATE TABLE IF NOT EXISTS videos (key TEXT PRIMARY KEY, value BLOB)")
-
-    # version table
-    con.execute("CREATE TABLE IF NOT EXISTS version (version TEXT)")
-    con.execute("INSERT INTO version (version) VALUES (:version)", {"version": __version__})
-
-    con.commit()
-    con.close()
+def get_db_stats(db: DedupeDb) -> DatabaseStats:
+    """Get some database stats."""
+    num_videos = len(
+        db.execute(
+            "SELECT hash_id FROM files WHERE hash_id IN (SELECT hash_id FROM shape_perceptual_hash_map)"
+        ).fetchall()
+    )
+    file_size = os.path.getsize(get_db_file_path())
+    return DatabaseStats(num_videos, file_size)
 
 
 def create_db():
@@ -313,34 +309,37 @@ class DedupeDb:
     """
 
     def create_tables(self):
-        self.conn.execute("CREATE TABLE IF NOT EXISTS videos (key TEXT PRIMARY KEY, value BLOB)")
+        # old:
+
+        # videos table (this is the sqlitedict schema)
+        self.execute("CREATE TABLE IF NOT EXISTS videos (key TEXT PRIMARY KEY, value BLOB)")
+
+        # new:
 
         # version table
-        self.conn.execute("CREATE TABLE IF NOT EXISTS version (version TEXT)")
-        self.conn.execute("INSERT INTO version (version) VALUES (:version)", {"version": __version__})
+        self.execute("CREATE TABLE IF NOT EXISTS version (version TEXT)")
+        self.execute("INSERT INTO version (version) VALUES (:version)", {"version": __version__})
 
         # files table
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS files ( hash_id INTEGER PRIMARY KEY, file_hash BLOB_BYTES UNIQUE )"
-        )
+        self.execute("CREATE TABLE IF NOT EXISTS files ( hash_id INTEGER PRIMARY KEY, file_hash BLOB_BYTES UNIQUE )")
 
         # this is straight up copied from Hydrus
-        self.conn.execute(
+        self.execute(
             "CREATE TABLE IF NOT EXISTS shape_perceptual_hashes ( phash_id INTEGER PRIMARY KEY, phash BLOB_BYTES UNIQUE )"  # noqa: E501
         )
-        self.conn.execute(
+        self.execute(
             "CREATE TABLE IF NOT EXISTS shape_perceptual_hash_map ( phash_id INTEGER, hash_id INTEGER, PRIMARY KEY ( phash_id, hash_id ) )"  # noqa: E501
         )
-        self.conn.execute(
+        self.execute(
             "CREATE TABLE IF NOT EXISTS shape_vptree ( phash_id INTEGER PRIMARY KEY, parent_id INTEGER, radius INTEGER, inner_id INTEGER, inner_population INTEGER, outer_id INTEGER, outer_population INTEGER )"  # noqa: E501
         )
-        self.conn.execute(
+        self.execute(
             "CREATE TABLE IF NOT EXISTS shape_maintenance_branch_regen ( phash_id INTEGER PRIMARY KEY )"
         )  # noqa: E501
-        self.conn.execute(
+        self.execute(
             "CREATE TABLE IF NOT EXISTS shape_search_cache ( hash_id INTEGER PRIMARY KEY, searched_distance INTEGER )"
         )
-        # TODO
+        # TODO: We don't need this I don't think.
         # self.conn.execute(
         #     "CREATE TABLE IF NOT EXISTS pixel_hash_map ( hash_id INTEGER, pixel_hash_id INTEGER, PRIMARY KEY ( hash_id, pixel_hash_id ) )"  # noqa: E501
         # )
@@ -348,6 +347,96 @@ class DedupeDb:
     """
     Utility
     """
+
+    def clear_search_cache(self):
+        """Clear the search cache for all files."""
+        tree = VpTreeManager(self)
+        result = self.execute("SELECT hash_id FROM shape_search_cache").fetchall()
+        if result:
+            hash_ids = [hash_id[0] for hash_id in result]
+            tree.reset_search(hash_ids)
+
+    def add_file(self, file_hash: str):
+        """Add a file to the db. If it already exists, do nothing."""
+        self.execute("INSERT OR IGNORE INTO files ( file_hash ) VALUES ( :file_hash )", {"file_hash": file_hash})
+
+    def add_perceptual_hash(self, perceptual_hash: str) -> int:
+        """
+        Add a perceptual hash to the db.
+        If it already exists, do nothing.
+
+        Returns the phash_id of the perceptual hash.
+        """
+        result = self.execute(
+            "SELECT phash_id FROM shape_perceptual_hashes WHERE phash = :phash;", {"phash": perceptual_hash}
+        ).fetchone()
+
+        if result is None:
+            self.execute(
+                "INSERT INTO shape_perceptual_hashes ( phash ) VALUES ( :phash )",
+                {"phash": perceptual_hash},
+            )
+            result = self.execute(
+                "SELECT phash_id FROM shape_perceptual_hashes WHERE phash = :phash;", {"phash": perceptual_hash}
+            ).fetchone()
+            result = result[0]
+            assert isinstance(result, int)
+        else:
+            result = result[0]
+        # TODO: Double check that the return value here is actually there if the result is not None.
+        # Remove the assert below if it is.
+        assert isinstance(result, int)
+        return result
+
+    def associate_file_with_perceptual_hash(self, file_hash: str, perceptual_hash: str):
+        """
+        Associate a file with a perceptual hash in the database. If the file already has a perceptual hash, it will be
+        overwritten.
+
+        Note:
+        Perceptual hashes are not unique for each file.
+        Files can have identical perceptual hashes.
+        This is not even that rare, e.g. a video that is all the same color.
+        """
+
+        # new
+        hash_id = self.get_hash_id(file_hash)
+
+        perceptual_hash_id = self.get_phash_id(perceptual_hash)
+        assert perceptual_hash_id is not None
+
+        tree = VpTreeManager(self)
+        tree.add_leaf(perceptual_hash_id, perceptual_hash)
+
+        already_exists = self.execute(
+            "SELECT hash_id FROM shape_perceptual_hash_map WHERE hash_id = :hash_id", {"hash_id": hash_id}
+        ).fetchone()
+
+        if already_exists:
+            self.execute("DELETE FROM shape_perceptual_hash_map WHERE hash_id = :hash_id", {"hash_id": hash_id})
+
+        res = self.execute(
+            "INSERT INTO shape_perceptual_hash_map ( phash_id, hash_id ) VALUES ( :phash_id, :hash_id )",
+            {"phash_id": perceptual_hash_id, "hash_id": hash_id},
+        )
+
+        # NOTE: We must fetchone here so that the rowcount is updated.
+        res.fetchone()
+        if res.rowcount > 0:
+            self.execute(
+                "REPLACE INTO shape_search_cache ( hash_id, searched_distance ) VALUES ( :hash_id, :searched_distance );",  # noqa: E501
+                {"hash_id": hash_id, "searched_distance": None},
+            )
+
+        # old
+        # if not is_db_accessible():
+        #    raise DedupeDbException("db is not accessible while trying to associate file with perceptual hash.")
+        # with SqliteDict(
+        #    get_db_file_path(), tablename="videos", flag="c", autocommit=True, outer_stack=False
+        # ) as videos_table:
+        #    row = videos_table[file_hash] if file_hash in videos_table else {}
+        #    row["perceptual_hash"] = perceptual_hash
+        #    videos_table[file_hash] = row
 
     def get_version(self) -> str:
         if self.does_table_exist("version"):
@@ -376,6 +465,16 @@ class DedupeDb:
             (perceptual_hash_id,) = result
         return perceptual_hash_id
 
+    def get_phash_id_from_hash_id(self, hash_id: str) -> str | None:
+        """Get the phash id from the hash_id, or None if not found."""
+        result = self.execute(
+            "SELECT phash_id FROM shape_perceptual_hash_map WHERE hash_id = :hash_id", {"hash_id": hash_id}
+        ).fetchone()
+        perceptual_hash_id = None
+        if result is not None:
+            (perceptual_hash_id,) = result
+        return perceptual_hash_id
+
     def get_hash_id(self, file_hash: str) -> str | None:
         """Get the hash id from the file hash, or None if not found."""
         result = self.execute(
@@ -385,6 +484,24 @@ class DedupeDb:
         if result is not None:
             (hash_id,) = result
         return hash_id
+
+    def get_phash(self, phash_id: str) -> str | None:
+        """Get the perceptual hash from its phash_id, or None if not found."""
+        result = self.execute(
+            "SELECT phash FROM shape_perceptual_hashes WHERE phash_id = :phash_id", {"phash_id": phash_id}
+        ).fetchone()
+        phash = None
+        if result is not None:
+            (phash,) = result
+        return phash
+
+    def get_file_hash(self, hash_id: str) -> str | None:
+        """Get the file hash from its hash_id, or None if not found."""
+        result = self.execute("SELECT file_hash FROM files WHERE hash_id = :hash_id", {"hash_id": hash_id}).fetchone()
+        file_hash = None
+        if result is not None:
+            (file_hash,) = result
+        return file_hash
 
     """
     Misc
@@ -426,86 +543,6 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
             version = self.get_version()
 
         self.set_version(__version__)
-
-
-def add_perceptual_hash(perceptual_hash: str) -> str:
-    """Add a perceptual hash to the db. If it already exists, do nothing."""
-    db = DedupeDb(get_db_dir(), get_db_name())
-    db.init_connection()
-    result = db.execute(
-        "SELECT phash_id FROM shape_perceptual_hashes WHERE phash = :phash;", {"phash": perceptual_hash}
-    ).fetchone()
-
-    if result is None:
-        db.execute(
-            "INSERT INTO shape_perceptual_hashes ( phash ) VALUES ( :phash )",
-            {"phash": perceptual_hash},
-        )
-        result = db.execute(
-            "SELECT phash_id FROM shape_perceptual_hashes WHERE phash = :phash;", {"phash": perceptual_hash}
-        ).fetchone()
-        db.commit()
-    db.close()
-    return result
-
-
-def add_file(file_hash: str):
-    """Add a file to the db. If it already exists, do nothing."""
-    db = DedupeDb(get_db_dir(), get_db_name())
-    db.init_connection()
-    db.execute("INSERT OR IGNORE INTO files ( file_hash ) VALUES ( :file_hash )", {"file_hash": file_hash})
-    db.commit()
-    db.close()
-
-
-def associate_file_with_perceptual_hash(file_hash: str, perceptual_hash: str):
-    """
-    Associate a file with a perceptual hash in the database. If the file already has a perceptual hash, it will be
-    overwritten.
-
-    Note:
-    Perceptual hashes are not unique for each file.
-    Files can have identical perceptual hashes.
-    This is not even that rare, e.g. a video that is all the same color.
-    """
-    if not is_db_accessible():
-        raise DedupeDbException("db is not accessible while trying to associate file with perceptual hash.")
-
-    # old
-    with SqliteDict(
-        get_db_file_path(), tablename="videos", flag="c", autocommit=True, outer_stack=False
-    ) as videos_table:
-        row = videos_table[file_hash] if file_hash in videos_table else {}
-        row["perceptual_hash"] = perceptual_hash
-        videos_table[file_hash] = row
-
-    # new
-    db = DedupeDb(get_db_dir(), get_db_name())
-    db.init_connection()
-
-    hash_id = db.get_hash_id(file_hash)
-    perceptual_hash_id = db.get_phash_id(perceptual_hash)
-
-    already_exists = db.execute(
-        "SELECT hash_id FROM shape_perceptual_hash_map WHERE hash_id = :hash_id", {"hash_id": hash_id}
-    ).fetchone()
-
-    if already_exists:
-        db.execute("DELETE FROM shape_perceptual_hash_map WHERE hash_id = :hash_id", {"hash_id": hash_id})
-
-    db.execute(
-        "INSERT INTO shape_perceptual_hash_map ( phash_id, hash_id ) VALUES ( :phash_id, :hash_id )",
-        {"phash_id": perceptual_hash_id, "hash_id": hash_id},
-    )
-
-    # TODO
-    # if self._GetRowCount() > 0:
-    #    self._Execute(
-    #        "REPLACE INTO shape_search_cache ( hash_id, searched_distance ) VALUES ( ?, ? );", (hash_id, None)
-    #    )
-
-    db.commit()
-    db.close()
 
 
 class SemanticVersion:

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .client import HVDClient
-from .db import DedupeDB
+from .db import DedupeDB, vptree
 from .hashing import (
     compute_phash,
     decode_phash_from_str,
@@ -59,10 +59,12 @@ class HydrusVideoDeduplicator:
 
     def __init__(
         self,
+        db: DedupeDB.DedupeDb,
         client: HVDClient,
         job_count: int = -2,
         failed_page_name: str | None = None,
     ):
+        self.db = db
         self.client = client
         self.job_count = job_count
         self.page_logger = None if failed_page_name is None else HydrusPageLogger(self.client, failed_page_name)
@@ -110,6 +112,10 @@ class HydrusVideoDeduplicator:
         #       while this is running.
         pre_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
 
+        # old:
+        # self.find_potential_duplicates_old()
+
+        # new:
         self.find_potential_duplicates()
 
         # Statistics for user
@@ -167,14 +173,25 @@ class HydrusVideoDeduplicator:
         """
         Get only the files that have not been perceptually hashed in the db from a list of files.
         """
-        with SqliteDict(
-            str(DedupeDB.get_db_file_path()), tablename="videos", flag="r", outer_stack=False
-        ) as videos_table:
-            return [
-                file_hash
-                for file_hash in file_hashes
-                if file_hash not in videos_table or "perceptual_hash" not in videos_table[file_hash]
-            ]
+
+        # new:
+        all_phashed_files = self.db.execute(
+            "SELECT file_hash FROM files WHERE hash_id IN (SELECT hash_id FROM shape_perceptual_hash_map)"
+        ).fetchall()
+
+        all_phashed_files = [row[0] for row in all_phashed_files]
+
+        return [file_hash for file_hash in file_hashes if file_hash not in all_phashed_files]
+
+        # old:
+        # with SqliteDict(
+        #    str(DedupeDB.get_db_file_path()), tablename="videos", flag="r", outer_stack=False
+        # ) as videos_table:
+        #    return [
+        #        file_hash
+        #        for file_hash in file_hashes
+        #        if file_hash not in videos_table or "perceptual_hash" not in videos_table[file_hash]
+        #    ]
 
     def add_perceptual_hashes_to_db(self, video_hashes: Sequence[str]) -> None:
         """
@@ -184,8 +201,8 @@ class HydrusVideoDeduplicator:
         """
         success_hash_count = 0
         failed_hash_count = 0
+        self.hydlog.info("Starting perceptual hash processing")
         try:
-            self.hydlog.info("Starting perceptual hash processing")
             with (
                 tqdm(total=len(video_hashes), dynamic_ncols=True, unit="video", colour="BLUE") as pbar,
                 Parallel(n_jobs=self.job_count, return_as="generator_unordered") as parallel,
@@ -200,9 +217,13 @@ class HydrusVideoDeduplicator:
                         failed_hash_count += 1
                         pbar.update(1)
                         continue
-                    DedupeDB.add_file(result.file_hash)
-                    DedupeDB.add_perceptual_hash(result.perceptual_hash)
-                    DedupeDB.associate_file_with_perceptual_hash(result.file_hash, result.perceptual_hash)
+                    self.db.add_file(result.file_hash)
+                    self.db.add_perceptual_hash(result.perceptual_hash)
+                    self.db.associate_file_with_perceptual_hash(result.file_hash, result.perceptual_hash)
+                    # We don't want files to exist in the database without a perceptual hash because we don't
+                    # have proper error checking right now for this in vptree.
+                    # So we need to wait to commit until after all the above is done.
+                    self.db.commit()
 
                     success_hash_count += 1
                     pbar.update(1)
@@ -254,6 +275,50 @@ class HydrusVideoDeduplicator:
         self,
     ) -> None:
         """Find potential duplicates in the database and mark them in Hydrus."""
+        # TODO: Should we turn the inside of this function into a generator? It might make testing super easy.
+        tree = vptree.VpTreeManager(self.db)
+        search_threshold = vptree.fix_vpdq_similarity((self.threshold))
+        assert search_threshold > 0 and isinstance(search_threshold, int)
+
+        if tree.MaintenanceDue(search_threshold):
+            tree.maintain_tree()
+
+        files = self.db.execute(
+            "SELECT hash_id FROM shape_search_cache WHERE searched_distance is NULL or searched_distance < :threshold",
+            {"threshold": search_threshold},
+        ).fetchall()
+
+        with tqdm(
+            dynamic_ncols=True, total=len(files), desc="Finding potential duplicates", unit="video", colour="BLUE"
+        ) as pbar:
+            for hash_id in files:
+                hash_id = hash_id[0]
+                # print(f"Searching for duplicates for hash_id: '{hash_id}'")
+                result = tree.SearchFile(hash_id, max_hamming_distance=2)
+                # print(f"File Hash: '{file_hash}'")
+                # print(result)
+                file_hash_a = self.db.get_file_hash(hash_id)
+                for similar_hash_id, distance in result:
+                    file_hash_b = self.db.get_file_hash(similar_hash_id)
+                    if hash_id != similar_hash_id:
+                        self.mark_videos_as_duplicates(file_hash_a, file_hash_b)
+
+                # TODO:
+                # Do we need to add the below line here? See _PerceptualHashesSearchForPotentialDuplicates in Hydrus.
+                # group_of_hash_ids = self._STL( self._Execute( 'SELECT hash_id FROM shape_search_cache WHERE searched_distance IS NULL or searched_distance < ?;', ( search_distance, ) ).fetchmany( 10 ) )   # noqa: E501
+                # Update the search cache
+                self.db.execute(
+                    "UPDATE shape_search_cache SET searched_distance = ? WHERE hash_id = ?;",
+                    (search_threshold, hash_id),
+                )
+
+                self.db.commit()
+                pbar.update(1)
+
+    def find_potential_duplicates_old(
+        self,
+    ) -> None:
+        """Old brute-force search. Find potential duplicates in the database and mark them in Hydrus."""
         with SqliteDict(
             str(DedupeDB.get_db_file_path()), tablename="videos", flag="c", autocommit=True, outer_stack=False
         ) as videos_table:

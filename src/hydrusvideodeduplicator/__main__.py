@@ -95,10 +95,6 @@ def main(
 
     DedupeDB.set_db_dir(dedup_database_dir)
 
-    # Clear cache
-    if clear_search_cache:
-        DedupeDB.clear_search_cache()
-
     # CLI overwrites env vars with no default value
     if not api_key:
         api_key = HYDRUS_API_KEY
@@ -136,7 +132,39 @@ def main(
 
     # Deduplication
 
-    deduper = HydrusVideoDeduplicator(client=hvdclient, job_count=job_count, failed_page_name=failed_page_name)
+    if DedupeDB.does_db_exist():
+        print_and_log(logger, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
+        db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
+        db.init_connection()
+        # Upgrade the database before doing anything.
+        db.upgrade_db()
+        db_stats = DedupeDB.get_db_stats(db)
+
+        print_and_log(
+            logger,
+            f"Database has {db_stats.num_videos} videos already perceptually hashed.",
+        )
+        print_and_log(
+            logger,
+            f"Database filesize: {db_stats.file_size} bytes.",
+        )
+        db.commit()
+
+        if clear_search_cache:
+            db.clear_search_cache()
+            print("[green] Cleared the search cache.")
+
+        # DedupeDB.clear_trashed_files_from_db(hvdclient)
+    else:
+        print_and_log(logger, f"Database not found. Creating one at '{DedupeDB.get_db_file_path()}'", logging.INFO)
+        if not DedupeDB.get_db_dir().exists():
+            DedupeDB.create_db_dir()
+        db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
+        db.init_connection()
+        db.create_tables()
+        db_stats = DedupeDB.get_db_stats(db)
+
+    deduper = HydrusVideoDeduplicator(db, client=hvdclient, job_count=job_count, failed_page_name=failed_page_name)
 
     if debug:
         deduper.hydlog.setLevel(logging.DEBUG)
@@ -146,30 +174,6 @@ def main(
         print("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
         raise typer.Exit(code=1)
     HydrusVideoDeduplicator.threshold = threshold
-
-    if DedupeDB.does_db_exist():
-        db_stats = DedupeDB.get_db_stats()
-        print_and_log(logger, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
-        print_and_log(
-            logger,
-            f"Database has {db_stats.num_videos} videos already perceptually hashed.",
-        )
-        print_and_log(
-            logger,
-            f"Database filesize: {db_stats.file_size} bytes.",
-        )
-        # Upgrade the database before doing anything.
-        db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
-        db.init_connection()
-        db.upgrade_db()
-        db.commit()
-        db.close()
-
-        DedupeDB.clear_trashed_files_from_db(hvdclient)
-    else:
-        print_and_log(logger, f"Database not found. Creating one at '{DedupeDB.get_db_file_path()}'", logging.INFO)
-        DedupeDB.create_db()
-        db_stats = DedupeDB.get_db_stats()
 
     if overwrite:
         print(f"[yellow] Overwriting {db_stats.num_videos} existing hashes.")

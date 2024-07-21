@@ -73,6 +73,10 @@ def main(
 ):
     # Fix mypy errors from optional parameters
     assert overwrite is not None and threshold is not None and skip_hashing is not None and job_count is not None
+    if job_count != 1:
+        print(f"[yellow] Job count was {job_count} but was overriden to '1' for development right now.")
+        print("Don't worry. Multithreaded hashing will be added back soon before the next release.")
+        job_count = 1
 
     # CLI debug parameter sets log level to info or debug
     loglevel = logging.INFO
@@ -162,6 +166,7 @@ def main(
         db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
         db.init_connection()
         db.create_tables()
+        db.commit()
         db_stats = DedupeDB.get_db_stats(db)
 
     deduper = HydrusVideoDeduplicator(db, client=hvdclient, job_count=job_count, failed_page_name=failed_page_name)

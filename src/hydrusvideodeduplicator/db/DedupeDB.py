@@ -531,8 +531,8 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
         if not self.does_need_upgrade():
             return
 
-        if SemanticVersion(version) < SemanticVersion("0.7.0"):
-            print_upgrade(version, "0.7.0")
+        if SemanticVersion(version) < SemanticVersion("0.6.9"):
+            print_upgrade(version, "0.6.9")
 
             # Create version table
             self.execute("CREATE TABLE IF NOT EXISTS version (version TEXT)")
@@ -585,7 +585,7 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
                     self.associate_file_with_perceptual_hash(video_hash, perceptual_hash)
                     pbar.update(1)
 
-            self.set_version("0.7.0")
+            self.set_version("0.6.9")
             # Note: We need to keep re-running get_version so that we can progressively upgrade.
             version = self.get_version()
 

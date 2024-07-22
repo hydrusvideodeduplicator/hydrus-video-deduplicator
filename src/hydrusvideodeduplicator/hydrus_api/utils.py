@@ -84,7 +84,7 @@ def parse_hydrus_metadata(text: str) -> dict[T.Optional[str], set[str]]:
 
 
 def parse_hydrus_metadata_file(
-    path_or_file: T.Union[str, os.PathLike, TextFileLike]
+    path_or_file: T.Union[str, os.PathLike, TextFileLike],
 ) -> dict[T.Optional[str], set[str]]:
     if isinstance(path_or_file, (str, os.PathLike)):
         with open(path_or_file, encoding=HYDRUS_METADATA_ENCODING) as file:

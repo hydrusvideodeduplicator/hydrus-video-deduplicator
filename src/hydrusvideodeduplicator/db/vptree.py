@@ -135,6 +135,7 @@ class VpTreeManager:
         self._perceptual_hash_id_to_vp_tree_node_cache = {}
         self._non_vp_treed_perceptual_hash_ids = set()
         self._root_node_perceptual_hash_id = None
+        self._reported_on_a_broken_branch = False
 
     def add_leaf(self, perceptual_hash_id, perceptual_hash):
         result = self.db.execute("SELECT phash_id FROM shape_vptree WHERE parent_id IS NULL;").fetchone()
@@ -161,11 +162,19 @@ class VpTreeManager:
 
                 if result is None:
                     if not self._reported_on_a_broken_branch:
+                        # TODO: Update this message.
+                        # TODO: Add CLI option to regenerate the vptree.
+                        # Note: I hit this path once somehow due to hitting some exception and the program crashing, but
+                        # it fixed itself on the next run. So maybe we should just log this and move on.
                         message = "Hey, while trying to import a file, hydrus discovered a hole in the similar files search tree. Please run _database->regenerate->similar files search tree_ when it is convenient!"  # noqa: E501
                         message += "\n" * 2
                         message += "You will not see this message again this boot."
 
+                        print(message)
                         log.error(message)
+                        log.error(f"perceptual_hash: {perceptual_hash}\n")
+                        log.error(f"phash_id: {perceptual_hash_id}\n")
+                        log.error(f"\nnext_ancestor_id: {next_ancestor_id}\nancestor phash id: {ancestor_id}")
 
                         self._reported_on_a_broken_branch = True
 
@@ -273,7 +282,6 @@ class VpTreeManager:
 
             self.db.execute("DELETE FROM shape_vptree;")
 
-            # TODO: make these in ctor
             self._perceptual_hash_id_to_vp_tree_node_cache = {}
             self._non_vp_treed_perceptual_hash_ids = set()
             self._root_node_perceptual_hash_id = None

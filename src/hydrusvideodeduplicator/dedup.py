@@ -3,12 +3,10 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from itertools import islice
 from typing import TYPE_CHECKING
 
 from joblib import Parallel, delayed
 from rich import print
-from sqlitedict import SqliteDict
 from tqdm import tqdm
 
 if TYPE_CHECKING:
@@ -22,9 +20,7 @@ from .client import HVDClient
 from .db import DedupeDB, vptree
 from .hashing import (
     compute_phash,
-    decode_phash_from_str,
     encode_phash_to_str,
-    get_phash_similarity,
 )
 from .page_logger import HydrusPageLogger
 
@@ -282,21 +278,6 @@ class HydrusVideoDeduplicator:
                     )
             print(f"[green] Added {success_hash_count} new perceptual hashes to the database.")
 
-    def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> None:
-        """Compare videos and mark them as potential duplicates in Hydrus if they are similar."""
-        hash_a = decode_phash_from_str(video1_phash)
-        hash_b = decode_phash_from_str(video2_phash)
-        similarity = get_phash_similarity(hash_a, hash_b)
-
-        if similarity >= self.threshold:
-            if self._DEBUG:
-                # Getting the file names will be VERY slow because of the API call
-                # file_names = get_file_names_hydrus(self.client.client, [video1_hash, video2_hash])
-                # self.hydlog.info(f"Duplicates filenames: {file_names}")
-                self.hydlog.info(f'"Similar {similarity}%: {video1_hash}" and "{video2_hash}"')
-
-            self.mark_videos_as_duplicates(video1_hash, video2_hash)
-
     def mark_videos_as_duplicates(self, video1_hash: str, video2_hash: str):
         """Mark a pair of videos as duplicates in Hydrus."""
         new_relationship = {
@@ -373,70 +354,3 @@ class HydrusVideoDeduplicator:
 
                 self.db.commit()
                 pbar.update(1)
-
-    def find_potential_duplicates_old(
-        self,
-    ) -> None:
-        """Old brute-force search. Find potential duplicates in the database and mark them in Hydrus."""
-        with SqliteDict(
-            str(DedupeDB.get_db_file_path()), tablename="videos", flag="c", autocommit=True, outer_stack=False
-        ) as videos_table:
-            current_hash = None
-            try:
-                # Make a copy of the video hashes here so we can preserve their order because SqliteDict row order
-                # changes during writes for the farthest search index. This is a bandaid solution.
-                # This assumes SqliteDict row order is preserved when opened and closed, even if it's not preserved
-                # while modifying elements.
-                video_hashes = [video_hash for video_hash in videos_table]
-                total = len(video_hashes)
-
-                with tqdm(
-                    dynamic_ncols=True, total=total, desc="Finding potential duplicates", unit="video", colour="BLUE"
-                ) as pbar:
-                    # -1 is all cores, -2 is all cores but one
-                    with Parallel(n_jobs=self.job_count) as parallel:
-                        for i, video1_hash in enumerate(video_hashes):
-                            pbar.update(1)
-                            current_hash = video1_hash
-
-                            row = videos_table[video1_hash]
-
-                            # We only care about combinations of pairs, not permutations,
-                            # so start at the next unique comparison.
-                            start_index = i + 1
-
-                            # Start at the last furthest searched position in the database for each element.
-                            # This way you only have to start searching at that place instead of at i+1, if it exists
-                            if "farthest_search_index" in row:
-                                start_index = row["farthest_search_index"]
-
-                            assert start_index <= total
-                            if start_index == total:
-                                # This file has already been searched for dupes against all other videos in the DB
-                                continue
-
-                            parallel(
-                                delayed(self.compare_videos)(
-                                    video1_hash,
-                                    video2_hash,
-                                    row["perceptual_hash"],
-                                    videos_table[video2_hash]["perceptual_hash"],
-                                )
-                                for video2_hash in islice(video_hashes, start_index, None)
-                            )
-
-                            # Video has now been compared against all other videos for dupes,
-                            # so update farthest_search_index to the current length of the table
-                            row["farthest_search_index"] = total
-                            videos_table[video1_hash] = row
-
-            except KeyboardInterrupt:
-                print("[yellow] Duplicate search was interrupted!")
-            else:
-                # current_hash can be None if Hydrus DB has no files...
-                if current_hash is not None:
-                    # Set the last element farthest_search_index to the end of the
-                    # table since it won't get hashed because of the islice optimization
-                    row = videos_table[current_hash]
-                    row["farthest_search_index"] = total
-                    videos_table[current_hash] = row

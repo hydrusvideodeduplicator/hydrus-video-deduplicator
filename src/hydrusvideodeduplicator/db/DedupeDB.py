@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rich import print
-from sqlitedict import SqliteDict
 
 from ..__about__ import __version__
 from .vptree import VpTreeManager
@@ -437,21 +436,25 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
                 "CREATE TABLE IF NOT EXISTS phashed_file_queue ( file_hash BLOB_BYTES NOT NULL UNIQUE, phash BLOB_BYTES NOT NULL, PRIMARY KEY ( file_hash, phash ) )"  # noqa: E501
             )
 
-            # Insert the files from the old videos table into the hash queue.
+            # Insert the files from the SqliteDict videos table into the hash queue.
             old_videos_data = []
             print(
                 "Migrating perceptually hashed videos from the old table.\n"
-                "This may take a few minutes, depending your db length."
+                "This may take a bit, depending your db length."
             )
-            with SqliteDict(
-                get_db_file_path(), tablename="videos", flag="c", autocommit=False, outer_stack=False
-            ) as videos_table:
-                video_hashes = [video_hash for video_hash in videos_table]
-                for video_hash in video_hashes:
-                    row = videos_table[video_hash]
-                    if "perceptual_hash" in row:
-                        old_videos_data.append((video_hash, row["perceptual_hash"]))
-                        # The farthest search index will not be moved.
+
+            from pickle import loads
+
+            for key, value in self.execute("SELECT key, value FROM videos"):
+                # I don't see why value could be None, but if it happens for whatever reason
+                # we just want to continue.
+                if value is None:
+                    continue
+                row = loads(bytes(value))  # this is decode function in SqliteDict
+                if "perceptual_hash" in row:
+                    video_hash = key
+                    old_videos_data.append((video_hash, row["perceptual_hash"]))
+                    # The farthest search index will not be moved.
 
             for video_hash, perceptual_hash in old_videos_data:
                 # TODO: If these functions change this upgrade may not work! We need to be careful about updating them. # noqa: E501

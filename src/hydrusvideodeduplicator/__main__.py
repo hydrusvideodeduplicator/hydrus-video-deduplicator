@@ -159,13 +159,13 @@ def main(
             logger,
             f"Database filesize: {db_stats.file_size} bytes.",
         )
-        db.commit()
 
         if clear_search_cache:
-            db.clear_search_cache()
+            db.execute("BEGIN TRANSACTION")
+            with db.conn:
+                db.clear_search_cache()
             print("[green] Cleared the search cache.")
 
-        # DedupeDB.clear_trashed_files_from_db(hvdclient)
     else:
         print_and_log(logger, f"Database not found. Creating one at '{DedupeDB.get_db_file_path()}'", logging.INFO)
         if not DedupeDB.get_db_dir().exists():

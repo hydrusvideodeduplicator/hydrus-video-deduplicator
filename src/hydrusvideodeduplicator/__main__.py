@@ -146,7 +146,9 @@ def main(
         db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
         db.init_connection()
         # Upgrade the database before doing anything.
-        db.upgrade_db()
+        db.execute("BEGIN TRANSACTION")
+        with db.conn:
+            db.upgrade_db()
         db_stats = DedupeDB.get_db_stats(db)
 
         print_and_log(

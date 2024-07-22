@@ -165,7 +165,9 @@ def main(
         db.commit()
         db_stats = DedupeDB.get_db_stats(db)
 
-    deduper = HydrusVideoDeduplicator(db, client=hvdclient, job_count=job_count, failed_page_name=failed_page_name)
+    deduper = HydrusVideoDeduplicator(
+        db, client=hvdclient, job_count=job_count, failed_page_name=failed_page_name, custom_query=query
+    )
 
     if debug:
         deduper.hydlog.setLevel(logging.DEBUG)
@@ -181,7 +183,6 @@ def main(
 
     deduper.deduplicate(
         overwrite=overwrite,
-        custom_query=query,
         skip_hashing=skip_hashing,
     )
 

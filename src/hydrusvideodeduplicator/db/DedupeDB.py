@@ -566,6 +566,7 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
         if not self.does_need_upgrade():
             return
 
+        # TODO: Change 0.6.9 back to 0.7.0 before release.
         if SemanticVersion(version) < SemanticVersion("0.6.9"):
             print_upgrade(version, "0.6.9")
 
@@ -597,8 +598,12 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
                 "CREATE TABLE IF NOT EXISTS phashed_file_queue ( file_hash BLOB_BYTES NOT NULL UNIQUE, phash BLOB_BYTES NOT NULL, PRIMARY KEY ( file_hash, phash ) )"  # noqa: E501
             )
 
-            # Insert the files from the old videos table into the DB and the newly added vptree.
+            # Insert the files from the old videos table into the hash queue.
             old_videos_data = []
+            print(
+                "Migrating perceptually hashed videos from the old table.\n"
+                "This may take a few minutes, depending your db length."
+            )
             with SqliteDict(
                 get_db_file_path(), tablename="videos", flag="c", autocommit=False, outer_stack=False
             ) as videos_table:
@@ -607,21 +612,14 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
                     row = videos_table[video_hash]
                     if "perceptual_hash" in row:
                         old_videos_data.append((video_hash, row["perceptual_hash"]))
-                        # TODO: Should we move the farthest search index as well?
+                        # The farthest search index will not be moved.
 
-            with tqdm(
-                dynamic_ncols=True,
-                total=len(old_videos_data),
-                desc="Migrating phashes to vptree...",
-                unit="file",
-                colour="BLUE",
-            ) as pbar:
-                for video_hash, perceptual_hash in old_videos_data:
-                    # TODO: If these functions change this upgrade may not work! We need to be careful about updating them. # noqa: E501
-                    #       An upgrade cutoff at some point to prevent bitrot is a good idea, which is what Hydrus does.
-                    self.add_to_phashed_files_queue(video_hash, perceptual_hash)
-                    pbar.update(1)
+            for video_hash, perceptual_hash in old_videos_data:
+                # TODO: If these functions change this upgrade may not work! We need to be careful about updating them. # noqa: E501
+                #       An upgrade cutoff at some point to prevent bitrot is a good idea, which is what Hydrus does.
+                self.add_to_phashed_files_queue(video_hash, perceptual_hash)
 
+            # TODO: Change 0.6.9 back to 0.7.0 before release.
             self.set_version("0.6.9")
             # Note: We need to keep re-running get_version so that we can progressively upgrade.
             version = self.get_version()

@@ -127,26 +127,15 @@ class HydrusVideoDeduplicator:
         client: HVDClient,
         job_count: int = -2,
         failed_page_name: str | None = None,
+        custom_query: Sequence[str] | None = None,
     ):
         self.db = db
         self.client = client
         self.job_count = job_count
         self.page_logger = None if failed_page_name is None else HydrusPageLogger(self.client, failed_page_name)
+        self.search_tags = self.get_search_tags(custom_query)
 
-    def deduplicate(
-        self,
-        overwrite: bool = False,
-        custom_query: Sequence[str] | None = None,
-        skip_hashing: bool = False,
-    ) -> None:
-        """
-        Run all deduplicate functions:
-        1. Retrieve video hashes
-        2. Calculate perceptual hashes
-        3. Find potential duplicates
-        """
-
-        # Add perceptual hashes to video files
+    def get_search_tags(self, custom_query: Sequence[str] | None) -> list[str]:
         # system:filetype tags are really inconsistent
         search_tags = [
             "system:filetype=video, gif, apng",
@@ -160,18 +149,39 @@ class HydrusVideoDeduplicator:
             if len(custom_query) > 0:
                 search_tags.extend(custom_query)
                 print(f"[yellow] Custom Query: {custom_query}")
+        return search_tags
+
+    def deduplicate(
+        self,
+        overwrite: bool = False,
+        skip_hashing: bool = False,
+    ) -> None:
+        """
+        Run all deduplicate functions.
+
+        Dedupe Algorithm:
+        1. Perceptually hash the videos.
+        2. Insert the perceptual hashes into the vptree
+        3. Search for similar videos in the vptree.
+        4. Mark the similar videos as potential duplicates in Hydrus.
+        """
 
         if skip_hashing:
             print("[yellow] Skipping perceptual hashing")
         else:
-            video_hashes = list(self.client.get_video_hashes(search_tags))
+            video_hashes = list(self.client.get_video_hashes(self.search_tags))
             if not overwrite:
                 video_hashes = self.filter_unhashed(video_hashes)
             print(f"[blue] Found {len(video_hashes)} eligible files to perceptually hash.")
             self.add_perceptual_hashes_to_db(video_hashes)
 
         # Insert the perceptual hashed files into the vptree.
-        self.process_phashed_file_queue()
+        try:
+            self.process_phashed_file_queue()
+        except KeyboardInterrupt:
+            print("[yellow] Building the search tree was interrupted! Progress was saved.")
+        else:
+            print("[green] Finished fully building the search tree.")
 
         # Number of potential duplicates before adding more.
         # This is just to print info for the user.
@@ -179,8 +189,10 @@ class HydrusVideoDeduplicator:
         #       while this is running.
         pre_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
 
-        # new:
-        self.find_potential_duplicates()
+        try:
+            self.find_potential_duplicates()
+        except KeyboardInterrupt:
+            print("[yellow] Searching for duplicates was interrupted! Progress was saved.")
 
         # Statistics for user
         post_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
@@ -214,7 +226,7 @@ class HydrusVideoDeduplicator:
                 total=len(video_hashes),
                 desc="Perceptually hashing files",
                 dynamic_ncols=True,
-                unit="video",
+                unit="file",
                 colour="BLUE",
             ) as pbar:
                 filehasher = FileHasher(self.client)
@@ -245,19 +257,22 @@ class HydrusVideoDeduplicator:
                         pbar.update(1)
 
         except KeyboardInterrupt:
-            print("[yellow] Perceptual hash processing was interrupted!")
+            print("[yellow] Perceptual hash processing was interrupted! Progress was saved.")
 
         else:
             print("[green] Finished perceptual hash processing.")
 
         finally:
+            # Print some useful stats and info for users
             total_failures = failed_from_api_errors_count + failed_from_phash_count
             if total_failures > 0:
                 print(f"[yellow] Perceptual hash processing had {total_failures} total failed files.")
+
                 if failed_from_api_errors_count > 0:
                     print(
                         f"[yellow] {failed_from_api_errors_count} failures were due to API errors. Ensure Hydrus is running and accessible before trying again."  # noqa: E501
                     )
+
                 if failed_from_phash_count > 0:
                     print(
                         f"[yellow] {failed_from_phash_count} failures were from an error during perceptual hashing. Are the files corrupted?"  # noqa: E501
@@ -267,7 +282,7 @@ class HydrusVideoDeduplicator:
                         "creating a Hydrus page with the name 'failed' and "
                         "running the program with '--failed-page-name=failed'\n"
                     )
-            print(f"[green] Added {success_hash_count} new videos to the perceptual hash database.")
+            print(f"[green] Added {success_hash_count} new perceptual hashes to the database.")
 
     def compare_videos(self, video1_hash: str, video2_hash: str, video1_phash: str, video2_phash: str) -> None:
         """Compare videos and mark them as potential duplicates in Hydrus if they are similar."""
@@ -302,7 +317,7 @@ class HydrusVideoDeduplicator:
         """
         results = self.db.execute("SELECT file_hash, phash FROM phashed_file_queue").fetchall()
         for file_hash, perceptual_hash in tqdm(
-            results, dynamic_ncols=True, total=len(results), desc="Building vptree", unit="file", colour="BLUE"
+            results, dynamic_ncols=True, total=len(results), desc="Building search tree", unit="file", colour="BLUE"
         ):
             self.db.add_file(file_hash)
             self.db.add_perceptual_hash(perceptual_hash)
@@ -316,14 +331,17 @@ class HydrusVideoDeduplicator:
     def find_potential_duplicates(
         self,
     ) -> None:
-        """Find potential duplicates in the database and mark them in Hydrus."""
+        """Find potential duplicates in the database and mark them as such in Hydrus."""
         # TODO: Should we turn the inside of this function into a generator? It might make testing super easy.
         tree = vptree.VpTreeManager(self.db)
         search_threshold = vptree.fix_vpdq_similarity((self.threshold))
         assert search_threshold > 0 and isinstance(search_threshold, int)
 
         if tree.MaintenanceDue(search_threshold):
+            # TODO: Do further testing on this.
+            print("[blue] Running search tree maintenance...")
             tree.maintain_tree()
+            self.db.commit()
 
         files = self.db.execute(
             "SELECT hash_id FROM shape_search_cache WHERE searched_distance is NULL or searched_distance < :threshold",
@@ -331,7 +349,7 @@ class HydrusVideoDeduplicator:
         ).fetchall()
 
         with tqdm(
-            dynamic_ncols=True, total=len(files), desc="Finding potential duplicates", unit="video", colour="BLUE"
+            dynamic_ncols=True, total=len(files), desc="Finding potential duplicates", unit="file", colour="BLUE"
         ) as pbar:
             for hash_id in files:
                 hash_id = hash_id[0]

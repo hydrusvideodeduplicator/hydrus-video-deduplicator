@@ -146,7 +146,7 @@ def main(
         db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
         db.init_connection()
         # Upgrade the database before doing anything.
-        db.execute("BEGIN TRANSACTION")
+        db.begin_transaction()
         with db.conn:
             db.upgrade_db()
         db_stats = DedupeDB.get_db_stats(db)
@@ -161,7 +161,7 @@ def main(
         )
 
         if clear_search_cache:
-            db.execute("BEGIN TRANSACTION")
+            db.begin_transaction()
             with db.conn:
                 db.clear_search_cache()
             print("[green] Cleared the search cache.")
@@ -172,8 +172,9 @@ def main(
             DedupeDB.create_db_dir()
         db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
         db.init_connection()
-        db.create_tables()
-        db.commit()
+        db.begin_transaction()
+        with db.conn:
+            db.create_tables()
         db_stats = DedupeDB.get_db_stats(db)
 
     deduper = HydrusVideoDeduplicator(

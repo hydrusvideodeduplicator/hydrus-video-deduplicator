@@ -150,6 +150,9 @@ class DedupeDb:
     def commit(self):
         self.conn.commit()
 
+    def begin_transaction(self):
+        self.execute("BEGIN TRANSACTION")
+
     def close(self):
         self.conn.close()
 

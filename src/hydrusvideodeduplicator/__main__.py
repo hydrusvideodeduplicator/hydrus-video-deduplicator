@@ -32,7 +32,7 @@ Parameters:
 - api_url will be read from env var $HYDRUS_API_URL or .env file
 - to add custom queries, do
   --custom-query="series:twilight" --custom-query="character:edward" ... etc for each query
-- threshold is the min % matching to be considered similar. 100% is identical.
+- threshold is the min % matching to be considered similar. 100% is very very similar.
 - verbose turns on logging
 - debug turns on logging and sets the logging level to debug
 """
@@ -42,7 +42,7 @@ print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
 def main(
     api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] = None,
     api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = HYDRUS_API_URL,
-    overwrite: Annotated[Optional[bool], typer.Option(help="Overwrite existing perceptual hashes")] = False,
+    overwrite: Annotated[Optional[Optional[bool]], typer.Option(hidden=True)] = None,  # deprecated
     query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = HYDRUS_QUERY,
     threshold: Annotated[
         Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")
@@ -63,7 +63,8 @@ def main(
         Optional[str], typer.Option(help="The name of the Hydrus page to add failed files to.")
     ] = FAILED_PAGE_NAME,
     job_count: Annotated[
-        Optional[int], typer.Option(help="Number of CPU threads to use. Default is all but one core.")
+        Optional[int],
+        typer.Option(help="Number of CPU threads to use for perceptual hashing. Default is all but one core."),
     ] = -2,
     dedup_database_dir: Annotated[
         Optional[Path], typer.Option(help="The directory to store the database used for dedupe.")
@@ -72,7 +73,7 @@ def main(
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
 ):
     # Fix mypy errors from optional parameters
-    assert overwrite is not None and threshold is not None and skip_hashing is not None and job_count is not None
+    assert threshold is not None and skip_hashing is not None and job_count is not None
 
     # CLI debug parameter sets log level to info or debug
     loglevel = logging.INFO
@@ -94,6 +95,14 @@ def main(
         logging.disable()
 
     DedupeDB.set_db_dir(dedup_database_dir)
+
+    # Print a warning if the deprecated overwrite option is set
+    if overwrite is not None:
+        pretty_overwrite = "--" + ("" if overwrite is True else "no-") + "overwrite"
+        print_and_log(
+            logger,
+            f"WARNING: '{pretty_overwrite}' option was deprecated and does nothing as of 0.7.0. Remove it from your args.",  # noqa: E501
+        )
 
     # CLI overwrites env vars with no default value
     if not api_key:
@@ -178,11 +187,7 @@ def main(
         raise typer.Exit(code=1)
     HydrusVideoDeduplicator.threshold = threshold
 
-    if overwrite:
-        print(f"[yellow] Overwriting {db_stats.num_videos} existing hashes.")
-
     deduper.deduplicate(
-        overwrite=overwrite,
         skip_hashing=skip_hashing,
     )
 

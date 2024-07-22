@@ -153,8 +153,7 @@ class HydrusVideoDeduplicator:
 
     def deduplicate(
         self,
-        overwrite: bool = False,
-        skip_hashing: bool = False,
+        skip_hashing: bool,
     ) -> None:
         """
         Run all deduplicate functions.
@@ -170,8 +169,7 @@ class HydrusVideoDeduplicator:
             print("[yellow] Skipping perceptual hashing")
         else:
             video_hashes = list(self.client.get_video_hashes(self.search_tags))
-            if not overwrite:
-                video_hashes = self.filter_unhashed(video_hashes)
+            video_hashes = self.filter_unhashed(video_hashes)
             print(f"[blue] Found {len(video_hashes)} eligible files to perceptually hash.")
             self.add_perceptual_hashes_to_db(video_hashes)
 

@@ -2,7 +2,7 @@
 
 ## Basic usage
 
-1. Backup your database and files (unless you trust a stranger to not ruin your database).
+1. Backup your Hydrus database to be safe.
 
 1. [Enable the Hydrus Client API](https://hydrusnetwork.github.io/hydrus/client_api.html#enabling_the_api) and create an access key with all permissions.
 
@@ -43,7 +43,9 @@ python3 -m hydrusvideodeduplicator --api-key="78d2fcc9fe1f43c5008959ed1abfe38ffe
 
 </details>
 
-To cancel processing, press CTRL+C.
+To cancel any stage of processing, press CTRL+C.
+
+You can cancel the first step, perceptual hashing, at any time to only search the duplicates that are currently hashed. You don't need to perceptually hash your entire database before you start searching.
 
 See the full list of options with `--help`.
 

@@ -2,9 +2,26 @@
 
 ## How to update
 
+I highly recommend backing up your dedupe database folder if it took a long time to hash/search your Hydrus files.
+
+I will do my best to preserve your database across upgrades, but there are no guarantees. Just back it up.
+
+See [How to backup my dedupe database](#how-to-backup-my-dedupe-database) for instructions on backups.
+
+To upgrade:
+
 ```sh
-pip3 install hydrusvideodeduplicator --upgrade
+# activate your venv first
+pip install hydrusvideodeduplicator --upgrade
 ```
+
+---
+
+## How to backup my dedupe database?
+
+You can backup your dedupe database by copying the database directory somewhere safe.
+
+See [Where are the video hashes stored?](#where-are-the-video-hashes-stored) location for the database directory.
 
 ---
 
@@ -12,9 +29,13 @@ pip3 install hydrusvideodeduplicator --upgrade
 
 1. First, the program will perceptually hash all your video files and store them in a database.
 
-    - Note: Initial hashing takes longer than searching for duplicates. It will also probably get slower as it progresses because the API requests are sorted by file size.
+    - Initial hashing takes longer than searching for duplicates. It will also probably get slower as it progresses because the API requests are sorted by file size.
 
-1. Then, it will search the database for potential duplicates and mark them as potential duplicates in Hydrus.
+1. Then, the perceptual hashes are put into a data structure to make it fast to search for duplicates.
+
+    - Note: Initial search tree building may take a while, but it should be very fast on subsequent runs when new files are added.
+
+1. Finally, it will search the database for potential duplicates and mark them as potential duplicates in Hydrus.
 
 You can run the program again when you add more files to find more duplicates.
 
@@ -61,12 +82,12 @@ These are the same queries as would be used in Hydrus.
 
 ---
 
-## I want to search my duplicates without hashing new video files
+## I want to search for duplicates without hashing new video files
 
-You can either use `--skip-hashing` or use a query limiting when files were imported
+You can either use `--skip-hashing`, press CTRL+C while perceptual hashing is running, or use a query limiting when files were imported.
 
 <details>
-<summary>Example</summary>
+<summary>Example query that limits import time</summary>
 <br>
 
 ```sh
@@ -74,8 +95,6 @@ You can either use `--skip-hashing` or use a query limiting when files were impo
 ```
 
 </details>
-
-Also, you can stop the program at any time with CTRL+C
 
 ---
 
@@ -86,14 +105,6 @@ Almost all video and animated files e.g. mp4, gif, apng, etc. are supported if t
 If you find a video that fails to perceptually hash, please create an issue on GitHub with some information about the video or message `@applenanner` on the [Hydrus Discord](https://discord.gg/wPHPCUZ).
 
 If a bad file crashes the whole program also create an issue. Skipping files is fine, but crashing is not.
-
----
-
-## I changed my threshold but it didn't find any new duplicates
-
-This is correct and should only affect searching for files BEFORE you set a new threshold.
-
-Next run use `--clear-search-cache` and then it should compare all videos to each other from the start.
 
 ---
 
@@ -113,7 +124,7 @@ You can reset your potential duplicates in Hydrus in duplicates processing:
 
 ![Demonstration of how to reset potential duplicates in Hydrus](./img/reset_duplicates.png)
 
-Then, you also have to reset your search cache with `--clear-search-cache`
+Then, you should also reset your search cache with `--clear-search-cache` to search for duplicates from scratch.
 
 ---
 
@@ -121,4 +132,12 @@ Then, you also have to reset your search cache with `--clear-search-cache`
 
 If you find a video that fails to perceptually hash, please create an issue on GitHub with some information about the video or message `@applenanner` on the [Hydrus Discord](https://discord.gg/wPHPCUZ).
 
-If a bad file crashes the whole program also create an issue. Skipping files is fine, but crashing is not.
+---
+
+## I have some "weird" messages while perceptual hashing is running
+
+If they're not error messages that mention perceptual hashing failing, they're probably FFmpeg messages from decoding the files and can be safely ignored.
+
+These messages are prevalent with certain video codecs, namely AV1 and H.265.
+
+Unfortunately these messages are not able to be silenced yet.

@@ -114,6 +114,34 @@ class TemporaryIntegerTable(object):
         return False
 
 
+def dedupe_list(xs: Iterable):
+    if isinstance(xs, set):
+        return list(xs)
+
+    xs_seen = set()
+
+    xs_return = []
+
+    for x in xs:
+        if x in xs_seen:
+            continue
+
+        xs_return.append(x)
+
+        xs_seen.add(x)
+
+    return xs_return
+
+
+def build_key_to_list_dict(pairs):
+    d = collections.defaultdict(list)
+
+    for key, value in pairs:
+        d[key].append(value)
+
+    return d
+
+
 class VpTreeManager:
     TemporaryIntegerTableNameCache()
 
@@ -123,7 +151,8 @@ class VpTreeManager:
             # need this for the TemporaryIntegerTableNameCache
             # don't run this more than once. do this once per program run. this is a singleton.
             # TODO: move this somewhere appropriate. this is bad.
-            self.db.execute('ATTACH ":memory:" as mem')
+            cur = self.db.conn.cursor()
+            cur.execute('ATTACH ":memory:" as mem')
         except sqlite3.OperationalError as exc:
             if str(exc) != "database mem is already in use":
                 raise
@@ -766,7 +795,7 @@ class VpTreeManager:
 
             with self._make_temporary_integer_table(similar_perceptual_hash_ids, "phash_id") as temp_table_name:
                 # temp perceptual_hashes to hash map
-                similar_perceptual_hash_ids_to_hash_ids = self.build_key_to_list_dict(
+                similar_perceptual_hash_ids_to_hash_ids = build_key_to_list_dict(
                     self.db.execute(
                         "SELECT phash_id, hash_id FROM {} CROSS JOIN shape_perceptual_hash_map USING ( phash_id );".format(  # noqa: E501
                             temp_table_name
@@ -791,35 +820,9 @@ class VpTreeManager:
 
             similar_hash_ids_and_distances.extend(similar_hash_ids_to_distances.items())
 
-        similar_hash_ids_and_distances = self.dedupe_list(similar_hash_ids_and_distances)
+        similar_hash_ids_and_distances = dedupe_list(similar_hash_ids_and_distances)
 
         return similar_hash_ids_and_distances
-
-    def dedupe_list(self, xs: Iterable):
-        if isinstance(xs, set):
-            return list(xs)
-
-        xs_seen = set()
-
-        xs_return = []
-
-        for x in xs:
-            if x in xs_seen:
-                continue
-
-            xs_return.append(x)
-
-            xs_seen.add(x)
-
-        return xs_return
-
-    def build_key_to_list_dict(self, pairs):
-        d = collections.defaultdict(list)
-
-        for key, value in pairs:
-            d[key].append(value)
-
-        return d
 
     def _try_to_populate_perceptual_hash_to_vptree_node_cache(self, perceptual_hash_ids: Collection[int]):
         if len(self._perceptual_hash_id_to_vp_tree_node_cache) > 1000000:
@@ -904,7 +907,7 @@ class VpTreeManager:
                 self.search_perceptual_hashes(perceptual_hashes, max_hamming_distance)
             )
 
-        similar_hash_ids_and_distances = self.dedupe_list(similar_hash_ids_and_distances)
+        similar_hash_ids_and_distances = dedupe_list(similar_hash_ids_and_distances)
 
         return similar_hash_ids_and_distances
 

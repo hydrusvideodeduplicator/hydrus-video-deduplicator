@@ -111,6 +111,21 @@ class FileHasher:
         return PerceptuallyHashedFile(file_hash, phash)
 
 
+@dataclass
+class PerceptualHashingStats:
+    success_hash_count: int = 0
+    failed_from_api_errors_count: int = 0
+    failed_from_phash_count: int = 0
+
+
+class CancelledPerceptualHashException(Exception):
+    """Exception for when perceptual hashing is cancelled."""
+
+    def __init__(self, stats: PerceptualHashingStats):
+        super().__init__()
+        self.stats = stats
+
+
 class HydrusVideoDeduplicator:
     hydlog = logging.getLogger("hvd")
     hydlog.setLevel(logging.INFO)
@@ -167,15 +182,57 @@ class HydrusVideoDeduplicator:
             video_hashes = list(self.client.get_video_hashes(self.search_tags))
             video_hashes = self.filter_unhashed(video_hashes)
             print(f"[blue] Found {len(video_hashes)} eligible files to perceptually hash.")
-            self.add_perceptual_hashes_to_db(video_hashes)
+            self.hydlog.info("Starting perceptual hash processing")
+            self.db.begin_transaction()
+            with self.db.conn:
+                try:
+                    stats = self.add_perceptual_hashes_to_db(video_hashes)
+                except CancelledPerceptualHashException as exc:
+                    # Interrupted, but on purpose.
+                    stats = exc.stats
+                    print("[yellow] Perceptual hash processing was interrupted! Progress was saved.")
+                else:
+                    print("[green] Finished perceptual hash processing.")
+                finally:
+                    # Print some useful stats and info for users
+                    total_failures = stats.failed_from_api_errors_count + stats.failed_from_phash_count
+                    if total_failures > 0:
+                        print(f"[yellow] Perceptual hash processing had {total_failures} total failed files.")
+
+                        if stats.failed_from_api_errors_count > 0:
+                            print(
+                                f"[yellow] {stats.failed_from_api_errors_count} failures were due to API errors. Ensure Hydrus is running and accessible before trying again."  # noqa: E501
+                            )
+
+                        if stats.failed_from_phash_count > 0:
+                            print(
+                                f"[yellow] {stats.failed_from_phash_count} failures were from an error during perceptual hashing. Are the files corrupted?"  # noqa: E501
+                            )
+                            print(
+                                "\nTip: You could have seen which files failed directly in Hydrus by "
+                                "creating a Hydrus page with the name 'failed' and "
+                                "running the program with '--failed-page-name=failed'\n"
+                            )
+                    print(f"[green] Added {stats.success_hash_count} new perceptual hashes to the database.")
 
         # Insert the perceptual hashed files into the vptree.
-        try:
-            self.process_phashed_file_queue()
-        except KeyboardInterrupt:
-            print("[yellow] Building the search tree was interrupted! Progress was saved.")
-        else:
-            print("[green] Finished fully building the search tree.")
+        self.db.begin_transaction()
+        with self.db.conn:
+            try:
+                self.process_phashed_file_queue()
+            except KeyboardInterrupt:
+                print("[yellow] Building the search tree was interrupted! Progress was saved.")
+            else:
+                print("[green] Finished fully building the search tree.")
+
+        self.db.begin_transaction()
+        with self.db.conn:
+            try:
+                self.run_maintenance()
+            except KeyboardInterrupt:
+                print("[yellow] Maintenance was interrupted!")
+            else:
+                print("[green] Finished maintenance.")
 
         # Number of potential duplicates before adding more.
         # This is just to print info for the user.
@@ -183,10 +240,12 @@ class HydrusVideoDeduplicator:
         #       while this is running.
         pre_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
 
-        try:
-            self.find_potential_duplicates()
-        except KeyboardInterrupt:
-            print("[yellow] Searching for duplicates was interrupted! Progress was saved.")
+        self.db.begin_transaction()
+        with self.db.conn:
+            try:
+                self.find_potential_duplicates()
+            except KeyboardInterrupt:
+                print("[yellow] Searching for duplicates was interrupted! Progress was saved.")
 
         # Statistics for user
         post_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
@@ -205,16 +264,13 @@ class HydrusVideoDeduplicator:
         all_phashed_files = self.db.get_phashed_files()
         return [file_hash for file_hash in file_hashes if file_hash not in all_phashed_files]
 
-    def add_perceptual_hashes_to_db(self, video_hashes: Sequence[str]) -> None:
+    def add_perceptual_hashes_to_db(self, video_hashes: Sequence[str]) -> PerceptualHashingStats:
         """
         Retrieves the video from Hydrus,
         calculates the perceptual hash,
         and then add it to the database.
         """
-        success_hash_count = 0
-        failed_from_api_errors_count = 0
-        failed_from_phash_count = 0
-        self.hydlog.info("Starting perceptual hash processing")
+        stats = PerceptualHashingStats()
         try:
             with tqdm(
                 total=len(video_hashes),
@@ -233,50 +289,24 @@ class HydrusVideoDeduplicator:
                         if isinstance(result, FailedPerceptuallyHashedFile):
                             # We only want to add the failure to the page if the file was the actual cause of failure.
                             if isinstance(result.exc, HydrusApiException):
-                                failed_from_api_errors_count += 1
+                                stats.failed_from_api_errors_count += 1
                                 print("[red] Hydrus API error during perceptual hashing:")
                                 print(f"{result.exc}")
                             else:
-                                failed_from_phash_count += 1
+                                stats.failed_from_phash_count += 1
                                 print("[red] Failed to perceptually hash a file.")
                                 print(f"Failed file SHA256 hash: {result.file_hash}")
                                 print(f"{result.exc}")
                                 if self.page_logger:
                                     self.page_logger.add_failed_video(result.file_hash)
                         else:
-                            success_hash_count += 1
+                            stats.success_hash_count += 1
                             self.db.add_to_phashed_files_queue(result.file_hash, result.perceptual_hash)
-                            self.db.commit()
 
                         pbar.update(1)
-
         except KeyboardInterrupt:
-            print("[yellow] Perceptual hash processing was interrupted! Progress was saved.")
-
-        else:
-            print("[green] Finished perceptual hash processing.")
-
-        finally:
-            # Print some useful stats and info for users
-            total_failures = failed_from_api_errors_count + failed_from_phash_count
-            if total_failures > 0:
-                print(f"[yellow] Perceptual hash processing had {total_failures} total failed files.")
-
-                if failed_from_api_errors_count > 0:
-                    print(
-                        f"[yellow] {failed_from_api_errors_count} failures were due to API errors. Ensure Hydrus is running and accessible before trying again."  # noqa: E501
-                    )
-
-                if failed_from_phash_count > 0:
-                    print(
-                        f"[yellow] {failed_from_phash_count} failures were from an error during perceptual hashing. Are the files corrupted?"  # noqa: E501
-                    )
-                    print(
-                        "\nTip: You could have seen which files failed directly in Hydrus by "
-                        "creating a Hydrus page with the name 'failed' and "
-                        "running the program with '--failed-page-name=failed'\n"
-                    )
-            print(f"[green] Added {success_hash_count} new perceptual hashes to the database.")
+            raise CancelledPerceptualHashException(stats)
+        return stats
 
     def mark_videos_as_duplicates(self, video1_hash: str, video2_hash: str):
         """Mark a pair of videos as duplicates in Hydrus."""
@@ -305,7 +335,17 @@ class HydrusVideoDeduplicator:
                 "DELETE FROM phashed_file_queue WHERE file_hash = :file_hash AND phash = :phash",
                 {"file_hash": file_hash, "phash": perceptual_hash},
             )
-            self.db.commit()
+
+    def run_maintenance(self):
+        """Run maintenance, if needed."""
+        tree = vptree.VpTreeManager(self.db)
+        search_threshold = vptree.fix_vpdq_similarity((self.threshold))
+        assert search_threshold > 0 and isinstance(search_threshold, int)
+
+        if tree.maintenance_due(search_threshold):
+            # TODO: Do further testing on this.
+            print("[blue] Running search tree maintenance...")
+            tree.maintain_tree()
 
     def find_potential_duplicates(
         self,
@@ -315,12 +355,6 @@ class HydrusVideoDeduplicator:
         tree = vptree.VpTreeManager(self.db)
         search_threshold = vptree.fix_vpdq_similarity((self.threshold))
         assert search_threshold > 0 and isinstance(search_threshold, int)
-
-        if tree.maintenance_due(search_threshold):
-            # TODO: Do further testing on this.
-            print("[blue] Running search tree maintenance...")
-            tree.maintain_tree()
-            self.db.commit()
 
         files = self.db.execute(
             "SELECT hash_id FROM shape_search_cache WHERE searched_distance is NULL or searched_distance < :threshold",
@@ -349,5 +383,4 @@ class HydrusVideoDeduplicator:
                     (search_threshold, hash_id),
                 )
 
-                self.db.commit()
                 pbar.update(1)

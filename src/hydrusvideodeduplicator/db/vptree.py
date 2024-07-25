@@ -166,9 +166,10 @@ class VpTreeManager:
                         # TODO: Add CLI option to regenerate the vptree.
                         # Note: I hit this path once somehow due to hitting some exception and the program crashing, but
                         # it fixed itself on the next run. So maybe we should just log this and move on.
-                        message = "Hey, while trying to import a file, hydrus discovered a hole in the similar files search tree. Please run _database->regenerate->similar files search tree_ when it is convenient!"  # noqa: E501
-                        message += "\n" * 2
-                        message += "You will not see this message again this boot."
+                        # message = "Hey, while trying to import a file, hydrus discovered a hole in the similar files search tree. Please run _database->regenerate->similar files search tree_ when it is convenient!"  # noqa: E501
+                        # message += "\n" * 2
+                        # message += "You will not see this message again this boot."
+                        message = "Broken branch detected. Either restart the program and see if it goes away, or reset your dedupe tree using '--clear-search-tree'."  # noqa: E501
 
                         print(message)
                         log.error(message)
@@ -181,9 +182,6 @@ class VpTreeManager:
                     # ok so there is a missing branch. typically from an import crash desync, is my best bet
                     # we still want to add our leaf because we need to add the file to the tree population, but we will add it to the ghost of the branch. no worries, the regen code will sort it all out  # noqa: E501
                     parent_id = ancestor_id
-
-                    # TODO: there's a secondary issue that we should add the ancestor_id's files to the file maintenance queue to check for presence in the similar files search system, I think  # noqa: E501
-                    # but we are too low level to talk to the maintenance queue here, so it'll have to be a more complicated answer  # noqa: E501
 
                     break
 
@@ -585,9 +583,11 @@ class VpTreeManager:
 
             self.db.execute("DELETE FROM shape_maintenance_branch_regen;")
 
-            log.error(
-                "Your similar files search tree seemed to be damaged. Please regenerate it under the _database_ menu!"
+            msg = (
+                "Your similar files search tree seemed to be damaged. Please regenerate it using '--clear-search-tree'!"
             )
+            log.error(msg)
+            print(msg)
 
             return
 

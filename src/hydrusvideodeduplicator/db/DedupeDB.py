@@ -62,15 +62,6 @@ class DatabaseStats:
     file_size: int  # in bytes
 
 
-def get_db_stats_old() -> DatabaseStats:
-    """OLD Get some database stats."""
-    con = sqlite3.connect(get_db_file_path())
-    (num_videos,) = con.execute("SELECT COUNT(*) FROM videos").fetchone()
-    con.close()
-    file_size = os.path.getsize(get_db_file_path())
-    return DatabaseStats(num_videos, file_size)
-
-
 def get_db_stats(db: DedupeDb) -> DatabaseStats:
     """Get some database stats."""
     # TODO: We don't need to get the file hashes. We just need the length.

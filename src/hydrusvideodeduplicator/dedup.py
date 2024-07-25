@@ -316,7 +316,7 @@ class HydrusVideoDeduplicator:
         search_threshold = vptree.fix_vpdq_similarity((self.threshold))
         assert search_threshold > 0 and isinstance(search_threshold, int)
 
-        if tree.MaintenanceDue(search_threshold):
+        if tree.maintenance_due(search_threshold):
             # TODO: Do further testing on this.
             print("[blue] Running search tree maintenance...")
             tree.maintain_tree()
@@ -332,10 +332,7 @@ class HydrusVideoDeduplicator:
         ) as pbar:
             for hash_id in files:
                 hash_id = hash_id[0]
-                # print(f"Searching for duplicates for hash_id: '{hash_id}'")
-                result = tree.SearchFile(hash_id, max_hamming_distance=search_threshold)
-                # print(f"File Hash: '{file_hash}'")
-                # print(result)
+                result = tree.search_file(hash_id, max_hamming_distance=search_threshold)
                 file_hash_a = self.db.get_file_hash(hash_id)
                 for similar_hash_id, distance in result:
                     file_hash_b = self.db.get_file_hash(similar_hash_id)

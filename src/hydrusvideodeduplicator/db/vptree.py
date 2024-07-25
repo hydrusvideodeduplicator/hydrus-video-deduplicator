@@ -58,11 +58,7 @@ class TemporaryIntegerTableNameCache:
         else:
             return TemporaryIntegerTableNameCache.my_instance
 
-    def Clear(self):
-        self._column_names_to_table_names = collections.defaultdict(collections.deque)
-        self._column_names_counter = collections.Counter()
-
-    def GetName(self, column_name):
+    def get_name(self, column_name):
         table_names = self._column_names_to_table_names[column_name]
 
         initialised = True
@@ -82,7 +78,7 @@ class TemporaryIntegerTableNameCache:
 
         return (initialised, table_name)
 
-    def ReleaseName(self, column_name, table_name):
+    def release_name(self, column_name, table_name):
         self._column_names_to_table_names[column_name].append(table_name)
 
 
@@ -95,7 +91,7 @@ class TemporaryIntegerTable(object):
         self._integer_iterable = integer_iterable
         self._column_name = column_name
 
-        (self._initialised, self._table_name) = TemporaryIntegerTableNameCache.instance().GetName(self._column_name)
+        (self._initialised, self._table_name) = TemporaryIntegerTableNameCache.instance().get_name(self._column_name)
 
     def __enter__(self):
         if not self._initialised:
@@ -113,7 +109,7 @@ class TemporaryIntegerTable(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._cursor.execute("DELETE FROM {};".format(self._table_name))
 
-        TemporaryIntegerTableNameCache.instance().ReleaseName(self._column_name, self._table_name)
+        TemporaryIntegerTableNameCache.instance().release_name(self._column_name, self._table_name)
 
         return False
 
@@ -499,10 +495,10 @@ class VpTreeManager:
 
         return {item for (item,) in iterable_cursor}
 
-    def _MakeTemporaryIntegerTable(self, integer_iterable, column_name):
+    def _make_temporary_integer_table(self, integer_iterable, column_name):
         return TemporaryIntegerTable(self.db.cur, integer_iterable, column_name)
 
-    def _RegenerateBranch(self, perceptual_hash_id):
+    def _regenerate_branch(self, perceptual_hash_id):
         log.info("reviewing existing branch")
 
         # grab everything in the branch
@@ -546,7 +542,7 @@ class VpTreeManager:
         for p_id in unbalanced_perceptual_hash_ids:
             self.db.execute("DELETE FROM shape_maintenance_branch_regen WHERE phash_id = ?;", ((p_id,)))
 
-        with self._MakeTemporaryIntegerTable(
+        with self._make_temporary_integer_table(
             unbalanced_perceptual_hash_ids, "phash_id"
         ) as temp_perceptual_hash_ids_table_name:
             useful_perceptual_hash_ids = self._STS(
@@ -621,7 +617,7 @@ class VpTreeManager:
 
                 log.info(f"rebalancing similar file metadata - num_done: {num_done}, num_to_do: {num_to_do}")
 
-                with self._MakeTemporaryIntegerTable(rebalance_perceptual_hash_ids, "phash_id") as temp_table_name:
+                with self._make_temporary_integer_table(rebalance_perceptual_hash_ids, "phash_id") as temp_table_name:
                     # temp perceptual hashes to tree
                     result = self.db.execute(
                         "SELECT phash_id FROM {} CROSS JOIN shape_vptree USING ( phash_id ) ORDER BY inner_population + outer_population DESC;".format(  # noqa: E501
@@ -637,7 +633,7 @@ class VpTreeManager:
                     else:
                         (biggest_perceptual_hash_id,) = result
 
-                self._RegenerateBranch(biggest_perceptual_hash_id)
+                self._regenerate_branch(biggest_perceptual_hash_id)
 
                 rebalance_perceptual_hash_ids = self._STL(
                     self.db.execute("SELECT phash_id FROM shape_maintenance_branch_regen;")
@@ -646,7 +642,7 @@ class VpTreeManager:
         finally:
             log.info("done!")
 
-    def SearchPerceptualHashes(self, search_perceptual_hashes: Collection[bytes], max_hamming_distance: int) -> list:
+    def search_perceptual_hashes(self, search_perceptual_hashes: Collection[bytes], max_hamming_distance: int) -> list:
         similar_hash_ids_and_distances = []
 
         if len(search_perceptual_hashes) == 0:
@@ -662,7 +658,7 @@ class VpTreeManager:
                     perceptual_hash_ids.add(perceptual_hash_id)
 
             if len(perceptual_hash_ids) > 0:
-                with self._MakeTemporaryIntegerTable(perceptual_hash_ids, "phash_id") as temp_table_name:
+                with self._make_temporary_integer_table(perceptual_hash_ids, "phash_id") as temp_table_name:
                     similar_hash_ids = self._STL(
                         self.db.execute(
                             f"SELECT hash_id FROM shape_perceptual_hash_map NATURAL JOIN {temp_table_name};"
@@ -706,7 +702,7 @@ class VpTreeManager:
                     # anyway, we now just get the whole lot of results first and then work on the whole lot
                     # UPDATE: we moved to a cache finally, so the iteration danger is less worrying, but leaving the above up anyway  # noqa: E501
 
-                    self._TryToPopulatePerceptualHashToVPTreeNodeCache(current_potentials)
+                    self._try_to_populate_perceptual_hash_to_vptree_node_cache(current_potentials)
 
                     for node_perceptual_hash_id in current_potentials:
                         if node_perceptual_hash_id not in self._perceptual_hash_id_to_vp_tree_node_cache:
@@ -768,9 +764,9 @@ class VpTreeManager:
 
             similar_perceptual_hash_ids = list(similar_perceptual_hash_ids_to_distances.keys())
 
-            with self._MakeTemporaryIntegerTable(similar_perceptual_hash_ids, "phash_id") as temp_table_name:
+            with self._make_temporary_integer_table(similar_perceptual_hash_ids, "phash_id") as temp_table_name:
                 # temp perceptual_hashes to hash map
-                similar_perceptual_hash_ids_to_hash_ids = self.BuildKeyToListDict(
+                similar_perceptual_hash_ids_to_hash_ids = self.build_key_to_list_dict(
                     self.db.execute(
                         "SELECT phash_id, hash_id FROM {} CROSS JOIN shape_perceptual_hash_map USING ( phash_id );".format(  # noqa: E501
                             temp_table_name
@@ -795,11 +791,11 @@ class VpTreeManager:
 
             similar_hash_ids_and_distances.extend(similar_hash_ids_to_distances.items())
 
-        similar_hash_ids_and_distances = self.DedupeList(similar_hash_ids_and_distances)
+        similar_hash_ids_and_distances = self.dedupe_list(similar_hash_ids_and_distances)
 
         return similar_hash_ids_and_distances
 
-    def DedupeList(self, xs: Iterable):
+    def dedupe_list(self, xs: Iterable):
         if isinstance(xs, set):
             return list(xs)
 
@@ -817,7 +813,7 @@ class VpTreeManager:
 
         return xs_return
 
-    def BuildKeyToListDict(self, pairs):
+    def build_key_to_list_dict(self, pairs):
         d = collections.defaultdict(list)
 
         for key, value in pairs:
@@ -825,7 +821,7 @@ class VpTreeManager:
 
         return d
 
-    def _TryToPopulatePerceptualHashToVPTreeNodeCache(self, perceptual_hash_ids: Collection[int]):
+    def _try_to_populate_perceptual_hash_to_vptree_node_cache(self, perceptual_hash_ids: Collection[int]):
         if len(self._perceptual_hash_id_to_vp_tree_node_cache) > 1000000:
             if not isinstance(perceptual_hash_ids, set):
                 perceptual_hash_ids = set(perceptual_hash_ids)
@@ -853,7 +849,7 @@ class VpTreeManager:
                 ).fetchall()
 
             else:
-                with self._MakeTemporaryIntegerTable(uncached_perceptual_hash_ids, "phash_id") as temp_table_name:
+                with self._make_temporary_integer_table(uncached_perceptual_hash_ids, "phash_id") as temp_table_name:
                     # temp perceptual_hash_ids to actual perceptual_hashes and tree info
                     rows = self.db.execute(
                         "SELECT phash_id, phash, radius, inner_id, outer_id FROM {} CROSS JOIN shape_perceptual_hashes USING ( phash_id ) CROSS JOIN shape_vptree USING ( phash_id );".format(  # noqa: E501
@@ -873,7 +869,7 @@ class VpTreeManager:
 
             self._perceptual_hash_id_to_vp_tree_node_cache.update(uncached_perceptual_hash_ids_to_vp_tree_nodes)
 
-    def SearchFile(self, hash_id: int, max_hamming_distance: int) -> list:
+    def search_file(self, hash_id: int, max_hamming_distance: int) -> list:
         similar_hash_ids_and_distances = [(hash_id, 0)]
 
         # Videos don't have pixel hash ids. What do ?
@@ -904,15 +900,19 @@ class VpTreeManager:
             perceptual_hashes = [self.db.get_phash(perceptual_hash_id)]
             assert perceptual_hashes is not None
 
-            similar_hash_ids_and_distances.extend(self.SearchPerceptualHashes(perceptual_hashes, max_hamming_distance))
+            similar_hash_ids_and_distances.extend(
+                self.search_perceptual_hashes(perceptual_hashes, max_hamming_distance)
+            )
 
-        similar_hash_ids_and_distances = self.DedupeList(similar_hash_ids_and_distances)
+        similar_hash_ids_and_distances = self.dedupe_list(similar_hash_ids_and_distances)
 
         return similar_hash_ids_and_distances
 
-    def MaintenanceDue(self, search_distance: int) -> bool:
+    def maintenance_due(self, search_distance: int) -> bool:
         """Note: Unlike Hydrus, we don't have a search distance option in a menu. So we need to pass it as a parameter."""  # noqa: E501
 
+        # TODO: Is 100 a sane number for videos? Hydrus uses 100 for images.
+        #       I suppose there's no correct answer, though.
         (count,) = self.db.execute(
             "SELECT COUNT( * ) FROM ( SELECT 1 FROM shape_search_cache WHERE searched_distance IS NULL or searched_distance < ? LIMIT 100 );",  # noqa: E501
             (search_distance,),

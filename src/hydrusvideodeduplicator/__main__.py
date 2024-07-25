@@ -56,8 +56,14 @@ def main(
     verify_cert: Annotated[
         Optional[str], typer.Option(help="Path to TLS cert. This forces verification.")
     ] = REQUESTS_CA_BUNDLE,
+    clear_search_tree: Annotated[
+        Optional[bool], typer.Option(help="Clear the search tree that tracks what files have already been compared.")
+    ] = False,
     clear_search_cache: Annotated[
-        Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared")
+        Optional[bool],
+        typer.Option(
+            help="Clear the search cache that tracks what files have been compared with a given similarity threshold."
+        ),
     ] = False,
     failed_page_name: Annotated[
         Optional[str], typer.Option(help="The name of the Hydrus page to add failed files to.")
@@ -159,6 +165,12 @@ def main(
             logger,
             f"Database filesize: {db_stats.file_size} bytes.",
         )
+
+        if clear_search_tree:
+            db.begin_transaction()
+            with db.conn:
+                db.clear_search_tree()
+            print("[green] Cleared the search tree.")
 
         if clear_search_cache:
             db.begin_transaction()

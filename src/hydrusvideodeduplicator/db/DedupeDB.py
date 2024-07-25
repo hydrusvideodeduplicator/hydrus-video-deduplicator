@@ -168,13 +168,15 @@ class DedupeDb:
         # files table
         self.execute("CREATE TABLE IF NOT EXISTS files ( hash_id INTEGER PRIMARY KEY, file_hash BLOB_BYTES UNIQUE )")
 
-        # this is straight up copied from Hydrus
+        # phash tables
         self.execute(
             "CREATE TABLE IF NOT EXISTS shape_perceptual_hashes ( phash_id INTEGER PRIMARY KEY, phash BLOB_BYTES UNIQUE )"  # noqa: E501
         )
         self.execute(
             "CREATE TABLE IF NOT EXISTS shape_perceptual_hash_map ( phash_id INTEGER, hash_id INTEGER, PRIMARY KEY ( phash_id, hash_id ) )"  # noqa: E501
         )
+
+        # vptree tables
         self.execute(
             "CREATE TABLE IF NOT EXISTS shape_vptree ( phash_id INTEGER PRIMARY KEY, parent_id INTEGER, radius INTEGER, inner_id INTEGER, inner_population INTEGER, outer_id INTEGER, outer_population INTEGER )"  # noqa: E501
         )
@@ -196,14 +198,47 @@ class DedupeDb:
             "CREATE TABLE IF NOT EXISTS phashed_file_queue ( file_hash BLOB_BYTES NOT NULL UNIQUE, phash BLOB_BYTES NOT NULL, PRIMARY KEY ( file_hash, phash ) )"  # noqa: E501
         )
 
-        # TODO: We don't need this I don't think.
-        # self.conn.execute(
-        #     "CREATE TABLE IF NOT EXISTS pixel_hash_map ( hash_id INTEGER, pixel_hash_id INTEGER, PRIMARY KEY ( hash_id, pixel_hash_id ) )"  # noqa: E501
-        # )
-
     """
     Utility
     """
+
+    def clear_search_tree(self):
+        """Clear the search tree. The search cache will also be cleared. Does not clear the perceptual hash map."""
+        # Note: Need a separate cursor here since we're running queries in the loop that overwrite this cursor.
+        cur = self.conn.cursor()
+        cur.execute("SELECT phash_id, hash_id FROM shape_perceptual_hash_map")
+
+        # Move the files back into the queue so that the tree can be rebuilt.
+        for phash_id, hash_id in cur:
+            phash_result = self.execute(
+                "SELECT phash FROM shape_perceptual_hashes WHERE phash_id = :phash_id", {"phash_id": phash_id}
+            ).fetchone()
+            if not phash_result:
+                # This should not happen. Perceptual hashes should always be in the database if there is a phash_id,
+                # otherwise we have no idea what perceptual hash it is.
+                print(
+                    f"ERROR clearing search tree while to get perceptual_hash from phash_id {phash_id}. perceptual_hash not found. Your DB may be corrupt."  # noqa: E501
+                )
+                continue
+            perceptual_hash = phash_result[0]
+
+            file_hash_result = self.execute(
+                "SELECT file_hash FROM files WHERE hash_id = :hash_id", {"hash_id": hash_id}
+            ).fetchone()
+            if not file_hash_result:
+                # This should not happen. File hashes should always be in the database if there is a hash_id,
+                # otherwise we have no idea what file it is in Hydrus.
+                print(
+                    f"ERROR clearing search tree while to get file_hash from hash_id {hash_id}. file_hash not found. Your DB may be corrupt."  # noqa: E501
+                )
+                continue
+            file_hash = file_hash_result[0]
+
+            self.add_to_phashed_files_queue(file_hash, perceptual_hash)
+
+        self.execute("DELETE FROM shape_vptree")
+        self.execute("DELETE FROM shape_search_cache")
+        self.execute("DELETE FROM shape_maintenance_branch_regen")
 
     def clear_search_cache(self):
         """Clear the search cache for all files."""
@@ -270,8 +305,6 @@ class DedupeDb:
         Files can have identical perceptual hashes.
         This is not even that rare, e.g. a video that is all the same color.
         """
-
-        # new
         hash_id = self.get_hash_id(file_hash)
 
         perceptual_hash_id = self.get_phash_id(perceptual_hash)

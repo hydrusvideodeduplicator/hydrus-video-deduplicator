@@ -134,10 +134,22 @@ If you find a video that fails to perceptually hash, please create an issue on G
 
 ---
 
-## I have some "weird" messages while perceptual hashing is running
+## I have some "weird" messages while perceptual hashing
 
-If they're not error messages that mention perceptual hashing failing, they're probably FFmpeg messages from decoding the files and can be safely ignored.
+If you get messages like this:
 
-These messages are prevalent with certain video codecs, namely AV1 and H.265.
+> VPS 0 does not exist
+>
+> SPS 0 does not exist.
 
-Unfortunately these messages are not able to be silenced yet.
+or
+
+> deprecated pixel format used, make sure you did set range correctly
+
+Don't worry. These are FFmpeg logs from file decoding. They can be safely ignored.
+
+These messages are prevalent  with certain video codecs, namely AV1 and H.265.
+
+Unfortunately these obnoxious messages are not able to be silenced yet.
+
+But if your messages mention perceptual hashing failing then see [My file failed to hash](#my-file-failed-to-hash).

@@ -438,9 +438,8 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
         if not self.does_need_upgrade():
             return
 
-        # TODO: Change 0.6.9 back to 0.7.0 before release.
-        if SemanticVersion(version) < SemanticVersion("0.6.9"):
-            print_upgrade(version, "0.6.9")
+        if SemanticVersion(version) < SemanticVersion("0.7.0"):
+            print_upgrade(version, "0.7.0")
 
             # Create version table
             self.execute("CREATE TABLE IF NOT EXISTS version (version TEXT)")
@@ -497,8 +496,7 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
                 #       An upgrade cutoff at some point to prevent bitrot is a good idea, which is what Hydrus does.
                 self.add_to_phashed_files_queue(video_hash, perceptual_hash)
 
-            # TODO: Change 0.6.9 back to 0.7.0 before release.
-            self.set_version("0.6.9")
+            self.set_version("0.7.0")
             # Note: We need to keep re-running get_version so that we can progressively upgrade.
             version = self.get_version()
 

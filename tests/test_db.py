@@ -13,6 +13,11 @@ if TYPE_CHECKING:
 import sqlite3
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import uuid
+
+
+def somedbdir():
+    return str(uuid.uuid4().hex)
 
 
 class TestDedupeDB(unittest.TestCase):
@@ -25,7 +30,7 @@ class TestDedupeDB(unittest.TestCase):
 
     def test_set_get_db_dir(self):
         with TemporaryDirectory() as tmpdir:
-            db_dir = Path(tmpdir) / "somedbdir"
+            db_dir = Path(tmpdir) / somedbdir()
             DedupeDB.set_db_dir(db_dir)
             result = DedupeDB.get_db_dir()
             self.assertEqual(result, db_dir)
@@ -37,7 +42,7 @@ class TestDedupeDB(unittest.TestCase):
 
     def test_create_db(self):
         with TemporaryDirectory() as tmpdir:
-            db_dir = Path(tmpdir) / "somedbdir"
+            db_dir = Path(tmpdir) / somedbdir()
             DedupeDB.set_db_dir(db_dir)
 
             DedupeDB.create_db()
@@ -110,9 +115,11 @@ class TestDedupeDB(unittest.TestCase):
                 ],
             )
 
+            con.close()
+
     def test_get_version(self):
         with TemporaryDirectory() as tmpdir:
-            db_dir = Path(tmpdir) / "somedbdir"
+            db_dir = Path(tmpdir) / somedbdir()
             DedupeDB.set_db_dir(db_dir)
 
             DedupeDB.create_db()
@@ -122,6 +129,8 @@ class TestDedupeDB(unittest.TestCase):
             db.set_version("1.2.3")
             version = db.get_version()
             self.assertEqual(version, "1.2.3")
+
+            db.conn.close()
 
     def test_semantic_version(self):
         pairs = [("0.1.0", "0.2.0"), ("1.0.1", "1.1.0"), ("1.0.10", "1.1.0")]

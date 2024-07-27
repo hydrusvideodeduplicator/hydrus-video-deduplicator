@@ -77,7 +77,7 @@ Alternatively, if you don't want to use hatch and you know what you're doing, yo
     ```sh
     cd hydrus-video-deduplicator
     python3 -m venv venv
-    source venv/bin/activate
+    source venv/bin/activate # or however it's activated on your OS
     pip install -e .
     ```
 

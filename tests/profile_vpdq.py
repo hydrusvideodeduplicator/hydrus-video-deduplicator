@@ -47,7 +47,7 @@ def profile_vpdq_similarity():
 
 
 # To use this, run "python -m cProfile tests/profile_vpdq.py"
-if __name__ == '__main__':
+if __name__ == "__main__":
     import cProfile
     import pstats
 
@@ -55,5 +55,5 @@ if __name__ == '__main__':
     profiler.enable()
     profile_vpdq_similarity()
     profiler.disable()
-    stats = pstats.Stats(profiler).sort_stats('cumtime')
+    stats = pstats.Stats(profiler).sort_stats("cumtime")
     stats.print_stats()

@@ -13,6 +13,11 @@ if TYPE_CHECKING:
 import sqlite3
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import uuid
+
+
+def somedbdir():
+    return str(uuid.uuid4().hex)
 
 
 class TestDedupeDB(unittest.TestCase):
@@ -25,7 +30,7 @@ class TestDedupeDB(unittest.TestCase):
 
     def test_set_get_db_dir(self):
         with TemporaryDirectory() as tmpdir:
-            db_dir = Path(tmpdir) / "somedbdir"
+            db_dir = Path(tmpdir) / somedbdir()
             DedupeDB.set_db_dir(db_dir)
             result = DedupeDB.get_db_dir()
             self.assertEqual(result, db_dir)
@@ -37,7 +42,7 @@ class TestDedupeDB(unittest.TestCase):
 
     def test_create_db(self):
         with TemporaryDirectory() as tmpdir:
-            db_dir = Path(tmpdir) / "somedbdir"
+            db_dir = Path(tmpdir) / somedbdir()
             DedupeDB.set_db_dir(db_dir)
 
             DedupeDB.create_db()
@@ -54,22 +59,49 @@ class TestDedupeDB(unittest.TestCase):
             # Check tables
             res = cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
             self.assertEqual(
-                res.fetchall(),
-                [
-                    ("videos",),
-                    ("version",),
-                ],
+                set(res.fetchall()),
+                set(
+                    [
+                        ("version",),
+                        ("files",),
+                        ("phashed_file_queue",),
+                        ("shape_maintenance_branch_regen",),
+                        ("shape_perceptual_hash_map",),
+                        ("shape_perceptual_hashes",),
+                        ("shape_search_cache",),
+                        ("shape_vptree",),
+                    ]
+                ),
             )
 
             # Check the database is queryable (this may be overkill)
             with self.assertRaises(sqlite3.OperationalError):
-                _ = cur.execute("SELECT key1 FROM videos")
+                _ = cur.execute("SELECT foo FROM files")
 
-            # Check videos table
-            res = cur.execute("SELECT key FROM videos")
-            self.assertEqual(len(res.fetchall()), 0)
-            res = cur.execute("SELECT value FROM videos")
-            self.assertEqual(len(res.fetchall()), 0)
+            def check_table_columns(table: str, expected_columns: list[str]):
+                for column in expected_columns:
+                    res = cur.execute(f"SELECT {column} FROM {table}")
+                    self.assertEqual(len(res.fetchall()), 0)
+
+            expected_tables = {
+                "files": ["hash_id", "file_hash"],
+                "phashed_file_queue": ["file_hash", "phash"],
+                "shape_maintenance_branch_regen": ["phash_id"],
+                "shape_perceptual_hash_map": ["phash_id", "hash_id"],
+                "shape_perceptual_hashes": ["phash_id", "phash"],
+                "shape_search_cache": ["hash_id", "searched_distance"],
+                "shape_vptree": [
+                    "phash_id",
+                    "parent_id",
+                    "radius",
+                    "inner_id",
+                    "inner_population",
+                    "outer_id",
+                    "outer_population",
+                ],
+            }
+            for table, cols in expected_tables.items():
+                check_table_columns(table, cols)
 
             # Check version table
             res = cur.execute("SELECT version FROM version")
@@ -83,9 +115,11 @@ class TestDedupeDB(unittest.TestCase):
                 ],
             )
 
+            con.close()
+
     def test_get_version(self):
         with TemporaryDirectory() as tmpdir:
-            db_dir = Path(tmpdir) / "somedbdir"
+            db_dir = Path(tmpdir) / somedbdir()
             DedupeDB.set_db_dir(db_dir)
 
             DedupeDB.create_db()
@@ -95,6 +129,8 @@ class TestDedupeDB(unittest.TestCase):
             db.set_version("1.2.3")
             version = db.get_version()
             self.assertEqual(version, "1.2.3")
+
+            db.conn.close()
 
     def test_semantic_version(self):
         pairs = [("0.1.0", "0.2.0"), ("1.0.1", "1.1.0"), ("1.0.10", "1.1.0")]

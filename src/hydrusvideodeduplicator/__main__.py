@@ -32,7 +32,7 @@ Parameters:
 - api_url will be read from env var $HYDRUS_API_URL or .env file
 - to add custom queries, do
   --custom-query="series:twilight" --custom-query="character:edward" ... etc for each query
-- threshold is the min % matching to be considered similar. 100% is identical.
+- threshold is the min % matching to be considered similar. 100% is very very similar.
 - verbose turns on logging
 - debug turns on logging and sets the logging level to debug
 """
@@ -42,7 +42,7 @@ print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
 def main(
     api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key")] = None,
     api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = HYDRUS_API_URL,
-    overwrite: Annotated[Optional[bool], typer.Option(help="Overwrite existing perceptual hashes")] = False,
+    overwrite: Annotated[Optional[Optional[bool]], typer.Option(hidden=True)] = None,  # deprecated
     query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = HYDRUS_QUERY,
     threshold: Annotated[
         Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")
@@ -56,14 +56,21 @@ def main(
     verify_cert: Annotated[
         Optional[str], typer.Option(help="Path to TLS cert. This forces verification.")
     ] = REQUESTS_CA_BUNDLE,
+    clear_search_tree: Annotated[
+        Optional[bool], typer.Option(help="Clear the search tree that tracks what files have already been compared.")
+    ] = False,
     clear_search_cache: Annotated[
-        Optional[bool], typer.Option(help="Clear the cache that tracks what files have already been compared")
+        Optional[bool],
+        typer.Option(
+            help="Clear the search cache that tracks what files have been compared with a given similarity threshold."
+        ),
     ] = False,
     failed_page_name: Annotated[
         Optional[str], typer.Option(help="The name of the Hydrus page to add failed files to.")
     ] = FAILED_PAGE_NAME,
     job_count: Annotated[
-        Optional[int], typer.Option(help="Number of CPU threads to use. Default is all but one core.")
+        Optional[int],
+        typer.Option(help="Number of CPU threads to use for perceptual hashing. Default is all but one core."),
     ] = -2,
     dedup_database_dir: Annotated[
         Optional[Path], typer.Option(help="The directory to store the database used for dedupe.")
@@ -72,7 +79,7 @@ def main(
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
 ):
     # Fix mypy errors from optional parameters
-    assert overwrite is not None and threshold is not None and skip_hashing is not None and job_count is not None
+    assert threshold is not None and skip_hashing is not None and job_count is not None
 
     # CLI debug parameter sets log level to info or debug
     loglevel = logging.INFO
@@ -95,9 +102,13 @@ def main(
 
     DedupeDB.set_db_dir(dedup_database_dir)
 
-    # Clear cache
-    if clear_search_cache:
-        DedupeDB.clear_search_cache()
+    # Print a warning if the deprecated overwrite option is set
+    if overwrite is not None:
+        pretty_overwrite = "--" + ("" if overwrite is True else "no-") + "overwrite"
+        print_and_log(
+            logger,
+            f"WARNING: '{pretty_overwrite}' option was deprecated and does nothing as of 0.7.0. Remove it from your args.",  # noqa: E501
+        )
 
     # CLI overwrites env vars with no default value
     if not api_key:
@@ -136,7 +147,51 @@ def main(
 
     # Deduplication
 
-    deduper = HydrusVideoDeduplicator(client=hvdclient, job_count=job_count, failed_page_name=failed_page_name)
+    if DedupeDB.does_db_exist():
+        print_and_log(logger, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
+        db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
+        db.init_connection()
+        # Upgrade the database before doing anything.
+        db.begin_transaction()
+        with db.conn:
+            db.upgrade_db()
+        db_stats = DedupeDB.get_db_stats(db)
+
+        print_and_log(
+            logger,
+            f"Database has {db_stats.num_videos} videos already perceptually hashed.",
+        )
+        print_and_log(
+            logger,
+            f"Database filesize: {db_stats.file_size} bytes.",
+        )
+
+        if clear_search_tree:
+            db.begin_transaction()
+            with db.conn:
+                db.clear_search_tree()
+            print("[green] Cleared the search tree.")
+
+        if clear_search_cache:
+            db.begin_transaction()
+            with db.conn:
+                db.clear_search_cache()
+            print("[green] Cleared the search cache.")
+
+    else:
+        print_and_log(logger, f"Database not found. Creating one at '{DedupeDB.get_db_file_path()}'", logging.INFO)
+        if not DedupeDB.get_db_dir().exists():
+            DedupeDB.create_db_dir()
+        db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
+        db.init_connection()
+        db.begin_transaction()
+        with db.conn:
+            db.create_tables()
+        db_stats = DedupeDB.get_db_stats(db)
+
+    deduper = HydrusVideoDeduplicator(
+        db, client=hvdclient, job_count=job_count, failed_page_name=failed_page_name, custom_query=query
+    )
 
     if debug:
         deduper.hydlog.setLevel(logging.DEBUG)
@@ -147,36 +202,7 @@ def main(
         raise typer.Exit(code=1)
     HydrusVideoDeduplicator.threshold = threshold
 
-    if DedupeDB.does_db_exist():
-        db_stats = DedupeDB.get_db_stats()
-        print_and_log(logger, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
-        print_and_log(
-            logger,
-            f"Database has {db_stats.num_videos} videos already perceptually hashed.",
-        )
-        print_and_log(
-            logger,
-            f"Database filesize: {db_stats.file_size} bytes.",
-        )
-        # Upgrade the database before doing anything.
-        db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
-        db.init_connection()
-        db.upgrade_db()
-        db.commit()
-        db.close()
-
-        DedupeDB.clear_trashed_files_from_db(hvdclient)
-    else:
-        print_and_log(logger, f"Database not found. Creating one at '{DedupeDB.get_db_file_path()}'", logging.INFO)
-        DedupeDB.create_db()
-        db_stats = DedupeDB.get_db_stats()
-
-    if overwrite:
-        print(f"[yellow] Overwriting {db_stats.num_videos} existing hashes.")
-
     deduper.deduplicate(
-        overwrite=overwrite,
-        custom_query=query,
         skip_hashing=skip_hashing,
     )
 

@@ -4,26 +4,23 @@ import logging
 import os
 import sqlite3
 from dataclasses import dataclass
-from itertools import islice
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rich import print
-from sqlitedict import SqliteDict
-from tqdm import tqdm
 
 from ..__about__ import __version__
+from .vptree import VpTreeManager
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
-    from typing import Any, TypeAlias
+    from collections.abc import Iterable
+    from typing import TypeAlias
 
     FileServiceKeys: TypeAlias = list[str]
     FileHashes: TypeAlias = Iterable[str]
 
-    from hydrusvideodeduplicator.client import HVDClient
 
-dedupedblog = logging.getLogger("hvd")
+dedupedblog = logging.getLogger("db")
 dedupedblog.setLevel(logging.INFO)
 
 _db_dir: Path = Path()
@@ -46,150 +43,6 @@ def does_db_exist() -> bool:
         return False
 
 
-def database_accessible(db_file: Path | str, tablename: str, verbose: bool = False):
-    try:
-        with SqliteDict(str(db_file), tablename=tablename, flag="r"):
-            return True
-    except OSError:
-        if verbose:
-            print("[red] Database does not exist.")
-    except RuntimeError:  # SqliteDict error when trying to create a table for a DB in read-only mode
-        if verbose:
-            print("[red] Database does not exist.")
-    except Exception as exc:
-        if verbose:
-            print(f"[red] Could not access database. Exception: {exc}")
-    return False
-
-
-def is_db_accessible(verbose: bool = False) -> bool:
-    """
-    Check DB exists and is accessible.
-
-    Return DB exists and is accessible.
-    """
-    return database_accessible(get_db_file_path(), tablename="videos", verbose=verbose)
-
-
-def clear_search_cache() -> None:
-    """Delete cache search index value for each video in database"""
-    if not is_db_accessible():
-        return
-
-    with SqliteDict(str(get_db_file_path()), tablename="videos", flag="c") as hashdb:
-        for key in hashdb:
-            row = hashdb[key]
-            if "farthest_search_index" in row:
-                del row["farthest_search_index"]
-                hashdb[key] = row
-                hashdb.commit()
-    print("[green] Cleared search cache.")
-
-
-def update_search_cache(new_total: int | None = None) -> None:
-    """
-    Update the search cache to clamp the farthest_search_index to the current length of the database.
-    """
-    assert new_total is None or new_total >= 0
-
-    if not is_db_accessible():
-        return
-
-    BATCH_SIZE = 256
-    with SqliteDict(str(get_db_file_path()), tablename="videos", flag="c", outer_stack=False) as hashdb:
-        if new_total is None:
-            new_total = len(hashdb)
-        for batched_items in batched_and_save_db(hashdb, BATCH_SIZE):
-            for video_hash, _ in batched_items.items():
-                row = hashdb[video_hash]
-                if "farthest_search_index" in row and row["farthest_search_index"] > new_total:
-                    row["farthest_search_index"] = new_total
-                    hashdb[video_hash] = row
-
-
-def batched_and_save_db(
-    db: SqliteDict,
-    batch_size: int = 1,
-    chunk_size: int = 1,
-) -> Generator[dict[str, dict[str, Any]], Any, None]:
-    """
-    Batch rows into rows of length n and save changes after each batch or after chunk_size batches.
-    """
-    assert batch_size >= 1 and chunk_size >= 1
-    it = iter(db.items())
-    chunk_counter = 0
-    while batch_items := dict(islice(it, batch_size)):
-        yield batch_items
-        chunk_counter += 1
-
-        # Save changes after chunk_size batches
-        if chunk_counter % chunk_size == 0:
-            db.commit()
-
-
-def are_files_deleted_hydrus(client: HVDClient, file_hashes: FileHashes) -> dict[str, bool]:
-    """
-    Check if files are trashed or deleted in Hydrus
-
-    Returns a dictionary of {hash, trashed_or_not}
-    """
-    videos_metadata = client.client.get_file_metadata(hashes=file_hashes, only_return_basic_information=False)[
-        "metadata"
-    ]
-
-    result: dict[str, bool] = {}
-    for video_metadata in videos_metadata:
-        # This should never happen, but it shouldn't break the program if it does
-        if "hash" not in video_metadata:
-            logging.error("Hash not found for potentially trashed file.")
-            continue
-        video_hash = video_metadata["hash"]
-        is_deleted: bool = video_metadata.get("is_deleted", False)
-        result[video_hash] = is_deleted
-
-    return result
-
-
-def clear_trashed_files_from_db(client: HVDClient) -> None:
-    """
-    Delete trashed and deleted Hydrus files from the database.
-    """
-    try:
-        with SqliteDict(str(get_db_file_path()), tablename="videos", flag="c", outer_stack=False) as hashdb:
-            # This is EXPENSIVE. sqlitedict gets len by iterating over the entire database!
-            if (total := len(hashdb)) < 1:
-                return
-
-            delete_count = 0
-            try:
-                with tqdm(
-                    dynamic_ncols=True,
-                    total=total,
-                    desc="Searching for trashed files to prune",
-                    unit="video",
-                    colour="BLUE",
-                ) as pbar:
-                    BATCH_SIZE = 32
-                    for batched_items in batched_and_save_db(hashdb, BATCH_SIZE):
-                        is_trashed_result = are_files_deleted_hydrus(client, batched_items.keys())
-                        for video_hash, is_trashed in is_trashed_result.items():
-                            if is_trashed is True:
-                                del hashdb[video_hash]
-                                delete_count += 1
-                        pbar.update(min(BATCH_SIZE, total - pbar.n))
-            except Exception as exc:
-                print("[red] Failed to clear trashed videos cache.")
-                print(exc)
-                dedupedblog.error(exc)
-            finally:
-                if delete_count > 0:
-                    print(f"Cleared {delete_count} trashed videos from the database.")
-                update_search_cache(total - delete_count)
-
-    except OSError as exc:
-        dedupedblog.info(exc)
-
-
 def create_db_dir() -> None:
     """
     Create the database folder if it doesn't already exist.
@@ -209,29 +62,12 @@ class DatabaseStats:
     file_size: int  # in bytes
 
 
-def get_db_stats() -> DatabaseStats:
+def get_db_stats(db: DedupeDb) -> DatabaseStats:
     """Get some database stats."""
-    con = sqlite3.connect(get_db_file_path())
-    (num_videos,) = con.execute("SELECT COUNT(*) FROM videos").fetchone()
-    con.close()
+    # TODO: We don't need to get the file hashes. We just need the length.
+    num_videos = len(db.get_phashed_files())
     file_size = os.path.getsize(get_db_file_path())
     return DatabaseStats(num_videos, file_size)
-
-
-def create_tables():
-    """
-    Create the database with the necessary tables.
-    """
-    # videos table (this is the sqlitedict schema)
-    con = sqlite3.connect(get_db_file_path())
-    con.execute("CREATE TABLE IF NOT EXISTS videos (key TEXT PRIMARY KEY, value BLOB)")
-
-    # version table
-    con.execute("CREATE TABLE IF NOT EXISTS version (version TEXT)")
-    con.execute("INSERT INTO version (version) VALUES (:version)", {"version": __version__})
-
-    con.commit()
-    con.close()
 
 
 def create_db():
@@ -240,7 +76,11 @@ def create_db():
     """
     if not get_db_dir().exists():
         create_db_dir()
-    create_tables()
+    db = DedupeDb(get_db_dir(), get_db_name())
+    db.init_connection()
+    db.create_tables()
+    db.commit()
+    db.close()
 
 
 def set_db_dir(dir: Path):
@@ -301,12 +141,188 @@ class DedupeDb:
     def commit(self):
         self.conn.commit()
 
+    def begin_transaction(self):
+        self.execute("BEGIN TRANSACTION")
+
     def close(self):
         self.conn.close()
 
     """
+    Tables
+    """
+
+    def create_tables(self):
+        # version table
+        self.execute("CREATE TABLE IF NOT EXISTS version (version TEXT)")
+        self.execute("INSERT INTO version (version) VALUES (:version)", {"version": __version__})
+
+        # files table
+        self.execute("CREATE TABLE IF NOT EXISTS files ( hash_id INTEGER PRIMARY KEY, file_hash BLOB_BYTES UNIQUE )")
+
+        # phash tables
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS shape_perceptual_hashes ( phash_id INTEGER PRIMARY KEY, phash BLOB_BYTES UNIQUE )"  # noqa: E501
+        )
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS shape_perceptual_hash_map ( phash_id INTEGER, hash_id INTEGER, PRIMARY KEY ( phash_id, hash_id ) )"  # noqa: E501
+        )
+
+        # vptree tables
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS shape_vptree ( phash_id INTEGER PRIMARY KEY, parent_id INTEGER, radius INTEGER, inner_id INTEGER, inner_population INTEGER, outer_id INTEGER, outer_population INTEGER )"  # noqa: E501
+        )
+        # fmt: off
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS shape_maintenance_branch_regen ( phash_id INTEGER PRIMARY KEY )"
+        )  # noqa: E501
+        # fmt: on
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS shape_search_cache ( hash_id INTEGER PRIMARY KEY, searched_distance INTEGER )"
+        )
+
+        # vptree insert queue. this is the list of files and their phashes that need to be inserted into the vptree.
+        # when entries are added to this queue they don't exist at all in the other tables. they don't have a hash_id
+        # or phash_id yet, unless those already exist from other files.
+        # this is just a table to store the phashes until they are properly inserted into the vptree, since inserting
+        # can take a while.
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS phashed_file_queue ( file_hash BLOB_BYTES NOT NULL UNIQUE, phash BLOB_BYTES NOT NULL, PRIMARY KEY ( file_hash, phash ) )"  # noqa: E501
+        )
+
+    """
     Utility
     """
+
+    def clear_search_tree(self):
+        """Clear the search tree. The search cache will also be cleared. Does not clear the perceptual hash map."""
+        # Note: Need a separate cursor here since we're running queries in the loop that overwrite this cursor.
+        cur = self.conn.cursor()
+        cur.execute("SELECT phash_id, hash_id FROM shape_perceptual_hash_map")
+
+        # Move the files back into the queue so that the tree can be rebuilt.
+        for phash_id, hash_id in cur:
+            phash_result = self.execute(
+                "SELECT phash FROM shape_perceptual_hashes WHERE phash_id = :phash_id", {"phash_id": phash_id}
+            ).fetchone()
+            if not phash_result:
+                # This should not happen. Perceptual hashes should always be in the database if there is a phash_id,
+                # otherwise we have no idea what perceptual hash it is.
+                print(
+                    f"ERROR clearing search tree while to get perceptual_hash from phash_id {phash_id}. perceptual_hash not found. Your DB may be corrupt."  # noqa: E501
+                )
+                continue
+            perceptual_hash = phash_result[0]
+
+            file_hash_result = self.execute(
+                "SELECT file_hash FROM files WHERE hash_id = :hash_id", {"hash_id": hash_id}
+            ).fetchone()
+            if not file_hash_result:
+                # This should not happen. File hashes should always be in the database if there is a hash_id,
+                # otherwise we have no idea what file it is in Hydrus.
+                print(
+                    f"ERROR clearing search tree while to get file_hash from hash_id {hash_id}. file_hash not found. Your DB may be corrupt."  # noqa: E501
+                )
+                continue
+            file_hash = file_hash_result[0]
+
+            self.add_to_phashed_files_queue(file_hash, perceptual_hash)
+
+        self.execute("DELETE FROM shape_vptree")
+        self.execute("DELETE FROM shape_search_cache")
+        self.execute("DELETE FROM shape_maintenance_branch_regen")
+
+    def clear_search_cache(self):
+        """Clear the search cache for all files."""
+        tree = VpTreeManager(self)
+        result = self.execute("SELECT hash_id FROM shape_search_cache").fetchall()
+        if result:
+            hash_ids = [hash_id[0] for hash_id in result]
+            tree.reset_search(hash_ids)
+
+    def add_file(self, file_hash: str):
+        """Add a file to the db. If it already exists, do nothing."""
+        self.execute("INSERT OR IGNORE INTO files ( file_hash ) VALUES ( :file_hash )", {"file_hash": file_hash})
+
+    def add_perceptual_hash(self, perceptual_hash: str) -> int:
+        """
+        Add a perceptual hash to the db.
+        If it already exists, do nothing.
+
+        Returns the phash_id of the perceptual hash.
+        """
+        result = self.execute(
+            "SELECT phash_id FROM shape_perceptual_hashes WHERE phash = :phash;", {"phash": perceptual_hash}
+        ).fetchone()
+
+        if result is None:
+            self.execute(
+                "INSERT INTO shape_perceptual_hashes ( phash ) VALUES ( :phash )",
+                {"phash": perceptual_hash},
+            )
+            result = self.execute(
+                "SELECT phash_id FROM shape_perceptual_hashes WHERE phash = :phash;", {"phash": perceptual_hash}
+            ).fetchone()
+            result = result[0]
+            assert isinstance(result, int)
+        else:
+            result = result[0]
+        # TODO: Double check that the return value here is actually there if the result is not None.
+        # Remove the assert below if it is.
+        assert isinstance(result, int)
+        return result
+
+    def add_to_phashed_files_queue(self, file_hash: str, perceptual_hash: str):
+        """
+        Add a file and its corresponding perceptual hash to the queue to be inserted into the vptree.
+
+        We keep the queue of files to be inserted in the vptree in a separate table to avoid any potential issues
+        with assumptions of what needs to exist when/where for vptree operations.
+
+        If the file hash is already in the queue, it will be replaced with the new perceptual hash.
+        """
+        self.execute(
+            "REPLACE INTO phashed_file_queue ( file_hash, phash ) VALUES ( :file_hash, :phash )",
+            {"file_hash": file_hash, "phash": perceptual_hash},
+        )
+
+    def associate_file_with_perceptual_hash(self, file_hash: str, perceptual_hash: str):
+        """
+        Associate a file with a perceptual hash in the database.
+        This will insert the file into the VpTree.
+        If the file already has a perceptual hash, it will be overwritten.
+
+        Note:
+        Perceptual hashes are not unique for each file.
+        Files can have identical perceptual hashes.
+        This is not even that rare, e.g. a video that is all the same color.
+        """
+        hash_id = self.get_hash_id(file_hash)
+
+        perceptual_hash_id = self.get_phash_id(perceptual_hash)
+        assert perceptual_hash_id is not None
+
+        tree = VpTreeManager(self)
+        tree.add_leaf(perceptual_hash_id, perceptual_hash)
+
+        already_exists = self.execute(
+            "SELECT hash_id FROM shape_perceptual_hash_map WHERE hash_id = :hash_id", {"hash_id": hash_id}
+        ).fetchone()
+
+        if already_exists:
+            self.execute("DELETE FROM shape_perceptual_hash_map WHERE hash_id = :hash_id", {"hash_id": hash_id})
+
+        res = self.execute(
+            "INSERT INTO shape_perceptual_hash_map ( phash_id, hash_id ) VALUES ( :phash_id, :hash_id )",
+            {"phash_id": perceptual_hash_id, "hash_id": hash_id},
+        )
+
+        # NOTE: We must fetchone here so that the rowcount is updated.
+        res.fetchone()
+        if res.rowcount > 0:
+            self.execute(
+                "REPLACE INTO shape_search_cache ( hash_id, searched_distance ) VALUES ( :hash_id, :searched_distance );",  # noqa: E501
+                {"hash_id": hash_id, "searched_distance": None},
+            )
 
     def get_version(self) -> str:
         if self.does_table_exist("version"):
@@ -324,6 +340,66 @@ class DedupeDb:
         # pls no injection. named placeholders don't work for tables.
         res = self.execute(f"SELECT * FROM pragma_table_list WHERE name='{table}'")
         return bool(res.fetchall())
+
+    def get_phash_id(self, perceptual_hash: str) -> str | None:
+        """Get the perceptual hash id from the phash, or None if not found."""
+        result = self.execute(
+            "SELECT phash_id FROM shape_perceptual_hashes WHERE phash = :phash", {"phash": perceptual_hash}
+        ).fetchone()
+        perceptual_hash_id = None
+        if result is not None:
+            (perceptual_hash_id,) = result
+        return perceptual_hash_id
+
+    def get_phash_id_from_hash_id(self, hash_id: str) -> str | None:
+        """Get the phash id from the hash_id, or None if not found."""
+        result = self.execute(
+            "SELECT phash_id FROM shape_perceptual_hash_map WHERE hash_id = :hash_id", {"hash_id": hash_id}
+        ).fetchone()
+        perceptual_hash_id = None
+        if result is not None:
+            (perceptual_hash_id,) = result
+        return perceptual_hash_id
+
+    def get_hash_id(self, file_hash: str) -> str | None:
+        """Get the hash id from the file hash, or None if not found."""
+        result = self.execute(
+            "SELECT hash_id FROM files WHERE file_hash = :file_hash", {"file_hash": file_hash}
+        ).fetchone()
+        hash_id = None
+        if result is not None:
+            (hash_id,) = result
+        return hash_id
+
+    def get_phash(self, phash_id: str) -> str | None:
+        """Get the perceptual hash from its phash_id, or None if not found."""
+        result = self.execute(
+            "SELECT phash FROM shape_perceptual_hashes WHERE phash_id = :phash_id", {"phash_id": phash_id}
+        ).fetchone()
+        phash = None
+        if result is not None:
+            (phash,) = result
+        return phash
+
+    def get_file_hash(self, hash_id: str) -> str | None:
+        """Get the file hash from its hash_id, or None if not found."""
+        result = self.execute("SELECT file_hash FROM files WHERE hash_id = :hash_id", {"hash_id": hash_id}).fetchone()
+        file_hash = None
+        if result is not None:
+            (file_hash,) = result
+        return file_hash
+
+    def get_phashed_files(self) -> list[str]:
+        """Get the file hashes of all files that are phashed. This includes the files in the phashed_file_queue."""
+        all_phashed_files_query = (
+            "SELECT file_hash FROM files "
+            "WHERE hash_id IN (SELECT hash_id FROM shape_perceptual_hash_map) "
+            "UNION "
+            "SELECT file_hash FROM phashed_file_queue"
+        )
+        all_phashed_files = self.execute(all_phashed_files_query)
+        all_phashed_files = [row[0] for row in all_phashed_files]
+        return all_phashed_files
 
     """
     Misc
@@ -353,39 +429,69 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
         if not self.does_need_upgrade():
             return
 
-        # Note: We need to keep re-running get_version so that we can progressively upgrade.
-        if SemanticVersion(version) < SemanticVersion("0.6.0"):
-            print_upgrade(version, "0.6.0")
-            self.set_version("0.6.0")
-            version = self.get_version()
-
         if SemanticVersion(version) < SemanticVersion("0.7.0"):
             print_upgrade(version, "0.7.0")
+
+            # Create version table
+            self.execute("CREATE TABLE IF NOT EXISTS version (version TEXT)")
+            self.execute("INSERT INTO version (version) VALUES (:version)", {"version": "0.6.0"})
+
+            # Create the vptree tables
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS files ( hash_id INTEGER PRIMARY KEY, file_hash BLOB_BYTES UNIQUE )"
+            )
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS shape_perceptual_hashes ( phash_id INTEGER PRIMARY KEY, phash BLOB_BYTES UNIQUE )"  # noqa: E501
+            )
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS shape_perceptual_hash_map ( phash_id INTEGER, hash_id INTEGER, PRIMARY KEY ( phash_id, hash_id ) )"  # noqa: E501
+            )
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS shape_vptree ( phash_id INTEGER PRIMARY KEY, parent_id INTEGER, radius INTEGER, inner_id INTEGER, inner_population INTEGER, outer_id INTEGER, outer_population INTEGER )"  # noqa: E501
+            )
+            # fmt: off
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS shape_maintenance_branch_regen ( phash_id INTEGER PRIMARY KEY )"
+            )  # noqa: E501
+            # fmt: on
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS shape_search_cache ( hash_id INTEGER PRIMARY KEY, searched_distance INTEGER )"  # noqa: E501
+            )
+
+            self.execute(
+                "CREATE TABLE IF NOT EXISTS phashed_file_queue ( file_hash BLOB_BYTES NOT NULL UNIQUE, phash BLOB_BYTES NOT NULL, PRIMARY KEY ( file_hash, phash ) )"  # noqa: E501
+            )
+
+            # Insert the files from the SqliteDict videos table into the hash queue.
+            old_videos_data = []
+            print(
+                "Migrating perceptually hashed videos from the old table.\n"
+                "This may take a bit, depending your db length."
+            )
+
+            from pickle import loads
+
+            for key, value in self.execute("SELECT key, value FROM videos"):
+                # I don't see why value could be None, but if it happens for whatever reason
+                # we just want to continue.
+                if value is None:
+                    continue
+                row = loads(bytes(value))  # this is decode function in SqliteDict
+                if "perceptual_hash" in row:
+                    video_hash = key
+                    old_videos_data.append((video_hash, row["perceptual_hash"]))
+                    # The farthest search index will not be moved.
+
+            for video_hash, perceptual_hash in old_videos_data:
+                # TODO: If these functions change this upgrade may not work! We need to be careful about updating them. # noqa: E501
+                #       An upgrade cutoff at some point to prevent bitrot is a good idea, which is what Hydrus does.
+                self.add_to_phashed_files_queue(video_hash, perceptual_hash)
+
             self.set_version("0.7.0")
+            # Note: We need to keep re-running get_version so that we can progressively upgrade.
             version = self.get_version()
 
         self.set_version(__version__)
-
-
-def associate_file_with_perceptual_hash(file_hash: str, perceptual_hash: str):
-    """
-    Associate a file with a perceptual hash in the database. If the file already has a perceptual hash, it will be
-    overwritten.
-
-    Note:
-    Perceptual hashes are not unique.
-    Files can have identical perceptual hashes.
-    This would not even be that rare, e.g. a video that is all the same color.
-    """
-    if not is_db_accessible():
-        raise DedupeDbException("db is not accessible while trying to associate file with perceptual hash.")
-
-    with SqliteDict(
-        get_db_file_path(), tablename="videos", flag="c", autocommit=True, outer_stack=False
-    ) as videos_table:
-        row = videos_table[file_hash] if file_hash in videos_table else {}
-        row["perceptual_hash"] = perceptual_hash
-        videos_table[file_hash] = row
 
 
 class SemanticVersion:

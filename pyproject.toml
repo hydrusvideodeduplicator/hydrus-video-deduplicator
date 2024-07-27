@@ -26,7 +26,6 @@ dependencies = [
     "tqdm",
     "python-dotenv",
     "typer",
-    "sqlitedict",
     "requests",
     "psutil",
     "joblib>=1.4",
@@ -85,7 +84,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.test.scripts]
-all = "python -m pytest src/hydrusvideodeduplicator/pdqhashing/tests tests/test_dedupe.py tests/test_vpdqpy.py --verbose {args}"
+all = "python -m pytest tests/test_db.py src/hydrusvideodeduplicator/pdqhashing/tests tests/test_dedupe.py tests/test_vpdqpy.py --verbose {args}"
 pdq = "python -m pytest src/hydrusvideodeduplicator/pdqhashing/tests --verbose {args}"
 db = "python -m pytest tests/test_db.py --verbose {args}"
 

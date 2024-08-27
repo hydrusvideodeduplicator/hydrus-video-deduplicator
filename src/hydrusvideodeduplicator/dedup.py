@@ -227,9 +227,12 @@ class HydrusVideoDeduplicator:
         # Number of potential duplicates before adding more. Just for user info.
         pre_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
 
+        # TODO: Make configurable
+        AUTOCOMMIT_THRESHOLD = 100
+
         video_counter = 0
         with SqliteDict(
-            str(DedupeDB.get_db_file_path()), tablename="videos", flag="c", autocommit=True, outer_stack=False
+            str(DedupeDB.get_db_file_path()), tablename="videos", flag="c", autocommit=False, outer_stack=False
         ) as videos_table:
             current_hash = None
             try:
@@ -280,9 +283,12 @@ class HydrusVideoDeduplicator:
                             # so update farthest_search_index to the current length of the table
                             row["farthest_search_index"] = total
                             videos_table[video1_hash] = row
+                            if i % AUTOCOMMIT_THRESHOLD:
+                                videos_table.commit()
 
             except KeyboardInterrupt:
                 print("[yellow] Duplicate search was interrupted!")
+                videos_table.commit()
             else:
                 # current_hash can be None if Hydrus DB has no files...
                 if current_hash is not None:
@@ -291,6 +297,8 @@ class HydrusVideoDeduplicator:
                     row = videos_table[current_hash]
                     row["farthest_search_index"] = total
                     videos_table[current_hash] = row
+                    videos_table.commit()
+            videos_table.commit()
 
         # Statistics for user
         post_dedupe_count = self.client.get_potential_duplicate_count_hydrus()

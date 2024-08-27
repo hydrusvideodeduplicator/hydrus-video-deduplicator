@@ -82,8 +82,10 @@ class HydrusVideoDeduplicator:
         if skip_hashing:
             print("[yellow] Skipping perceptual hashing")
         else:
+            print('Requesting hashes from hydrus (may take a moment depending on your client size and search filters)...', end="")
             video_hashes = list(self.client.get_video_hashes(search_tags))
             self.add_perceptual_hashes_to_db(overwrite=overwrite, video_hashes=video_hashes)
+            print(' done.')
 
         self._find_potential_duplicates()
 

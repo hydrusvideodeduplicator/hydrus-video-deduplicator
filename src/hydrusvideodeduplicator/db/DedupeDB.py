@@ -167,9 +167,7 @@ def clear_trashed_files_from_db(client: HVDClient) -> None:
             finally:
                 if delete_count > 0:
                     print(f"Cleared {delete_count} trashed videos from the database.")
-                print('Updating search cache...', end="")
                 update_search_cache(total - delete_count)
-                print(' done.')
 
     except OSError as exc:
         dedupedblog.info(exc)

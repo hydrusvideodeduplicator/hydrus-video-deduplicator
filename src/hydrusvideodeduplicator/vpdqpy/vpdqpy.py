@@ -148,9 +148,24 @@ class Vpdq:
             else:
                 average_fps = round(raw_average_fps)
 
-            for index, frame in enumerate(container.decode(video)):
-                if index % average_fps == 0:
-                    yield frame
+            # The following is a very overly complex "for loop" in order to decode frames from the video.
+            # Why not use a for loop? Because for some reason av>=12 will sometimes throw an
+            # av.error.InvalidDataError error in container.decode(). I'm not sure why this happens.
+            # Normally this loop would be written as `for frame_index, frame in container.decode(video)`,
+            # but to catch the exception I need to wrap the decode call with try/catch and iterate using next().
+            frame_generator = container.decode(video)
+            frame_index = 0
+            while True:
+                try:
+                    frame = next(frame_generator)
+                    if frame_index % average_fps == 0:
+                        yield frame
+                    frame_index += 1
+                except StopIteration:
+                    break
+                except av.error.InvalidDataError as exc:
+                    log.error(f"Skipping bad frame at index {frame_index}: {exc}")
+                    frame_index += 1
 
     @staticmethod
     def computeHash(

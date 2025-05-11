@@ -22,7 +22,7 @@ import warnings
 
 import requests
 
-__version__ = "5.0.1"
+__version__ = "5.1.0"
 
 DEFAULT_API_URL = "http://127.0.0.1:45869/"
 HYDRUS_METADATA_ENCODING = "utf-8"
@@ -39,12 +39,12 @@ class _StringableIntEnum(enum.IntEnum):
 # The client should accept all objects that either support the iterable or mapping protocol. We must ensure that objects
 # are either lists or dicts, so Python's json module can handle them
 class _ABCJSONEncoder(json.JSONEncoder):
-    def default(self, object_: T.Any) -> T.Any:
-        if isinstance(object_, abc.Mapping):
-            return dict(object_)
-        if isinstance(object_, abc.Iterable):
-            return list(object_)
-        return super().default(object_)
+    def default(self, o: T.Any) -> T.Any:
+        if isinstance(o, abc.Mapping):
+            return dict(o)
+        if isinstance(o, abc.Iterable):
+            return list(o)
+        return super().default(o)
 
 
 # This is public so other code can import it to annotate their own types
@@ -98,6 +98,9 @@ class Permission(_StringableIntEnum):
     ADD_NOTES = 7
     MANAGE_FILE_RELATIONSHIPS = 8
     EDIT_FILE_RATINGS = 9
+    MANAGE_POPUPS = 10
+    EDIT_TIMES = 11
+    COMMIT_PENDING = 12
 
 
 @enum.unique
@@ -177,6 +180,11 @@ class FileSortType(_StringableIntEnum):
     MODIFIED_TIME = 14
     FRAMERATE = 15
     NUMBER_OF_FRAMES = 16
+    LAST_VIEWED_TIME = 18
+    ARCHIVE_TIMESTAMP = 19
+    HASH_HEX = 20
+    PIXEL_HASH_HEX = 21
+    BLURHASH = 22
 
 
 @enum.unique
@@ -217,8 +225,33 @@ class DuplicateStatus(_StringableIntEnum):
     DUPLICATES = 8
 
 
+@enum.unique
+class TimestampType(_StringableIntEnum):
+    MODIFIED_DOMAIN = 0
+    MODIFIED_FILE = 1
+    MODIFIED_AGGREGATE = 2
+    IMPORTED = 3
+    DELETED = 4
+    ARCHIVED = 5
+    LAST_VIEWED = 6
+    PREVIOUSLY_VIEWED = 7
+
+
+@enum.unique
+class CanvasType(_StringableIntEnum):
+    MEDIA_VIEWER = 0
+    PREVIEW_VIEWER = 1
+
+
+@enum.unique
+class RenderFormat(_StringableIntEnum):
+    JPEG = 1
+    PNG = 2
+    WEBP = 33  # this is not a typo, hydev really made it 33
+
+
 class Client:
-    VERSION = 56
+    VERSION = 70
 
     # Access Management
     _GET_API_VERSION_PATH = "/api_version"
@@ -235,6 +268,8 @@ class Client:
     _ARCHIVE_FILES_PATH = "/add_files/archive_files"
     _UNARCHIVE_FILES_PATH = "/add_files/unarchive_files"
     _GENERATE_HASHES_PATH = "/add_files/generate_hashes"
+    _CLEAR_FILE_DELETION_RECORD_PATH = "/add_files/clear_file_deletion_record"
+    _MIGRATE_FILES_PATH = "/add_files/migrate_files"
 
     # Adding Tags
     _CLEAN_TAGS_PATH = "/add_tags/clean_tags"
@@ -286,9 +321,27 @@ class Client:
     _GET_RANDOM_POTENTIALS_PATH = "/manage_file_relationships/get_random_potentials"
     _SET_FILE_RELATIONSHIPS_PATH = "/manage_file_relationships/set_file_relationships"
     _SET_KINGS_PATH = "/manage_file_relationships/set_kings"
+    _REMOVE_POTENTIALS_PATH = "/manage_file_relationships/remove_potentials"
 
     # Editing File Ratings
     _SET_RATING_PATH = "/edit_ratings/set_rating"
+
+    # Editing File Times
+    _SET_TIME_PATH = "/edit_times/set_time"
+
+    # Managing Popups
+    _GET_POPUPS_PATH = "/manage_popups/get_popups"
+    _ADD_POPUP_PATH = "/manage_popups/add_popup"
+    _UPDATE_POPUP_PATH = "/manage_popups/update_popup"
+    _DISMISS_POPUP_PATH = "/manage_popups/dismiss_popup"
+    _FINISH_POPUP_PATH = "/manage_popups/finish_popup"
+    _CANCEL_POPUP_PATH = "/manage_popups/cancel_popup"
+    _CALL_USER_CALLABLE_PATH = "/manage_popups/call_user_callable"
+
+    # Managing Services
+    _GET_PENDING_COUNTS_PATH = "/manage_services/get_pending_counts"
+    _COMMIT_PENDING_PATH = "/manage_services/commit_pending"
+    _FORGET_PENDING_PATH = "/manage_services/forget_pending"
 
     def __init__(
         self,
@@ -394,9 +447,22 @@ class Client:
         response = self._api_request("GET", self._GET_SERVICES_PATH)
         return response.json()
 
-    def add_file(self, path_or_file: T.Union[str, os.PathLike, BinaryFileLike]) -> dict[str, T.Any]:
+    def add_file(
+        self,
+        path_or_file: T.Union[str, os.PathLike, BinaryFileLike],
+        delete_after_successful_import: T.Optional[bool] = None,
+        file_service_keys: T.Optional[abc.Iterable[str]] = None,
+        deleted_file_service_keys: T.Optional[abc.Iterable[str]] = None,
+    ) -> dict[str, T.Any]:
         if isinstance(path_or_file, (str, os.PathLike)):
-            response = self._api_request("POST", self._ADD_FILE_PATH, json={"path": os.fspath(path_or_file)})
+            payload: dict[str, T.Any] = {"path": os.fspath(path_or_file)}
+            if delete_after_successful_import is not None:
+                payload["delete_after_successful_import"] = delete_after_successful_import
+            if file_service_keys is not None:
+                payload["file_service_keys"] = file_service_keys
+            if deleted_file_service_keys is not None:
+                payload["deleted_file_service_keys"] = deleted_file_service_keys
+            response = self._api_request("POST", self._ADD_FILE_PATH, json=payload)
         else:
             response = self._api_request(
                 "POST",
@@ -489,6 +555,37 @@ class Client:
         response = self._api_request("POST", self._GENERATE_HASHES_PATH, json={"path": path})
         return response.json()
 
+    def clear_file_deletion_record(
+        self,
+        file_ids: T.Optional[abc.Iterable[str]] = None,
+        hashes: T.Optional[abc.Iterable[str]] = None,
+    ) -> None:
+        payload: dict[str, T.Any] = {}
+        if file_ids is not None:
+            payload["file_ids"] = file_ids
+        if hashes is not None:
+            payload["hashes"] = hashes
+
+        self._api_request("POST", self._CLEAR_FILE_DELETION_RECORD_PATH, json=payload)
+
+    def migrate_files(
+        self,
+        hashes: T.Optional[abc.Iterable[str]] = None,
+        file_ids: T.Optional[abc.Iterable[int]] = None,
+        file_service_keys: T.Optional[abc.Iterable[str]] = None,
+        deleted_file_service_keys: T.Optional[abc.Iterable[str]] = None,
+    ) -> None:
+        payload: dict[str, T.Any] = {}
+        if hashes is not None:
+            payload["hashes"] = hashes
+        if file_ids is not None:
+            payload["file_ids"] = file_ids
+        if file_service_keys is not None:
+            payload["file_service_keys"] = file_service_keys
+        if deleted_file_service_keys is not None:
+            payload["deleted_file_service_keys"] = deleted_file_service_keys
+        self._api_request("POST", self._MIGRATE_FILES_PATH, json=payload)
+
     def get_url_files(self, url: str, doublecheck_file_system: T.Optional[bool] = None) -> dict[str, T.Any]:
         payload = {"url": url}
         if doublecheck_file_system is not None:
@@ -509,6 +606,8 @@ class Client:
         show_destination_page: T.Optional[bool] = None,
         service_keys_to_additional_tags: T.Optional[abc.Mapping[str, abc.Iterable[str]]] = None,
         filterable_tags: T.Optional[abc.Iterable[str]] = None,
+        file_service_keys: T.Optional[abc.Iterable[str]] = None,
+        deleted_file_service_keys: T.Optional[abc.Iterable[str]] = None,
     ) -> dict[str, str]:
         if destination_page_key is not None and destination_page_name is not None:
             raise ValueError("Exactly one of destination_page_key, destination_page_name is required")
@@ -524,6 +623,10 @@ class Client:
             payload["service_keys_to_additional_tags"] = service_keys_to_additional_tags
         if filterable_tags is not None:
             payload["filterable_tags"] = filterable_tags
+        if file_service_keys is not None:
+            payload["file_service_keys"] = file_service_keys
+        if deleted_file_service_keys is not None:
+            payload["deleted_file_service_keys"] = deleted_file_service_keys
 
         response = self._api_request("POST", self._ADD_URL_PATH, json=payload)
         return response.json()
@@ -534,6 +637,7 @@ class Client:
         file_ids: T.Optional[abc.Iterable[int]] = None,
         urls_to_add: T.Optional[abc.Iterable[str]] = None,
         urls_to_delete: T.Optional[abc.Iterable[str]] = None,
+        normalise_urls: T.Optional[bool] = None,
     ) -> None:
         if hashes is None and file_ids is None:
             raise ValueError("At least one of hashes, file_ids is required")
@@ -551,6 +655,8 @@ class Client:
         if urls_to_delete is not None:
             urls_to_delete = urls_to_delete
             payload["urls_to_delete"] = urls_to_delete
+        if normalise_urls is not None:
+            payload["normalise_urls"] = normalise_urls
 
         self._api_request("POST", self._ASSOCIATE_URL_PATH, json=payload)
 
@@ -587,6 +693,8 @@ class Client:
         service_keys_to_actions_to_tags: T.Optional[
             abc.Mapping[str, abc.Mapping[T.Union[int, TagAction], abc.Iterable[str]]]
         ] = None,
+        override_previously_deleted_mappings: T.Optional[bool] = None,
+        create_new_deleted_mappings: T.Optional[bool] = None,
     ) -> None:
         if hashes is None and file_ids is None:
             raise ValueError("At least one of hashes, file_ids is required")
@@ -602,6 +710,10 @@ class Client:
             payload["service_keys_to_tags"] = service_keys_to_tags
         if service_keys_to_actions_to_tags is not None:
             payload["service_keys_to_actions_to_tags"] = service_keys_to_actions_to_tags
+        if override_previously_deleted_mappings is not None:
+            payload["override_previously_deleted_mappings"] = override_previously_deleted_mappings
+        if create_new_deleted_mappings is not None:
+            payload["create_new_deleted_mappings"] = create_new_deleted_mappings
 
         self._api_request("POST", self._ADD_TAGS_PATH, json=payload)
 
@@ -678,6 +790,8 @@ class Client:
         file_sort_asc: T.Optional[bool] = None,
         return_file_ids: T.Optional[bool] = None,
         return_hashes: T.Optional[bool] = None,
+        include_current_tags: T.Optional[bool] = None,
+        include_pending_tags: T.Optional[bool] = None,
     ) -> dict[str, T.Any]:
         params: dict[str, T.Any] = {"tags": json.dumps(tags, cls=_ABCJSONEncoder)}
         if file_service_keys is not None:
@@ -694,6 +808,10 @@ class Client:
             params["return_file_ids"] = json.dumps(return_file_ids)
         if return_hashes is not None:
             params["return_hashes"] = json.dumps(return_hashes)
+        if include_current_tags is not None:
+            params["include_current_tags"] = json.dumps(include_current_tags)
+        if include_pending_tags is not None:
+            params["include_pending_tags"] = json.dumps(include_pending_tags)
 
         response = self._api_request("GET", self._SEARCH_FILES_PATH, params=params)
         return response.json()
@@ -719,6 +837,7 @@ class Client:
         include_notes: T.Optional[bool] = None,
         include_services_object: T.Optional[bool] = None,
         include_blurhash: T.Optional[bool] = None,
+        include_milliseconds: T.Optional[bool] = None,
     ) -> dict[str, T.Any]:
         if hashes is None and file_ids is None:
             raise ValueError("At least one of hashes, file_ids is required")
@@ -742,9 +861,34 @@ class Client:
             params["include_services_object"] = json.dumps(include_services_object)
         if include_blurhash is not None:
             params["include_blurhash"] = json.dumps(include_blurhash)
+        if include_milliseconds is not None:
+            params["include_milliseconds"] = json.dumps(include_milliseconds)
 
         response = self._api_request("GET", self._GET_FILE_METADATA_PATH, params=params)
         return response.json()
+
+    def set_time(
+        self,
+        timestamp_ms: T.Union[int, None],
+        timestamp_type: T.Union[int, TimestampType],
+        file_service_key: T.Optional[str] = None,
+        canvas_type: T.Optional[T.Union[int, CanvasType]] = None,
+        domain: T.Optional[str] = None,
+        hashes: T.Optional[abc.Iterable[str]] = None,
+        file_ids: T.Optional[abc.Iterable[int]] = None,
+    ) -> dict[str, T.Any]:
+        payload: dict[str, T.Any] = {"timestamp_ms": timestamp_ms, "timestamp_type": timestamp_type}
+        if file_service_key is not None:
+            payload["file_service_key"] = file_service_key
+        if canvas_type is not None:
+            payload["canvas_type"] = canvas_type
+        if domain is not None:
+            payload["domain"] = domain
+        if hashes is not None:
+            payload["hashes"] = hashes
+        if file_ids is not None:
+            payload["file_ids"] = file_ids
+        return self._api_request("POST", self._SET_TIME_PATH, json=payload).json()
 
     def get_file(
         self, hash_: T.Optional[str] = None, file_id: T.Optional[int] = None, download: T.Optional[bool] = None
@@ -758,7 +902,7 @@ class Client:
         if file_id is not None:
             params["file_id"] = file_id
         if download is not None:
-            params["download"] = download
+            params["download"] = json.dumps(download)
 
         return self._api_request("GET", self._GET_FILE_PATH, params=params, stream=True)
 
@@ -921,6 +1065,18 @@ class Client:
         response = self._api_request("POST", self._SET_KINGS_PATH, json=payload)
         return response.json()
 
+    def remove_potentials(
+        self,
+        file_ids: T.Optional[abc.Iterable[int]] = None,
+        hashes: T.Optional[abc.Iterable[str]] = None,
+    ) -> None:
+        payload: dict[str, T.Any] = {}
+        if file_ids is not None:
+            payload["file_ids"] = file_ids
+        if hashes is not None:
+            payload["hashes"] = hashes
+        self._api_request("POST", self._REMOVE_POTENTIALS_PATH, json=payload)
+
     def get_thumbnail(self, hash_: T.Optional[str] = None, file_id: T.Optional[int] = None) -> requests.Response:
         if (hash_ is None and file_id is None) or (hash_ is not None and file_id is not None):
             raise ValueError("Exactly one of hash_, file_id is required")
@@ -934,7 +1090,14 @@ class Client:
         return self._api_request("GET", self._GET_THUMBNAIL_PATH, params=params, stream=True)
 
     def get_render(
-        self, hash_: T.Optional[str] = None, file_id: T.Optional[int] = None, download: T.Optional[bool] = None
+        self,
+        hash_: T.Optional[str] = None,
+        file_id: T.Optional[int] = None,
+        download: T.Optional[bool] = None,
+        render_format: T.Optional[T.Union[int, RenderFormat]] = None,
+        render_quality: T.Optional[int] = None,
+        width: T.Optional[int] = None,
+        height: T.Optional[int] = None,
     ) -> requests.Response:
         if (hash_ is None and file_id is None) or (hash_ is not None and file_id is not None):
             raise ValueError("Exactly one of hash_, file_id is required")
@@ -946,6 +1109,14 @@ class Client:
             params["file_id"] = file_id
         if download is not None:
             params["download"] = download
+        if render_format is not None:
+            params["render_format"] = render_format
+        if render_quality is not None:
+            params["render_quality"] = render_quality
+        if width is not None:
+            params["width"] = width
+        if height is not None:
+            params["height"] = height
 
         return self._api_request("GET", self._GET_RENDER_PATH, params=params, stream=True)
 
@@ -1016,7 +1187,7 @@ class Client:
         deleted_file_service_keys: T.Optional[abc.Iterable[str]] = None,
         tag_service_key: T.Optional[str] = None,
     ) -> dict[str, T.Any]:
-        params: dict[str, str] = {}
+        params: dict[str, T.Any] = {}
         if tags is not None:
             params["tags"] = json.dumps(tags, cls=_ABCJSONEncoder)
         if file_service_keys is not None:
@@ -1030,3 +1201,139 @@ class Client:
 
     def get_client_options(self) -> dict[str, T.Any]:
         return self._api_request("GET", self._GET_CLIENT_OPTIONS_PATH).json()
+
+    def get_popups(self, only_in_view: T.Optional[bool] = None) -> dict[str, T.Any]:
+        params: dict[str, T.Any] = {}
+        if only_in_view is not None:
+            params["only_in_view"] = json.dumps(only_in_view, cls=_ABCJSONEncoder)
+        return self._api_request("GET", self._GET_POPUPS_PATH, params=params).json()
+
+    def add_popup(
+        self,
+        status_title: T.Optional[str] = None,
+        status_text_1: T.Optional[str] = None,
+        status_text_2: T.Optional[str] = None,
+        is_cancellable: T.Optional[bool] = None,
+        is_pausable: T.Optional[bool] = None,
+        attached_files_mergable: T.Optional[bool] = None,
+        popup_gauge_1: T.Optional[tuple[int, int]] = None,
+        popup_gauge_2: T.Optional[tuple[int, int]] = None,
+        api_data: T.Optional[dict[str, T.Any]] = None,
+        files_label: T.Optional[str] = None,
+        file_ids: T.Optional[abc.Iterable[str]] = None,
+        hashes: T.Optional[abc.Iterable[str]] = None,
+    ) -> dict[str, T.Any]:
+        payload: dict[str, T.Any] = {}
+        if status_title is not None:
+            payload["status_title"] = status_title
+        if status_text_1 is not None:
+            payload["status_text_1"] = status_text_1
+        if status_text_2 is not None:
+            payload["status_text_2"] = status_text_2
+        if is_cancellable is not None:
+            payload["is_cancellable"] = is_cancellable
+        if is_pausable is not None:
+            payload["is_pausable"] = is_pausable
+        if attached_files_mergable is not None:
+            payload["attached_files_mergable"] = attached_files_mergable
+        if popup_gauge_1 is not None:
+            payload["popup_gauge_1"] = popup_gauge_1
+        if popup_gauge_2 is not None:
+            payload["popup_gauge_2"] = popup_gauge_2
+        if api_data is not None:
+            payload["api_data"] = api_data
+        if files_label is not None:
+            payload["files_label"] = files_label
+        if file_ids is not None:
+            payload["file_ids"] = file_ids
+        if hashes is not None:
+            payload["hashes"] = hashes
+        return self._api_request("POST", self._ADD_POPUP_PATH, json=payload).json()
+
+    def update_popup(
+        self,
+        job_status_key: str,
+        status_title: T.Optional[str] = None,
+        status_text_1: T.Optional[str] = None,
+        status_text_2: T.Optional[str] = None,
+        is_cancellable: T.Optional[bool] = None,
+        is_pausable: T.Optional[bool] = None,
+        attached_files_mergable: T.Optional[bool] = None,
+        popup_gauge_1: T.Optional[tuple[int, int]] = None,
+        popup_gauge_2: T.Optional[tuple[int, int]] = None,
+        api_data: T.Optional[dict[str, T.Any]] = None,
+        files_label: T.Optional[str] = None,
+        file_ids: T.Optional[abc.Iterable[str]] = None,
+        hashes: T.Optional[abc.Iterable[str]] = None,
+    ) -> dict[str, T.Any]:
+        payload: dict[str, T.Any] = {"job_status_key": job_status_key}
+        if status_title is not None:
+            payload["status_title"] = status_title
+        if status_text_1 is not None:
+            payload["status_text_1"] = status_text_1
+        if status_text_2 is not None:
+            payload["status_text_2"] = status_text_2
+        if is_cancellable is not None:
+            payload["is_cancellable"] = is_cancellable
+        if is_pausable is not None:
+            payload["is_pausable"] = is_pausable
+        if attached_files_mergable is not None:
+            payload["attached_files_mergable"] = attached_files_mergable
+        if popup_gauge_1 is not None:
+            payload["popup_gauge_1"] = popup_gauge_1
+        if popup_gauge_2 is not None:
+            payload["popup_gauge_2"] = popup_gauge_2
+        if api_data is not None:
+            payload["api_data"] = api_data
+        if files_label is not None:
+            payload["files_label"] = files_label
+        if file_ids is not None:
+            payload["file_ids"] = file_ids
+        if hashes is not None:
+            payload["hashes"] = hashes
+        return self._api_request("POST", self._UPDATE_POPUP_PATH, json=payload).json()
+
+    def dismiss_popup(
+        self,
+        job_status_key: str,
+        seconds: T.Optional[int] = None,
+    ) -> dict[str, T.Any]:
+        payload: dict[str, T.Any] = {"job_status_key": job_status_key}
+        if seconds is not None:
+            payload["seconds"] = seconds
+        return self._api_request("POST", self._DISMISS_POPUP_PATH, json=payload).json()
+
+    def finish_popup(
+        self,
+        job_status_key: str,
+        seconds: T.Optional[int] = None,
+    ) -> dict[str, T.Any]:
+        payload: dict[str, T.Any] = {"job_status_key": job_status_key}
+        if seconds is not None:
+            payload["seconds"] = seconds
+        return self._api_request("POST", self._FINISH_POPUP_PATH, json=payload).json()
+
+    def cancel_popup(
+        self,
+        job_status_key: str,
+        seconds: T.Optional[int] = None,
+    ) -> dict[str, T.Any]:
+        payload: dict[str, T.Any] = {"job_status_key": job_status_key}
+        if seconds is not None:
+            payload["seconds"] = seconds
+        return self._api_request("POST", self._CANCEL_POPUP_PATH, json=payload).json()
+
+    def call_popup_user_callable(self, job_status_key: str) -> dict[str, T.Any]:
+        payload: dict[str, T.Any] = {"job_status_key": job_status_key}
+        return self._api_request("POST", self._CALL_USER_CALLABLE_PATH, json=payload).json()
+
+    def get_pending_counts(self) -> dict[str, T.Any]:
+        return self._api_request("GET", self._GET_PENDING_COUNTS_PATH).json()
+
+    def commit_pending(self, service_key: str) -> dict[str, T.Any]:
+        payload: dict[str, T.Any] = {"service_key": service_key}
+        return self._api_request("POST", self._COMMIT_PENDING_PATH, json=payload).json()
+
+    def forget_pending(self, service_key: str) -> dict[str, T.Any]:
+        payload: dict[str, T.Any] = {"service_key": service_key}
+        return self._api_request("POST", self._FORGET_PENDING_PATH, json=payload).json()

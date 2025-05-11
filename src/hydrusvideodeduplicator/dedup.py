@@ -185,6 +185,7 @@ class HydrusVideoDeduplicator:
             video_hashes = list(self.client.get_video_hashes(self.search_tags))
             video_hashes = self.filter_unhashed(video_hashes)
             print(f"[blue] Found {len(video_hashes)} eligible files to perceptually hash.")
+            print("\nTip: You can skip perceptual hashing at any time by pressing CTRL+C.")
             self.hydlog.info("Starting perceptual hash processing")
             self.db.begin_transaction()
             with self.db.conn:
@@ -219,6 +220,7 @@ class HydrusVideoDeduplicator:
                     print(f"[green] Added {stats.success_hash_count} new perceptual hashes to the database.")
 
         # Insert the perceptual hashed files into the vptree.
+        print("\nTip: You can skip building the search tree at any time by pressing CTRL+C.")
         self.db.begin_transaction()
         with self.db.conn:
             try:
@@ -243,6 +245,7 @@ class HydrusVideoDeduplicator:
         #       while this is running.
         pre_dedupe_count = self.client.get_potential_duplicate_count_hydrus()
 
+        print("\nTip: You can skip finding potential duplicates at any time by pressing CTRL+C.")
         self.db.begin_transaction()
         with self.db.conn:
             try:
@@ -382,7 +385,7 @@ class HydrusVideoDeduplicator:
                 for similar_hash_id, distance in result:
                     file_hash_b = self.db.get_file_hash(similar_hash_id)
                     if hash_id != similar_hash_id:
-                        # self.hydlog.info(f'Similar files found. "{file_hash_a}" and "{file_hash_b}"')
+                        self.hydlog.info(f'Similar files found: "{file_hash_a}" and "{file_hash_b}"')
                         self.mark_videos_as_duplicates(file_hash_a, file_hash_b)
                         num_similar_pairs += 1
 

@@ -786,7 +786,7 @@ class VpTreeManager:
                                 ):  # i.e. search sphere intersects with non-node sphere space at some point
                                     next_potentials.append(outer_perceptual_hash_id)
 
-            log.info(f"Similar file search touched {total_nodes_searched} nodes over {num_cycles} cycles.")
+            log.debug(f"Similar file search touched {total_nodes_searched} nodes over {num_cycles} cycles.")
 
             # so, now we have perceptual_hash_ids and distances. let's map that to actual files.
             # files can have multiple perceptual_hashes, and perceptual_hashes can refer to multiple files, so let's make sure we are setting the smallest distance we found  # noqa: E501

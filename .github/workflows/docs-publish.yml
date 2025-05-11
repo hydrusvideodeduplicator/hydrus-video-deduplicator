@@ -24,7 +24,7 @@ jobs:
     - name: Setup python
       uses: actions/setup-python@v5
       with:
-        python-version: 3.x
+        python-version: '3.12'
     - name: Setup hatch and deploy documentation
       run: |
         pip install hatch

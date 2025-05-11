@@ -17,6 +17,13 @@ pip install hydrusvideodeduplicator --upgrade
 
 ---
 
+## Can I safely cancel a dedupe in progress?
+
+Yes. You can safely skip any or all of the dedupe steps in progress by pressing `CTRL+C`. The next time you launch the
+program it will continue where you left off.
+
+---
+
 ## How to backup my dedupe database?
 
 You can backup your dedupe database by copying the database directory somewhere safe.
@@ -38,6 +45,9 @@ See [Where are the video hashes stored?](#where-are-the-video-hashes-stored) loc
 1. Finally, it will search the database for potential duplicates and mark them as potential duplicates in Hydrus.
 
 You can run the program again when you add more files to find more duplicates.
+
+> **Note**: You can skip any of the steps to find duplicates for only a few videos at a time. The next time you
+> launch the program it will continue where you left off.
 
 ---
 

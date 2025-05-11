@@ -87,7 +87,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.test.scripts]
-all = "python -m pytest tests/test_db.py src/hydrusvideodeduplicator/pdqhashing/tests tests/test_dedupe.py tests/test_vpdqpy.py tests/test_main_vcr.py --verbose {args}"
+all = "python -m pytest tests/test_db.py src/hydrusvideodeduplicator/pdqhashing/tests tests/test_dedupe.py tests/test_vpdqpy.py --verbose {args}" # TODO: add back `tests/test_main_vcr.py`, see https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/issues/69
 pdq = "python -m pytest src/hydrusvideodeduplicator/pdqhashing/tests --verbose {args}"
 db = "python -m pytest tests/test_db.py --verbose {args}"
 vcr = "python -m pytest tests/test_main_vcr.py --verbose {args}"

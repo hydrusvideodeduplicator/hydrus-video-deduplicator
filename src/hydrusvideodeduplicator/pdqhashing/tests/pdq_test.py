@@ -16,7 +16,7 @@ class PdqTest(unittest.TestCase):
         if not Path(SAMPLE_MEDIA).exists():
             logging.info("Cloning ThreatExchange repo to get test sample files.")
             subprocess.run(
-                ["git", "clone", "https://github.com/facebook/ThreatExchange.git", "--depth=1"],
+                ["git", "clone", "https://github.com/facebook/ThreatExchange.git"],
                 cwd=Path(__file__).parents[1],
                 check=True,
             )
@@ -28,6 +28,13 @@ class PdqTest(unittest.TestCase):
                 pdqhashing tests folder in order to run PDQ tests. See README.md in pdqhashing.
                 """
             )
+
+        logging.info("Switching ThreatExchange repo to commit with the test sample files.")
+        subprocess.run(
+            ["git", "checkout", "ce4504d88ed797385bf054d772dfb67d1bef10b0"],
+            cwd=Path(__file__).parents[1] / "ThreatExchange",
+            check=True,
+        )
 
     def get_data(self):
         return [

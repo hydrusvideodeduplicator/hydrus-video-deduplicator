@@ -8,9 +8,10 @@ import zipfile
 from typing import TYPE_CHECKING
 
 import vcr
+
 from hydrusvideodeduplicator.__main__ import main
 
-from .check_testdb import check_testdb_exists
+from ..check_testdb import check_testdb_exists
 
 if TYPE_CHECKING:
     pass
@@ -24,7 +25,7 @@ def somedbdir():
     return str(uuid.uuid4().hex)
 
 
-CASSETTES_DIR = Path(__file__).parent / "testdb/fixtures/vcr_cassettes"
+CASSETTES_DIR = Path(__file__).parents[1] / "testdb/fixtures/vcr_cassettes"
 
 
 def unzip_all(zip_dir: Path, extract_to: Path):

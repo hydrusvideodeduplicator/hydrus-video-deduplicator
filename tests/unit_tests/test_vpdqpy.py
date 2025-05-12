@@ -15,9 +15,10 @@ import logging
 import unittest
 from pathlib import Path
 from typing import TYPE_CHECKING
-from .check_testdb import check_testdb_exists
 
 from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqHash
+
+from ..check_testdb import check_testdb_exists
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -30,8 +31,8 @@ class TestVpdq(unittest.TestCase):
 
     def setUp(self):
         check_testdb_exists()
-        all_vids_dir = Path(__file__).parent / "testdb" / "videos"
-        self.video_hashes_dir = Path(__file__).parent / "testdb" / "video hashes"
+        all_vids_dir = Path(__file__).parents[1] / "testdb" / "videos"
+        self.video_hashes_dir = Path(__file__).parents[1] / "testdb" / "video hashes"
         assert all_vids_dir.is_dir()
         assert self.video_hashes_dir.is_dir()
 

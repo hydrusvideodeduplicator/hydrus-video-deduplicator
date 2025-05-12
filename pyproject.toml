@@ -61,7 +61,7 @@ dependencies = [
 
 [tool.hatch.envs.benchmark.scripts]
 # pytest-benchmark is a plugin for pytest that allows for benchmarking
-vpdq = "python -m pytest tests/test_benchmark_vpdqpy.py {args}"
+vpdq = "python -m pytest tests/benchmarks/test_benchmark_vpdqpy.py {args}"
 
 # Docs environment
 
@@ -87,10 +87,10 @@ dependencies = [
 ]
 
 [tool.hatch.envs.test.scripts]
-all = "python -m pytest tests/test_db.py src/hydrusvideodeduplicator/pdqhashing/tests tests/test_dedupe.py tests/test_vpdqpy.py tests/test_main_vcr.py --verbose {args}"
+all = "python -m pytest tests/unit_tests/test_db.py src/hydrusvideodeduplicator/pdqhashing/tests tests/acceptance_tests/test_dedupe.py tests/unit_tests/test_vpdqpy.py tests/acceptance_tests/test_main_vcr.py --verbose {args}"
 pdq = "python -m pytest src/hydrusvideodeduplicator/pdqhashing/tests --verbose {args}"
-db = "python -m pytest tests/test_db.py --verbose {args}"
-vcr = "python -m pytest tests/test_main_vcr.py --verbose {args}"
+db = "python -m pytest tests/unit_tests/test_db.py --verbose {args}"
+vcr = "python -m pytest tests/acceptance_tests/test_main_vcr.py --verbose {args}"
 
 # Format environment
 

@@ -50,6 +50,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+tests/testdb/fixtures/vcr_cassettes/main.yaml
 
 # Translations
 *.mo

@@ -83,7 +83,14 @@ jobs:
     - name: Install hatch
       run: pip install hatch
 
+    - name: Create benchmark env
+      run : |
+        hatch env create benchmark
+
     - name: Benchmark
       run: |
-        hatch env create benchmark
         hatch run benchmark:vpdq --benchmark-json "${{ matrix.python-version }}.json"
+
+    - name: Profile
+      run: |
+        hatch run benchmark:profile_vpdq

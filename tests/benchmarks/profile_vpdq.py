@@ -11,50 +11,80 @@ Blender Foundation | www.blender.org
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqHash
 
-from ..check_testdb import check_testdb_exists
-
 if TYPE_CHECKING:
     pass
 
-check_testdb_exists()
 
-all_phashes_dir = Path(__file__).parent / "testdb" / "video hashes"
-
-video_hashes_paths: list[Path] = []
-video_hashes_paths.extend(Path(all_phashes_dir).glob("*"))
-video_phashes: list[VpdqHash] = list()
-for video_hash_file in video_hashes_paths:
-    with open(video_hash_file) as file:
-        video_hash = Vpdq.json_to_vpdq(file.readline())
-        video_phashes.append(video_hash)
-
-pairs = []
-for i, phash1 in enumerate(video_phashes):
-    for j, phash2 in enumerate(video_phashes):
-        if j < i:
-            continue
-        pairs.append((phash1, phash2))
+def check_testdb_exists():
+    """
+    Check if the testdb submodule is pulled.
+    Throws RuntimeError if it's not updated.
+    """
+    testdb_dir = Path(__file__).parents[1] / "testdb"
+    if len(os.listdir(testdb_dir)) == 0:
+        raise RuntimeError("Video hashes dir is missing. Is the testdb submodule pulled?")
 
 
 def profile_vpdq_similarity():
     """Profile VPDQ similarity"""
-    for pair in pairs:
-        Vpdq.is_similar(pair[0], pair[1], threshold=75)
+
+    all_phashes_dir = Path(__file__).parents[1] / "testdb" / "video hashes"
+    video_hashes_paths: list[Path] = []
+    video_hashes_paths.extend(Path(all_phashes_dir).glob("*"))
+    video_phashes: list[VpdqHash] = list()
+    for video_hash_file in video_hashes_paths:
+        with open(video_hash_file) as file:
+            video_hash = Vpdq.json_to_vpdq(file.readline())
+            video_phashes.append(video_hash)
+    assert len(video_phashes) > 0
+
+    pairs = []
+    for i, phash1 in enumerate(video_phashes):
+        for j, phash2 in enumerate(video_phashes):
+            if j < i:
+                continue
+            pairs.append((phash1, phash2))
+
+    profiler = cProfile.Profile()
+    with profiler:
+        for pair in pairs:
+            Vpdq.is_similar(pair[0], pair[1], threshold=75)
+    stats = pstats.Stats(profiler).sort_stats("cumtime")
+    stats.print_stats()
 
 
-# To use this, run "python -m cProfile tests/profile_vpdq.py"
+def profile_vpdq_hashing():
+    """Benchmark VPDQ hashing"""
+    """Currently around 7.5 seconds on my PC"""
+    all_vids_dir = Path(__file__).parents[1] / "testdb" / "videos"
+
+    vids_dirs = ["sintel"]
+    similarity_vids: list[Path] = []
+    for vids_dir in vids_dirs:
+        similarity_vids.extend(Path(all_vids_dir / vids_dir).glob("*"))
+    assert len(similarity_vids) > 0
+
+    profiler = cProfile.Profile()
+    with profiler:
+        for vid in similarity_vids:
+            perceptual_hash = Vpdq.computeHash(vid)
+            assert len(perceptual_hash) > 0
+    stats = pstats.Stats(profiler).sort_stats("cumtime")
+    stats.print_stats()
+
+
+# To use this, run "python profile_vpdq.py"
 if __name__ == "__main__":
     import cProfile
     import pstats
 
-    profiler = cProfile.Profile()
-    profiler.enable()
+    check_testdb_exists()
+
     profile_vpdq_similarity()
-    profiler.disable()
-    stats = pstats.Stats(profiler).sort_stats("cumtime")
-    stats.print_stats()
+    profile_vpdq_hashing()

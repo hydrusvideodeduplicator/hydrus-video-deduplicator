@@ -56,12 +56,12 @@ path = "src/hydrusvideodeduplicator/__about__.py"
 [tool.hatch.envs.benchmark]
 dependencies = [
     "pytest",
-    "pytest-benchmark",
+    "pytest-benchmark", # a plugin for pytest that enables benchmarking
 ]
 
 [tool.hatch.envs.benchmark.scripts]
-# pytest-benchmark is a plugin for pytest that allows for benchmarking
 vpdq = "python -m pytest tests/benchmarks/test_benchmark_vpdqpy.py {args}"
+profile_vpdq = "python tests/benchmarks/profile_vpdq.py"
 
 # Docs environment
 

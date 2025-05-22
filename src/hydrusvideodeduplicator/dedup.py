@@ -5,7 +5,6 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from joblib import Parallel, delayed
 from rich import print
 from tqdm import tqdm
 
@@ -14,14 +13,13 @@ if TYPE_CHECKING:
 
     FileHash = str
 
+import gc
+
 import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .client import HVDClient
 from .db import DedupeDB, vptree
-from .hashing import (
-    compute_phash,
-    encode_phash_to_str,
-)
+from .hashing import compute_phash, encode_phash_to_str
 from .page_logger import HydrusPageLogger
 
 
@@ -62,8 +60,9 @@ class FileHasher:
     joblib due to the sqlite db member variable.
     """
 
-    def __init__(self, client: HVDClient):
+    def __init__(self, client: HVDClient, num_threads: int = 0):
         self.client = client
+        self.num_threads = num_threads
 
     def _fetch_file(self, file_hash: str):
         try:
@@ -74,7 +73,7 @@ class FileHasher:
 
     def _phash_file(self, file: bytes) -> str:
         try:
-            phash = compute_phash(file)
+            phash = compute_phash(file, self.num_threads)
             phash_str: str = encode_phash_to_str(phash)
         except Exception as exc:
             raise FailedPerceptualHashException("", str(exc))
@@ -288,33 +287,32 @@ class HydrusVideoDeduplicator:
                 unit="file",
                 colour="BLUE",
             ) as pbar:
-                filehasher = FileHasher(self.client)
-                with Parallel(n_jobs=self.job_count, return_as="generator_unordered") as parallel:
-                    # Note: joblib actually copies the entire filehasher into a new process, including the client.
-                    result_generator = parallel(
-                        delayed(filehasher.fetch_and_phash_file)(video_hash) for video_hash in video_hashes
-                    )
-                    for result in result_generator:
-                        if isinstance(result, FailedPerceptuallyHashedFile):
-                            # We only want to add the failure to the page if the file was the actual cause of failure.
-                            if isinstance(result.exc, HydrusApiException):
-                                stats.failed_from_api_errors_count += 1
-                                print("[red] Hydrus API error during perceptual hashing:")
-                                print(f"{result.exc}")
-                            else:
-                                stats.failed_from_phash_count += 1
-                                print("[red] Failed to perceptually hash a file.")
-                                print(f"Failed file SHA256 hash: {result.file_hash}")
-                                print(f"{result.exc}")
-                                if self.page_logger:
-                                    self.page_logger.add_failed_video(result.file_hash)
+                filehasher = FileHasher(self.client, self.job_count)
+                for video_hash in video_hashes:
+                    result = filehasher.fetch_and_phash_file(video_hash)
+                    if isinstance(result, FailedPerceptuallyHashedFile):
+                        # We only want to add the failure to the page if the file was the actual cause of failure.
+                        if isinstance(result.exc, HydrusApiException):
+                            stats.failed_from_api_errors_count += 1
+                            print("[red] Hydrus API error during perceptual hashing:")
+                            print(f"{result.exc}")
                         else:
-                            stats.success_hash_count += 1
-                            self.db.add_to_phashed_files_queue(result.file_hash, result.perceptual_hash)
+                            stats.failed_from_phash_count += 1
+                            print("[red] Failed to perceptually hash a file.")
+                            print(f"Failed file SHA256 hash: {result.file_hash}")
+                            print(f"{result.exc}")
+                            if self.page_logger:
+                                self.page_logger.add_failed_video(result.file_hash)
+                    else:
+                        stats.success_hash_count += 1
+                        self.db.add_to_phashed_files_queue(result.file_hash, result.perceptual_hash)
 
-                        pbar.update(1)
+                    # Collect garbage now to avoid huge memory usage from the video files and frames.
+                    gc.collect()
+                    pbar.update(1)
         except KeyboardInterrupt:
             raise CancelledPerceptualHashException(stats)
+        gc.collect()
         return stats
 
     def mark_videos_as_duplicates(self, video1_hash: str, video2_hash: str):

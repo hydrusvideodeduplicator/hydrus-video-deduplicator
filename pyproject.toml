@@ -31,9 +31,10 @@ dependencies = [
     "requests",
     "psutil",
     "joblib>=1.4",
-    # Below is for vpdqpy
+    # vpdqpy dependencies
     "pillow",
     "av",
+    "hvdaccelerators",
 ]
 
 [project.urls]

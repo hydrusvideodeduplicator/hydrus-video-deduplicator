@@ -14,13 +14,13 @@ from .vpdqpy.vpdqpy import Vpdq
 """TODO: Rework this with into a hashing interface that is used by hashers."""
 
 
-def compute_phash(video: Path | str | bytes) -> VpdqHash:
+def compute_phash(video: Path | str | bytes, num_threads: int = 0) -> VpdqHash:
     """
     Calculate the perceptual hash of a video.
 
     Returns the perceptual hash of the video.
     """
-    phash = Vpdq.computeHash(video)
+    phash = Vpdq.computeHash(video, num_threads)
     return phash
 
 

@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import av
+from hvdaccelerators import vpdq
 from PIL import Image
 
-from ..pdqhashing.hasher.pdq_hasher import PDQHasher
 from ..pdqhashing.pdq_types.hash256 import Hash256
 
 if TYPE_CHECKING:
@@ -168,22 +168,33 @@ class Vpdq:
                     frame_index += 1
 
     @staticmethod
-    def computeHash(
-        video_file: Path | str | bytes,
-    ) -> VpdqHash:
+    def computeHash(video_file: Path | str | bytes, num_threads: int = 0) -> VpdqHash:
         """Perceptually hash video from a file path or the bytes"""
         video = Vpdq.get_video_bytes(video_file)
         if video is None:
             raise ValueError
 
-        pdq = PDQHasher()
         features: VpdqHash = []
 
+        hasher = None
         for second, frame in enumerate(Vpdq.frame_extract_pyav(video)):
-            pdq_hash_and_quality = pdq.fromBufferedImage(frame.to_image())
-            pdq_frame = VpdqFeature(pdq_hash_and_quality.getHash(), pdq_hash_and_quality.getQuality(), second)
-            features.append(pdq_frame)
-
+            im = frame.to_image()
+            im.thumbnail((512, 512))
+            if not hasher:
+                # Average FPS is used by vpdq to calculate the timestamp, but we completely discard
+                # the timestamp so this value doesn't matter.
+                average_fps = 1
+                hasher = vpdq.VideoHasher(average_fps, im.width, im.height, num_threads)
+            rgb_image = im.convert("RGB")
+            # Note: hash_frame will block if vpdq's internal frame queue is full. This is necessary,
+            # otherwise if hashing gets too far behind decoding there will be an insane amount of memory
+            # used to hold the raw frames.
+            hasher.hash_frame(rgb_image.tobytes())
+        features = hasher.finish()
+        features = [
+            VpdqFeature(Hash256.fromHexString(feature.get_hash()), feature.get_quality(), feature.get_frame_number())
+            for feature in features
+        ]
         deduped_features = Vpdq.dedupe_features(features)
         return deduped_features
 

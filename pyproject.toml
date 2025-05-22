@@ -31,10 +31,16 @@ dependencies = [
     "requests",
     "psutil",
     "joblib>=1.4",
-    # Below is for vpdqpy
+    # vpdqpy dependencies
     "pillow",
     "av",
+    # vpdqpy optional dependencies
+    "hvdaccelerators @ git+https://github.com/hydrusvideodeduplicator/hvdaccelerators.git",
 ]
+
+# pypi doesn't allow this, so need to remove and upload hvdaccelerators to pypi before release.
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [project.urls]
 Documentation = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator#readme"

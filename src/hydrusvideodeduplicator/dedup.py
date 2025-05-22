@@ -60,8 +60,9 @@ class FileHasher:
     joblib due to the sqlite db member variable.
     """
 
-    def __init__(self, client: HVDClient):
+    def __init__(self, client: HVDClient, num_threads: int = 0):
         self.client = client
+        self.num_threads = num_threads
 
     def _fetch_file(self, file_hash: str):
         try:
@@ -72,7 +73,7 @@ class FileHasher:
 
     def _phash_file(self, file: bytes) -> str:
         try:
-            phash = compute_phash(file)
+            phash = compute_phash(file, self.num_threads)
             phash_str: str = encode_phash_to_str(phash)
         except Exception as exc:
             raise FailedPerceptualHashException("", str(exc))
@@ -286,7 +287,7 @@ class HydrusVideoDeduplicator:
                 unit="file",
                 colour="BLUE",
             ) as pbar:
-                filehasher = FileHasher(self.client)
+                filehasher = FileHasher(self.client, self.job_count)
                 for video_hash in video_hashes:
                     result = filehasher.fetch_and_phash_file(video_hash)
                     if isinstance(result, FailedPerceptuallyHashedFile):

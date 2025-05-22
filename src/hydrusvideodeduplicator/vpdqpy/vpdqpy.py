@@ -168,9 +168,7 @@ class Vpdq:
                     frame_index += 1
 
     @staticmethod
-    def computeHash(
-        video_file: Path | str | bytes,
-    ) -> VpdqHash:
+    def computeHash(video_file: Path | str | bytes, num_threads: int = 0) -> VpdqHash:
         """Perceptually hash video from a file path or the bytes"""
         video = Vpdq.get_video_bytes(video_file)
         if video is None:
@@ -186,7 +184,7 @@ class Vpdq:
                 # Average FPS is used by vpdq to calculate the timestamp, but we completely discard
                 # the timestamp so this value doesn't matter.
                 average_fps = 1
-                hasher = vpdq.VideoHasher(average_fps, im.width, im.height)
+                hasher = vpdq.VideoHasher(average_fps, im.width, im.height, num_threads)
             rgb_image = im.convert("RGB")
             # Note: hash_frame will block if vpdq's internal frame queue is full. This is necessary,
             # otherwise if hashing gets too far behind decoding there will be an insane amount of memory

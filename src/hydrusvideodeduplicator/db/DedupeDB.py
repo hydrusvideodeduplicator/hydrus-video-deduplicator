@@ -491,6 +491,10 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
             # Note: We need to keep re-running get_version so that we can progressively upgrade.
             version = self.get_version()
 
+        # No db changes in this case, just print a nice message that your DB is upgraded.
+        if SemanticVersion(version) < SemanticVersion(__version__):
+            print_upgrade(version, __version__)
+
         self.set_version(__version__)
 
 

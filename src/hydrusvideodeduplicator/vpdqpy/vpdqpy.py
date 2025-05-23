@@ -23,6 +23,9 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 log.setLevel(logging.CRITICAL)
 
+# The dimensions of the image after downscaling for pdq
+DOWNSCALE_DIMENSIONS = 512
+
 
 @dataclass(slots=True)
 class VpdqFeature:
@@ -159,7 +162,12 @@ class Vpdq:
                 try:
                     frame = next(frame_generator)
                     if frame_index % average_fps == 0:
-                        yield frame
+                        yield frame.reformat(
+                            width=DOWNSCALE_DIMENSIONS,
+                            height=DOWNSCALE_DIMENSIONS,
+                            format="rgb24",
+                            interpolation=av.video.reformatter.Interpolation.POINT,
+                        )
                     frame_index += 1
                 except StopIteration:
                     break
@@ -176,20 +184,15 @@ class Vpdq:
 
         features: VpdqHash = []
 
-        hasher = None
-        for second, frame in enumerate(Vpdq.frame_extract_pyav(video)):
-            im = frame.to_image()
-            im.thumbnail((512, 512))
-            if not hasher:
-                # Average FPS is used by vpdq to calculate the timestamp, but we completely discard
-                # the timestamp so this value doesn't matter.
-                average_fps = 1
-                hasher = vpdq.VideoHasher(average_fps, im.width, im.height, num_threads)
-            rgb_image = im.convert("RGB")
+        # Average FPS is used by vpdq to calculate the timestamp, but we completely discard
+        # the timestamp so this value doesn't matter.
+        average_fps = 1
+        hasher = vpdq.VideoHasher(average_fps, DOWNSCALE_DIMENSIONS, DOWNSCALE_DIMENSIONS, num_threads)
+        for frame in Vpdq.frame_extract_pyav(video):
             # Note: hash_frame will block if vpdq's internal frame queue is full. This is necessary,
             # otherwise if hashing gets too far behind decoding there will be an insane amount of memory
             # used to hold the raw frames.
-            hasher.hash_frame(rgb_image.tobytes())
+            hasher.hash_frame(bytes(frame.planes[0]))
         features = hasher.finish()
         features = [
             VpdqFeature(Hash256.fromHexString(feature.get_hash()), feature.get_quality(), feature.get_frame_number())

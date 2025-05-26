@@ -352,11 +352,35 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#basic-usage" class="md-nav__link">
+  <a href="#creating-a-hydrus-api-key" class="md-nav__link">
     <span class="md-ellipsis">
-      Basic usage
+      Creating a Hydrus API Key
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-video-dedupe" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running Video Dedupe
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running Video Dedupe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#advanced-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advanced Usage
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -483,11 +507,35 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#basic-usage" class="md-nav__link">
+  <a href="#creating-a-hydrus-api-key" class="md-nav__link">
     <span class="md-ellipsis">
-      Basic usage
+      Creating a Hydrus API Key
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-video-dedupe" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running Video Dedupe
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running Video Dedupe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#advanced-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advanced Usage
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -511,61 +559,75 @@
 
 
 <h1 id="usage">Usage</h1>
-<h2 id="basic-usage">Basic usage</h2>
+<h2 id="creating-a-hydrus-api-key">Creating a Hydrus API Key</h2>
 <ol>
 <li>
-<p>Backup your Hydrus database to be safe.</p>
-</li>
-<li>
-<p><a href="https://hydrusnetwork.github.io/hydrus/client_api.html#enabling_the_api">Enable the Hydrus Client API</a> and create an access key with all permissions.</p>
+<p><a href="https://hydrusnetwork.github.io/hydrus/client_api.html#enabling_the_api">Enable the Hydrus Client API service</a>. Ensure <code>use https</code> is enabled for the client api service.</p>
 <ul>
 <li>
-<p>The program needs access to your <em>entire</em> database. Do NOT use blacklist/whitelist filters for the API token.</p>
-</li>
-<li>
-<p>https is the default for the client API URL.</p>
+<p>If you need http for some reason instead of https, you must specify your Hydrus API URL directly with <code>--api-url</code></p>
 <ul>
-<li>Specify your Hydrus API URL with <code>--api-url</code> if you need http<ul>
 <li>Ex. <code>python -m hydrusvideodeduplicator --api-url=http://localhost:45869</code></li>
 </ul>
 </li>
-<li>⚠️ SSL cert is <strong>not verified</strong> by default unless you enter the cert's file path with <code>--verify-cert</code></li>
+<li>
+<p>Enable <code>allow non-local connections</code> in <code>manage services-&gt;client api</code> if you are running under <a href="https://learn.microsoft.com/en-us/windows/wsl/">Windows Subsystem for Linux</a>, or the connection will fail.</p>
+</li>
+<li>
+<p>⚠️ For https, SSL cert is <strong>not verified</strong> by default unless you enter the cert's file path with <code>--verify-cert</code></p>
+</li>
 </ul>
 </li>
 <li>
-<p>Enable <code>allow non-local connections</code> in <code>manage services-&gt;client api</code> if you are using <a href="https://learn.microsoft.com/en-us/windows/wsl/">WSL</a> or the connection will fail.</p>
-</li>
+<p>Create a client api service key with <code>permits everything</code> enabled.</p>
+<ul>
+<li>Do NOT set blacklist/whitelist filters for the API token.</li>
 </ul>
-</li>
-<li>
-<p>Run and enter your access key as a parameter</p>
 </li>
 </ol>
-<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>-m<span class="w"> </span>hydrusvideodeduplicator<span class="w"> </span>--api-key<span class="o">=</span><span class="s2">&quot;put your Hydrus api key here&quot;</span>
-</code></pre></div>
-<details>
-<summary>Example</summary>
+<blockquote>
+<p><strong>Example</strong>: The API key should look something vaguely like <code>78d2fcc9fe1f43c5008959ed1abfe38ffedcfa127d4f051a1038e068d3e32656</code></p>
+<p><strong>Note</strong>: You will need this API key in the next step, so you should probably copy this API key to your clipboard.</p>
+</blockquote>
+<p>After getting your API key, continue to <a href="#running-video-dedupe">Running Video Dedupe</a>.</p>
+<h2 id="running-video-dedupe">Running Video Dedupe</h2>
+<details open>
+<summary>Windows</summary>
 <br>
+
+Run `hydrusvideodeduplicator.exe` and enter the Hydrus API key you created in [Creating a Hydrus API Key](#creating-a-hydrus-api-key) when prompted.
+
+</details>
+
+<p><br></p>
+<details>
+<summary>Linux and macos</summary>
+<br>
+
+Run `python3 -m hydrusvideodeduplicator --api-key="<your api key>"` and enter the Hydrus API key you created in [Creating a Hydrus API Key](#creating-a-hydrus-api-key).
+
+Example:
 
 <div class="highlight"><pre><span></span><code>python3<span class="w"> </span>-m<span class="w"> </span>hydrusvideodeduplicator<span class="w"> </span>--api-key<span class="o">=</span><span class="s2">&quot;78d2fcc9fe1f43c5008959ed1abfe38ffedcfa127d4f051a1038e068d3e32656&quot;</span>
 </code></pre></div>
 
 </details>
 
+<p><br></p>
+<p>To cancel any stage of processing at any time, press CTRL+C.</p>
+<p>You may want to cancel the first step, perceptually hashing, before it's finished in order to search for duplicates on that subset of videos that have been hashed. The next time you run the program it will continue where you left off. This may be useful for large databases that may take forever to perceptually hash.</p>
+<p>See the full list of options with <code>--help</code>.</p>
+<p>See the <a href="../faq/">FAQ</a> for more information.</p>
+<h3 id="advanced-usage">Advanced Usage</h3>
 <p>You can select certain files with queries just like Hydrus. e.g. <code>--query="character:batman"</code></p>
 <details>
 <summary>Example</summary>
 <br>
 
-<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>-m<span class="w"> </span>hydrusvideodeduplicator<span class="w"> </span>--api-key<span class="o">=</span><span class="s2">&quot;78d2fcc9fe1f43c5008959ed1abfe38ffedcfa127d4f051a1038e068d3e32656&quot;</span><span class="w"> </span>--query<span class="o">=</span><span class="s2">&quot;character:batman&quot;</span>
+<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>-m<span class="w"> </span>hydrusvideodeduplicator<span class="w"> </span>--api-key<span class="o">=</span><span class="s2">&quot;...&quot;</span><span class="w"> </span>--query<span class="o">=</span><span class="s2">&quot;character:batman&quot;</span>
 </code></pre></div>
 
 </details>
-
-<p>To cancel any stage of processing, press CTRL+C.</p>
-<p>You can cancel the first step, perceptual hashing, at any time to only search the duplicates that are currently hashed. You don't need to perceptually hash your entire database before you start searching.</p>
-<p>See the full list of options with <code>--help</code>.</p>
-<p>See the <a href="../faq/">FAQ</a> for more information.</p>
 
 
 
@@ -586,7 +648,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 27, 2024 19:45:32">July 27, 2024</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 26, 2025 07:59:55 UTC">May 26, 2025</span>
   </span>
 
     

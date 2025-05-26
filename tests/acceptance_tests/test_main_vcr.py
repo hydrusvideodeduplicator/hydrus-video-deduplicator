@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import vcr
 
-from hydrusvideodeduplicator.__main__ import main
+from hydrusvideodeduplicator.entrypoint import main
 
 from ..check_testdb import check_testdb_exists
 

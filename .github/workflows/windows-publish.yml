@@ -1,0 +1,39 @@
+name: Windows publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build windows exe
+    runs-on: windows-2019
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run : |
+          python -m pip install pyinstaller
+          python -m pip install .
+
+      - name: Build
+        run: pyinstaller build_files/windows/hydrusvideodeduplicator.spec
+
+      - name: Upload
+        uses: softprops/action-gh-release@37fd9d0351a2df198244c8ef9f56d02d1f921e20
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            dist/hydrusvideodeduplicator.exe

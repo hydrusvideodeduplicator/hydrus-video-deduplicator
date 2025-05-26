@@ -42,7 +42,7 @@ See [Where are the video hashes stored?](#where-are-the-video-hashes-stored) loc
 
 1. First, the program will perceptually hash all your video files and store them in a database.
 
-    - Initial hashing takes longer than searching for duplicates. It will also probably get slower as it progresses because the API requests are sorted by file size.
+    - Initial hashing generally takes longer than searching for duplicates. It will also probably get slower as it progresses, because they are hashed in order of increasing file size.
 
 1. Then, the perceptual hashes are put into a data structure to make it fast to search for duplicates.
 
@@ -51,6 +51,8 @@ See [Where are the video hashes stored?](#where-are-the-video-hashes-stored) loc
 1. Finally, it will search the database for potential duplicates and mark them as potential duplicates in Hydrus.
 
 You can run the program again when you add more files to find more duplicates.
+
+See the [Theory](theory.md) for an in-depth explanation for how it all works.
 
 > **Note**: You can skip any of the steps to find duplicates for only a few videos at a time. The next time you
 > launch the program it will continue where you left off.
@@ -67,7 +69,7 @@ On Windows, this directory is likely `%USERPROFILE%\AppData\Local\hydrusvideoded
 
 On macos, this directory is likely `/Users/<yourusername>/Library/Application Support/hydrusvideodeduplicator`
 
-The database directory can be set with `DEDUP_DATABASE_DIR` environment variable.
+The database directory can be set with the `--dedup-database-dir` CLI option, or a `DEDUP_DATABASE_DIR` environment variable.
 
 ---
 

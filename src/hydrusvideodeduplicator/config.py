@@ -70,3 +70,15 @@ _HYDRUS_LOCAL_FILE_SERVICE_KEYS_ENV = os.getenv("HYDRUS_LOCAL_FILE_SERVICE_KEYS"
 HYDRUS_LOCAL_FILE_SERVICE_KEYS = validate_json_array_env_var(
     _HYDRUS_LOCAL_FILE_SERVICE_KEYS_ENV, err_msg="Ensure HYDRUS_LOCAL_FILE_SERVICE_KEYS is a JSON formatted array"
 )
+
+_IS_WINDOWS_EXE = False
+
+
+def is_windows_exe():
+    global _IS_WINDOWS_EXE
+    return _IS_WINDOWS_EXE
+
+
+def set_windows_exe():
+    global _IS_WINDOWS_EXE
+    _IS_WINDOWS_EXE = True

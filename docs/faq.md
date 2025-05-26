@@ -10,6 +10,12 @@ See [How to backup my dedupe database](#how-to-backup-my-dedupe-database) for in
 
 To upgrade:
 
+### Windows
+
+Download the [latest release directly from the github releases page](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/releases).
+
+### Linux and macOS
+
 ```sh
 # activate your venv first
 pip install hydrusvideodeduplicator --upgrade

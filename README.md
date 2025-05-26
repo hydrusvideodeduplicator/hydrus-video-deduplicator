@@ -19,9 +19,23 @@ Hydrus Video Deduplicator **does not modify your files**. It only marks videos a
 
 [See the Hydrus documentation for how duplicates are managed in Hydrus](https://hydrusnetwork.github.io/hydrus/duplicates.html).
 
-This program contains no telemetry. It only makes requests to the Hydrus API URL.
+This program contains no telemetry. It only makes requests to the Hydrus API URL which you specify.
 
 ## [Installation](./docs/installation.md)
+
+For Windows, you can get the [latest release directly from the github releases page](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/releases).
+
+For Linux and macos, see the [Python Install](#python-install).
+
+> **Note**: Many instructions in this repo are written for the Python install instead of the Windows exe. If you're using the Windows exe, simply replace `python3 -m hydrusvideodeduplicator` with `hydrusvideodeduplicator.exe` and they will work the same.
+
+## [Usage](./docs/usage.md)
+
+See [Usage](./docs/usage.md) for how to run the program, and [FAQ](./docs/faq.md) for more information.
+
+## Python Install
+
+> **Note**: Windows users do not need the Python install. Download the exe as described in [Installation](#installation) instead.
 
 ### Dependencies
 
@@ -31,21 +45,7 @@ This program contains no telemetry. It only makes requests to the Hydrus API URL
 python3 -m pip install hydrusvideodeduplicator
 ```
 
----
-
-## [Usage](./docs/usage.md)
-
-Simplest usage:
-
-```sh
-python3 -m hydrusvideodeduplicator --api-key="put your Hydrus api key here"
-```
-
-You should now see all potential video duplicates in the Hydrus duplicates processing page.
-
-For many users, it should be as simple as the Usage command above.
-
-For more information, see the [Usage](./docs/usage.md) and [FAQ](./docs/faq.md).
+Then continue to [Usage](./docs/usage.md).
 
 ---
 

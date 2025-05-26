@@ -28,7 +28,7 @@ jobs:
           python -m pip install .
 
       - name: Build
-        run: pyinstaller --onefile src/hydrusvideodeduplicator/entrypoint.py --name=hydrusvideodeduplicator
+        run: pyinstaller --onefile src/hydrusvideodeduplicator/winexe_entrypoint.py --name=hydrusvideodeduplicator
       - uses: actions/upload-artifact@v4
         with:
           name: win-exe

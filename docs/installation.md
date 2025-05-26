@@ -10,9 +10,13 @@ You should now be good to go. Proceed to [usage.](./usage.md)
 <summary>Development Install</summary>
 <br>
 
-### Dependencies
+Dependencies:
 
-- [Python](https://www.python.org/downloads/) >=3.10
+<br>
+
+[Python](https://www.python.org/downloads/) >=3.10
+
+<br>
 
 Run in PowerShell:
 
@@ -22,7 +26,7 @@ python3 -m venv venv         # Create a virtual environment somewhere to avoid s
 python3 -m pip install hydrusvideodeduplicator
 ```
 
-You should now be good to go. Proceed to [usage.](./usage.md)
+You should now be good to go. Proceed to the Usage page.
 
 > Note: Any time you want to run the program again you will have to run the command to activate the virtual environment first.
 

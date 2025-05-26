@@ -1,7 +1,8 @@
-name: Build windows exe
+name: Windows publish
 
 on:
-  push:
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -28,10 +29,11 @@ jobs:
           python -m pip install .
 
       - name: Build
-        run: pyinstaller build_files\windows\hydrusvideodeduplicator.spec
-      - uses: actions/upload-artifact@v4
+        run: pyinstaller build_files/windows/hydrusvideodeduplicator.spec
+
+      - name: Upload
+        uses: softprops/action-gh-release@37fd9d0351a2df198244c8ef9f56d02d1f921e20
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: hydrusvideodeduplicator-windows
-          path: dist/hydrusvideodeduplicator.exe
-          if-no-files-found: error
-          retention-days: 1 # We don't need to retain long. This artifact is not for releasing.
+          files: |
+            dist/hydrusvideodeduplicator.exe

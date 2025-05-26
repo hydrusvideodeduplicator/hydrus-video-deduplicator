@@ -36,7 +36,7 @@ class FailedPerceptuallyHashedFile:
     """Class for failed perceptually hashed files."""
 
     file_hash: FileHash
-    exc: Exception | str
+    exc: Exception
 
 
 class HydrusApiException(Exception):
@@ -55,9 +55,6 @@ class FailedPerceptualHashException(Exception):
 class FileHasher:
     """
     A class to fetch a file from Hydrus and phash it.
-
-    Note: This class was created because HydrusVideoDeduplicator is not pickleable by
-    joblib due to the sqlite db member variable.
     """
 
     def __init__(self, client: HVDClient, num_threads: int = 0):
@@ -103,9 +100,7 @@ class FileHasher:
         try:
             phash = self._phash_file(file)
         except FailedPerceptualHashException as exc:
-            # Note: Joblib can't serialize unless this exc is a str. It may be because
-            # it may contain exceptions from other modules like pyav or something.
-            return FailedPerceptuallyHashedFile(file_hash, str(exc))
+            return FailedPerceptuallyHashedFile(file_hash, exc)
 
         return PerceptuallyHashedFile(file_hash, phash)
 

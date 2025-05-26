@@ -30,7 +30,6 @@ dependencies = [
     "typer",
     "requests",
     "psutil",
-    "joblib>=1.4",
     # vpdqpy dependencies
     "pillow",
     "av",

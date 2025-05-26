@@ -2,6 +2,14 @@
 
 ## Windows
 
+For Windows, you can get the [latest release directly from the github releases page](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/releases).
+
+You should now be good to go. Proceed to [usage.](./usage.md)
+
+<details>
+<summary>Development Install</summary>
+<br>
+
 ### Dependencies
 
 - [Python](https://www.python.org/downloads/) >=3.10
@@ -17,6 +25,10 @@ python3 -m pip install hydrusvideodeduplicator
 You should now be good to go. Proceed to [usage.](./usage.md)
 
 > Note: Any time you want to run the program again you will have to run the command to activate the virtual environment first.
+
+</details>
+
+<br>
 
 ---
 
@@ -61,4 +73,4 @@ You should now be good to go. Proceed to [usage.](./usage.md)
 
 ## macos
 
-Same directions as Linux and Windows but using your preferred package manager for dependencies e.g. [brew](https://brew.sh/).
+Same directions as Linux but using your preferred package manager for dependencies e.g. [brew](https://brew.sh/).

@@ -1,0 +1,37 @@
+name: Build windows exe
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build windows exe
+    runs-on: windows-2019
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run : |
+          python -m pip install pyinstaller
+          python -m pip install .
+
+      - name: Build
+        run: pyinstaller --onefile src/hydrusvideodeduplicator/entrypoint.py --name=hydrusvideodeduplicator
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win-exe
+          path: dist/hydrusvideodeduplicator.exe
+          if-no-files-found: error
+          retention-days: 1 # We don't need to retain long. This artifact is not for releasing.

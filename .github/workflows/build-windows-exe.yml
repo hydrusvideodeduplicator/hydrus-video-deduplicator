@@ -28,10 +28,10 @@ jobs:
           python -m pip install .
 
       - name: Build
-        run: pyinstaller --onefile src/hydrusvideodeduplicator/winexe_entrypoint.py --name=hydrusvideodeduplicator
+        run: pyinstaller build_files\windows\hydrusvideodeduplicator.spec
       - uses: actions/upload-artifact@v4
         with:
-          name: win-exe
+          name: hydrusvideodeduplicator-windows
           path: dist/hydrusvideodeduplicator.exe
           if-no-files-found: error
           retention-days: 1 # We don't need to retain long. This artifact is not for releasing.

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-windows:
@@ -37,3 +37,5 @@ jobs:
         with:
           files: |
             dist/hydrusvideodeduplicator.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}

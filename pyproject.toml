@@ -51,6 +51,10 @@ exclude = [
 [tool.hatch.version]
 path = "src/hydrusvideodeduplicator/__about__.py"
 
+# Use uv for better performance compared to pip and virtualenv
+[tool.hatch.envs.default]
+installer = "uv"
+
 # Benchmark environment
 
 [tool.hatch.envs.benchmark]

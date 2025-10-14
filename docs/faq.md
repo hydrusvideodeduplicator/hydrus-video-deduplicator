@@ -17,8 +17,9 @@ Download the [latest release directly from the github releases page](https://git
 ### Linux and macOS
 
 ```sh
-# activate your venv first
-pip install hydrusvideodeduplicator --upgrade
+# activate your venv first, e.g., source .venv/bin/activate
+# if you aren't using uv, omit it from the command below.
+uv pip install hydrusvideodeduplicator --upgrade
 ```
 
 ---

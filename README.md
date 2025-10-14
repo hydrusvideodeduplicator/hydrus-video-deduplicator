@@ -27,7 +27,7 @@ For Windows, you can get the [latest release directly from the github releases p
 
 For Linux and macos, see the [Python Install](#python-install).
 
-> **Note**: Many instructions in this repo are written for the Python install instead of the Windows exe. If you're using the Windows exe, simply replace `python3 -m hydrusvideodeduplicator` with `hydrusvideodeduplicator.exe` and they will work the same.
+> **Note**: Many instructions in this repo are written for the Python install instead of the Windows exe. If you're using the Windows exe, simply replace `python -m hydrusvideodeduplicator` with `hydrusvideodeduplicator.exe` and the instructions will work the same.
 
 ## [Usage](./docs/usage.md)
 
@@ -42,7 +42,7 @@ See [Usage](./docs/usage.md) for how to run the program, and [FAQ](./docs/faq.md
 - [Python](https://www.python.org/downloads/) >=3.10
 
 ```sh
-python3 -m pip install hydrusvideodeduplicator
+python -m pip install hydrusvideodeduplicator
 ```
 
 Then continue to [Usage](./docs/usage.md).

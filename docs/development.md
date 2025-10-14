@@ -72,16 +72,17 @@ Alternatively, if you don't want to use hatch and you know what you're doing, yo
     git clone https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator.git
     ```
 
-1. Install local editable package with pip and venv:
+1. Install local editable package with [uv](https://docs.astral.sh/uv):
 
     ```sh
     cd hydrus-video-deduplicator
-    python3 -m venv venv
-    source venv/bin/activate # or however it's activated on your OS
-    pip install -e .
+    pip install uv
+    uv venv
+    source .venv/bin/activate # or .venv\Scripts\activate on Windows
+    uv pip install -e .
     ```
 
-1. Now if you run `python3 -m hydrusvideodeduplicator` there should be no errors.
+1. Now if you run `python -m hydrusvideodeduplicator` there should be no errors.
 
 ---
 

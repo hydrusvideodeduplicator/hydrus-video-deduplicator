@@ -43,7 +43,7 @@ Run the program and enter the Hydrus API key you created previously.
 Example:
 
 ```sh
-python3 -m hydrusvideodeduplicator --api-key="78d2fcc9fe1f43c5008959ed1abfe38ffedcfa127d4f051a1038e068d3e32656"
+python -m hydrusvideodeduplicator --api-key="78d2fcc9fe1f43c5008959ed1abfe38ffedcfa127d4f051a1038e068d3e32656"
 ```
 
 </details>
@@ -67,7 +67,7 @@ You can select certain files with queries just like Hydrus. e.g. `--query="chara
 <br>
 
 ```sh
-python3 -m hydrusvideodeduplicator --api-key="..." --query="character:batman"
+python -m hydrusvideodeduplicator --api-key="..." --query="character:batman"
 ```
 
 </details>

@@ -14,21 +14,26 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Install Python
-        uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
-      - run: python -m pip install hatch build
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run : |
+          python -m pip install uv
+          uv venv
+          uv pip install hatch
 
       - name: Build package without Hatch to make sure it works
-        run: python -m build && rm -rf dist
+        run: uv build && rm -rf dist
 
       - name: Build sdist
-        run: hatch build --clean --target sdist dist
+        run: uv run hatch build --clean --target sdist dist
       - uses: actions/upload-artifact@v4
         with:
           name: dist-sdist

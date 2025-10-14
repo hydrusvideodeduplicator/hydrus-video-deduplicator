@@ -19,58 +19,62 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.13'
-
-    - name: Install hatch
-      run: pip install hatch
+        python-version: "3.14"
 
     - name: Install dependencies
-      run: pip install -e .
+      run: |
+        python -m pip install uv
+        uv venv
+        uv pip install hatch
+        uv pip install -e .
 
     - name: Lint with Ruff
-      run: hatch run lint:lint
+      run: uv run hatch run lint:lint
 
     - name: Format check with black
-      run: hatch run lint:format
+      run: uv run hatch run lint:format
   
   unittest:
     name: Unit Test
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12', '3.13', '3.x']
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14', '3.x']
         os: ['ubuntu-latest', 'windows-2025', 'macos-14']
     runs-on: ${{ matrix.os }}
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         lfs: 'false'
         submodules: 'recursive'
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install hatch
-      run: pip install hatch
+    - name: Install dependencies
+      run: |
+        python -m pip install uv
+        uv venv
+        uv pip install hatch
 
     - name: Unit test
       run: |
-        hatch env create test
-        hatch run test:all
+        uv run hatch env create test
+        uv run hatch run test:all
 
   benchmark:
     name: Benchmark
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         lfs: 'false'
         submodules: 'recursive'
@@ -80,17 +84,20 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install hatch
-      run: pip install hatch
+    - name: Install dependencies
+      run: |
+        python -m pip install uv
+        uv venv
+        uv pip install hatch
 
     - name: Create benchmark env
-      run : |
-        hatch env create benchmark
+      run: |
+        uv run hatch env create benchmark
 
     - name: Benchmark
       run: |
-        hatch run benchmark:vpdq --benchmark-json "${{ matrix.python-version }}.json"
+        uv run hatch run benchmark:vpdq --benchmark-json "${{ matrix.python-version }}.json"
 
     - name: Profile
       run: |
-        hatch run benchmark:profile_vpdq
+        uv run hatch run benchmark:profile_vpdq

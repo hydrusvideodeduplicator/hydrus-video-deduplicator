@@ -18,14 +18,21 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
+
     - name: Setup python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
-        python-version: '3.12'
-    - name: Setup hatch and deploy documentation
+        python-version: "3.14"
+
+    - name: Install dependencies 
       run: |
-        pip install hatch
-        hatch run docs:gh-deploy
+        python -m pip install uv
+        uv venv
+        uv pip install hatch
+
+    - name: Deploy documentation
+      run: |
+        uv run hatch run docs:gh-deploy

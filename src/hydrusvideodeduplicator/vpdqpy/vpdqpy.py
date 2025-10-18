@@ -11,8 +11,6 @@ import av
 from hvdaccelerators import vpdq
 from PIL import Image
 
-from ..pdqhashing.pdq_types.hash256 import Hash256
-
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from fractions import Fraction

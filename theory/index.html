@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://hydrusvideodeduplicator.github.io/hydrus-video-deduplicator/contact/">
+        <link rel="canonical" href="https://hydrusvideodeduplicator.github.io/hydrus-video-deduplicator/theory/">
       
       
-        <link rel="prev" href="../development/">
+        <link rel="prev" href="../faq/">
       
       
-        <link rel="next" href="../credits/">
+        <link rel="next" href="../development/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -24,7 +24,7 @@
     
     
       
-        <title>Contact - Hydrus Video Deduplicator</title>
+        <title>Theory - Hydrus Video Deduplicator</title>
       
     
     
@@ -76,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#contact" class="md-skip">
+        <a href="#theory" class="md-skip">
           Skip to content
         </a>
       
@@ -112,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Contact
+              Theory
             
           </span>
         </div>
@@ -343,10 +343,19 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../theory/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -357,6 +366,7 @@
   
 
       </a>
+      
     </li>
   
 
@@ -387,19 +397,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../contact/" class="md-nav__link">
         
   
   
@@ -410,7 +411,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -474,10 +474,20 @@
   
 
 
-<h1 id="contact">Contact</h1>
-<p>Create an issue on GitHub for any problems/concerns. Provide as much detail as possible in your issue.</p>
-<p>Email <code>hydrusvideodeduplicator@gmail.com</code> for other general questions/concerns.</p>
-<p>Message <code>@applenanner</code> on the <a href="https://discord.gg/wPHPCUZ">Hydrus Discord</a> for other general questions/concerns.</p>
+<h1 id="theory">Theory</h1>
+<p><img alt="Hydrus Video Deduplicator High Level Diagram" src="../img/hvd_high_level_diagram.drawio.svg" /></p>
+<ol>
+<li>
+<p>First, video files are perceptually hashed. These perceptual hashes are cached in a local database.</p>
+</li>
+<li>
+<p>Then, a similarity search cache is built using the perceptual hashes to make it possible to compare video similarities very quickly.</p>
+</li>
+<li>
+<p>Finally, the search cache is queried for a given relative similarity threshold, and video pairs that exceed that that threshold
+will be marked as potential duplicates in Hydrus via the Hydrus Client API.</p>
+</li>
+</ol>
 
 
 
@@ -498,7 +508,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 9, 2024 00:29:30 UTC">June 9, 2024</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 26, 2025 19:15:10 UTC">May 26, 2025</span>
   </span>
 
     

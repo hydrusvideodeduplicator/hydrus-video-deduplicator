@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import json
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -24,40 +23,7 @@ log.setLevel(logging.CRITICAL)
 # The dimensions of the image after downscaling for pdq
 DOWNSCALE_DIMENSIONS = 512
 
-
-@dataclass(slots=True)
-class VpdqFeature:
-    pdq_hash: vpdq.PdqHash256  # 64 char hex string
-    quality: float  # 0 to 100
-    frame_number: int
-
-    def assert_valid(self) -> VpdqFeature:
-        """Checks the bounds of all the elements, throws ValueError if invalid"""
-        if len(str(self.pdq_hash)) < vpdq.PdqHash256.HASH256_HEX_NUM_NYBBLES:
-            raise ValueError("invalid PDQ hash")
-        if not (0 <= self.quality <= 100):
-            raise ValueError("invalid VPDQ quality")
-        if self.frame_number < 0:
-            raise ValueError("invalid frame number")
-        return self
-
-    @staticmethod
-    def from_str(serialized: str) -> VpdqFeature:
-        """Convert from a string back to the class - the inverse of __str__"""
-        parts = serialized.split(",")
-        try:
-            pdq_hex, qual_str, time_str = parts  # Wrong count = ValueError
-            return VpdqFeature(
-                vpdq.PdqHash256.fromHexString(pdq_hex), float(qual_str), int(float(time_str))
-            ).assert_valid()
-        except ValueError:
-            raise ValueError(f"invalid {Vpdq.__name__} serialization: {serialized}")
-
-    def __str__(self) -> str:
-        return f"{self.pdq_hash},{self.quality},{self.frame_number}"
-
-
-VpdqHash: TypeAlias = list[VpdqFeature]
+VpdqHash: TypeAlias = list[vpdq.vpdqFeature]
 
 
 class Vpdq:
@@ -82,37 +48,6 @@ class Vpdq:
         return video
 
     @staticmethod
-    def dedupe_features(features: VpdqHash) -> VpdqHash:
-        """Filter out vpdq features with the exact same hash"""
-        unique_features = set()
-        ret = []
-        for feature in features:
-            if str(feature.pdq_hash) not in unique_features:
-                ret.append(feature)
-                unique_features.add(str(feature.pdq_hash))
-        return ret
-
-    @staticmethod
-    def filter_features(vpdq_features: VpdqHash, threshold: Annotated[float, ValueRange(0.0, 100.0)]) -> VpdqHash:
-        """Remove features that are below a certain quality threshold""" ""
-        return [feature for feature in vpdq_features if feature.quality >= threshold]
-
-    @staticmethod
-    def feature_match_count(
-        query_features: VpdqHash,
-        target_features: VpdqHash,
-        distance_tolerance: float,
-    ) -> int:
-        """Get the number of features that are within a threshold"""
-        return sum(
-            any(
-                query_feature.pdq_hash.hammingDistanceLE(target_feature.pdq_hash, distance_tolerance)
-                for target_feature in target_features
-            )
-            for query_feature in query_features
-        )
-
-    @staticmethod
     def match_hash(
         query_features: VpdqHash,
         target_features: VpdqHash,
@@ -120,15 +55,7 @@ class Vpdq:
         distance_tolerance: float = 31.0,
     ):
         """Get the similarity of two videos by comparing their list of features"""
-        query_filtered = Vpdq.filter_features(query_features, quality_tolerance)
-        target_filtered = Vpdq.filter_features(target_features, quality_tolerance)
-
-        # Avoid divide by zero
-        if len(query_filtered) == 0 or len(target_filtered) == 0:
-            return 0.0
-
-        result = Vpdq.feature_match_count(query_filtered, target_filtered, distance_tolerance)
-        return result * 100 / len(query_filtered)
+        return vpdq.matchHash(query_features, target_features, int(distance_tolerance), int(quality_tolerance))
 
     @staticmethod
     def frame_extract_pyav(video_bytes: bytes) -> Iterator[Image.Image]:
@@ -194,14 +121,7 @@ class Vpdq:
             # used to hold the raw frames.
             hasher.hash_frame(bytes(frame.planes[0]))
         features = hasher.finish()
-        features = [
-            VpdqFeature(
-                vpdq.PdqHash256.fromHexString(feature.get_hash()), feature.get_quality(), feature.get_frame_number()
-            )
-            for feature in features
-        ]
-        deduped_features = Vpdq.dedupe_features(features)
-        return deduped_features
+        return features
 
     @staticmethod
     def is_similar(
@@ -218,9 +138,9 @@ class Vpdq:
     @staticmethod
     def vpdq_to_json(vpdq_features: VpdqHash, *, indent: int | None = None) -> str:
         """Convert from VPDQ features to json object and return the json object as a str"""
-        return json.dumps([str(f.assert_valid()) for f in vpdq_features], indent=indent)
+        return json.dumps([str(f) for f in vpdq_features], indent=indent)
 
     @staticmethod
     def json_to_vpdq(json_str: str) -> VpdqHash:
         """Load a str as a json object and convert from json object to VPDQ features"""
-        return [VpdqFeature.from_str(s) for s in json.loads(json_str or "[]")]
+        return [vpdq.vpdqFeature.from_str(s) for s in json.loads(json_str or "[]")]

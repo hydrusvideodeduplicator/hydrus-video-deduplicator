@@ -33,8 +33,13 @@ dependencies = [
     # vpdqpy dependencies
     "pillow",
     "av",
-    "hvdaccelerators>=0.2.1",
+    # REVERT THIS:
+    "hvdaccelerators @ git+https://github.com/hydrusvideodeduplicator/hvdaccelerators.git@misc-speedup",
 ]
+
+# REVERT THIS:
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [project.urls]
 Documentation = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator#readme"

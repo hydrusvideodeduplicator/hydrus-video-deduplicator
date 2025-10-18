@@ -29,13 +29,13 @@ DOWNSCALE_DIMENSIONS = 512
 
 @dataclass(slots=True)
 class VpdqFeature:
-    pdq_hash: Hash256  # 64 char hex string
+    pdq_hash: vpdq.PdqHash256  # 64 char hex string
     quality: float  # 0 to 100
     frame_number: int
 
     def assert_valid(self) -> VpdqFeature:
         """Checks the bounds of all the elements, throws ValueError if invalid"""
-        if len(str(self.pdq_hash)) < Hash256.HASH256_HEX_NUM_NYBBLES:
+        if len(str(self.pdq_hash)) < vpdq.PdqHash256.HASH256_HEX_NUM_NYBBLES:
             raise ValueError("invalid PDQ hash")
         if not (0 <= self.quality <= 100):
             raise ValueError("invalid VPDQ quality")
@@ -49,7 +49,9 @@ class VpdqFeature:
         parts = serialized.split(",")
         try:
             pdq_hex, qual_str, time_str = parts  # Wrong count = ValueError
-            return VpdqFeature(Hash256.fromHexString(pdq_hex), float(qual_str), int(float(time_str))).assert_valid()
+            return VpdqFeature(
+                vpdq.PdqHash256.fromHexString(pdq_hex), float(qual_str), int(float(time_str))
+            ).assert_valid()
         except ValueError:
             raise ValueError(f"invalid {Vpdq.__name__} serialization: {serialized}")
 
@@ -124,7 +126,7 @@ class Vpdq:
         target_filtered = Vpdq.filter_features(target_features, quality_tolerance)
 
         # Avoid divide by zero
-        if len(query_filtered) <= 0 or len(target_filtered) <= 0:
+        if len(query_filtered) == 0 or len(target_filtered) == 0:
             return 0.0
 
         result = Vpdq.feature_match_count(query_filtered, target_filtered, distance_tolerance)
@@ -195,7 +197,9 @@ class Vpdq:
             hasher.hash_frame(bytes(frame.planes[0]))
         features = hasher.finish()
         features = [
-            VpdqFeature(Hash256.fromHexString(feature.get_hash()), feature.get_quality(), feature.get_frame_number())
+            VpdqFeature(
+                vpdq.PdqHash256.fromHexString(feature.get_hash()), feature.get_quality(), feature.get_frame_number()
+            )
             for feature in features
         ]
         deduped_features = Vpdq.dedupe_features(features)

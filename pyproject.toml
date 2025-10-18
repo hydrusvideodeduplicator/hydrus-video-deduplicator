@@ -33,7 +33,7 @@ dependencies = [
     # vpdqpy dependencies
     "pillow",
     "av",
-    "hvdaccelerators",
+    "hvdaccelerators>=0.2.1",
 ]
 
 [project.urls]

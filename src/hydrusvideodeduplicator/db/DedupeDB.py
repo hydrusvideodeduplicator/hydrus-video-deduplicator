@@ -271,7 +271,7 @@ class DedupeDb:
         assert isinstance(result, int)
         return result
 
-    def add_to_phashed_files_queue(self, file_hash: str, perceptual_hash: str):
+    def add_to_phashed_files_queue(self, file_hash: str, perceptual_hash: bytes):
         """
         Add a file and its corresponding perceptual hash to the queue to be inserted into the vptree.
 
@@ -285,7 +285,7 @@ class DedupeDb:
             {"file_hash": file_hash, "phash": perceptual_hash},
         )
 
-    def associate_file_with_perceptual_hash(self, file_hash: str, perceptual_hash: str):
+    def associate_file_with_perceptual_hash(self, file_hash: str, perceptual_hash: bytes):
         """
         Associate a file with a perceptual hash in the database.
         This will insert the file into the VpTree.
@@ -341,7 +341,7 @@ class DedupeDb:
         res = self.execute(f"SELECT * FROM pragma_table_list WHERE name='{table}'")
         return bool(res.fetchall())
 
-    def get_phash_id(self, perceptual_hash: str) -> str | None:
+    def get_phash_id(self, perceptual_hash: bytes) -> str | None:
         """Get the perceptual hash id from the phash, or None if not found."""
         result = self.execute(
             "SELECT phash_id FROM shape_perceptual_hashes WHERE phash = :phash", {"phash": perceptual_hash}
@@ -371,7 +371,7 @@ class DedupeDb:
             (hash_id,) = result
         return hash_id
 
-    def get_phash(self, phash_id: str) -> str | None:
+    def get_phash(self, phash_id: str) -> bytes | None:
         """Get the perceptual hash from its phash_id, or None if not found."""
         result = self.execute(
             "SELECT phash FROM shape_perceptual_hashes WHERE phash_id = :phash_id", {"phash_id": phash_id}
@@ -412,6 +412,10 @@ class DedupeDb:
 
     def upgrade_db(self):
         """Upgrade the db."""
+
+        # WARNING:
+        # If any functions change then upgrades may not work! We need to be careful about updating them and what we call. # noqa: E501
+        # An upgrade cutoff at some point to prevent bitrot is a good idea, which is what Hydrus does.
 
         def print_upgrade(version: str, new_version: str):
             print(f"Upgrading db from {version} to version {new_version}")
@@ -483,11 +487,13 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
                     # The farthest search index will not be moved.
 
             for video_hash, perceptual_hash in old_videos_data:
-                # TODO: If these functions change this upgrade may not work! We need to be careful about updating them. # noqa: E501
-                #       An upgrade cutoff at some point to prevent bitrot is a good idea, which is what Hydrus does.
-                self.add_to_phashed_files_queue(video_hash, perceptual_hash)
+                # Add to phashed file queue
+                self.execute(
+                    "REPLACE INTO phashed_file_queue ( file_hash, phash ) VALUES ( :file_hash, :phash )",
+                    {"file_hash": video_hash, "phash": str(perceptual_hash)},
+                )
 
-            self.set_version("0.7.0")
+            self.execute("UPDATE version SET version = :version", {"version": "0.7.0"})
             # Note: We need to keep re-running get_version so that we can progressively upgrade.
             version = self.get_version()
 

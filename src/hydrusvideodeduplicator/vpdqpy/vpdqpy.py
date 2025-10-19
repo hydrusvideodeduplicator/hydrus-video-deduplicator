@@ -51,11 +51,10 @@ class Vpdq:
     def match_hash(
         query_features: VpdqHash,
         target_features: VpdqHash,
-        quality_tolerance: float = 50.0,
         distance_tolerance: float = 31.0,
     ):
         """Get the similarity of two videos by comparing their list of features"""
-        return vpdq.matchHash(query_features, target_features, int(distance_tolerance), int(quality_tolerance))
+        return vpdq.matchHash(query_features, target_features, int(distance_tolerance))
 
     @staticmethod
     def frame_extract_pyav(video_bytes: bytes) -> Iterator[Image.Image]:

@@ -7,11 +7,8 @@ if TYPE_CHECKING:
     from typing import Annotated
 
     from .typing_utils import ValueRange
-    from .vpdqpy.vpdqpy import VpdqHash
 
-from .vpdqpy.vpdqpy import Vpdq
-
-"""TODO: Rework this with into a hashing interface that is used by hashers."""
+from .vpdqpy.vpdqpy import Vpdq, VpdqHash
 
 
 def compute_phash(video: Path | str | bytes, num_threads: int = 0) -> VpdqHash:
@@ -30,7 +27,7 @@ def encode_phash_to_str(phash: VpdqHash) -> str:
 
     Returns the perceptual hash encoded as a string.
     """
-    encoded_phash = Vpdq.vpdq_to_json(phash)
+    encoded_phash = str(phash)
     return encoded_phash
 
 
@@ -40,8 +37,7 @@ def decode_phash_from_str(phash_str: str) -> VpdqHash:
 
     Returns the perceptual hash encoded as a string.
     """
-    phash = Vpdq.json_to_vpdq(phash_str)
-    return phash
+    return VpdqHash.from_string(phash_str)
 
 
 def get_phash_similarity(

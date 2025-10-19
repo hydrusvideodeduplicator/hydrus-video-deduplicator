@@ -23,7 +23,7 @@ log.setLevel(logging.CRITICAL)
 # The dimensions of the image after downscaling for pdq
 DOWNSCALE_DIMENSIONS = 512
 
-VpdqHash: TypeAlias = list[vpdq.vpdqFeature]
+VpdqHash: TypeAlias = vpdq.VpdqHash
 
 
 class Vpdq:
@@ -108,8 +108,6 @@ class Vpdq:
         if video is None:
             raise ValueError
 
-        features: VpdqHash = []
-
         # Average FPS is used by vpdq to calculate the timestamp, but we completely discard
         # the timestamp so this value doesn't matter.
         average_fps = 1
@@ -119,8 +117,7 @@ class Vpdq:
             # otherwise if hashing gets too far behind decoding there will be an insane amount of memory
             # used to hold the raw frames.
             hasher.hash_frame(bytes(frame.planes[0]))
-        features = hasher.finish()
-        return features
+        return hasher.finish()
 
     @staticmethod
     def is_similar(

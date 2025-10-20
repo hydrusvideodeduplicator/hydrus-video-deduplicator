@@ -77,7 +77,6 @@ class TestMainVcr(unittest.TestCase):
                 num_similar_pairs = main(
                     "3b3cf10cc13862818ea95ddecfe434bed0828fb319b1ff56413917b471b566ab",
                     "https://localhost:45869",
-                    job_count=1,  # TODO: vcr doesn't work with more than 1 jobcount
                     dedup_database_dir=db_dir,
                 )
 

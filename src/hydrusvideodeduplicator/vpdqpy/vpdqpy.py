@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -130,13 +129,3 @@ class Vpdq:
         """
         similarity = Vpdq.match_hash(query_features=vpdq_features1, target_features=vpdq_features2)
         return similarity >= threshold, similarity
-
-    @staticmethod
-    def vpdq_to_json(vpdq_features: VpdqHash, *, indent: int | None = None) -> str:
-        """Convert from VPDQ features to json object and return the json object as a str"""
-        return json.dumps([str(f) for f in vpdq_features], indent=indent)
-
-    @staticmethod
-    def json_to_vpdq(json_str: str) -> VpdqHash:
-        """Load a str as a json object and convert from json object to VPDQ features"""
-        return [vpdq.vpdqFeature.from_str(s) for s in json.loads(json_str or "[]")]

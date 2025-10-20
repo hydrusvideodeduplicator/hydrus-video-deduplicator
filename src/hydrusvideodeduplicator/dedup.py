@@ -19,7 +19,7 @@ import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .client import HVDClient
 from .db import DedupeDB, vptree
-from .hashing import compute_phash, encode_phash_to_str
+from .hashing import compute_phash
 from .page_logger import HydrusPageLogger
 
 

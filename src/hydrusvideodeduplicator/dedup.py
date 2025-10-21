@@ -76,9 +76,10 @@ class FileHasher:
             raise FailedPerceptualHashException("", str(exc))
 
         # sanity check
+        # Note: Hashes may have 0 bytes if there was no frames that were high enough quality to be used.
         # Note: Using 32 here because each pdq hash is 32 bytes, and there must be at least one pdq hash.
-        if phash_bytes is None or len(phash_bytes) < 32 or (len(phash_bytes) % 32 != 0):
-            raise FailedPerceptualHashException("", "phash_str was None or length less than 32 len not multiple of 32.")
+        if phash_bytes is None or (len(phash_bytes) % 32 != 0):
+            raise FailedPerceptualHashException("", "phash_str was None or len not multiple of 32.")
 
         return phash_bytes
 

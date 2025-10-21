@@ -11,6 +11,7 @@ from rich import print
 
 from ..__about__ import __version__
 from .vptree import VpTreeManager
+from .migration_utils import convert_old_vpdq_to_new
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -64,8 +65,7 @@ class DatabaseStats:
 
 def get_db_stats(db: DedupeDb) -> DatabaseStats:
     """Get some database stats."""
-    # TODO: We don't need to get the file hashes. We just need the length.
-    num_videos = len(db.get_phashed_files())
+    num_videos = db.get_num_phashed_files()
     file_size = os.path.getsize(get_db_file_path())
     return DatabaseStats(num_videos, file_size)
 
@@ -401,6 +401,20 @@ class DedupeDb:
         all_phashed_files = [row[0] for row in all_phashed_files]
         return all_phashed_files
 
+    def get_num_phashed_files(self) -> int:
+        """Get total number of all files that are phashed.  This includes the files in the phashed_file_queue."""
+        query = """
+            SELECT COUNT(*) FROM (
+                SELECT file_hash FROM files
+                WHERE hash_id IN (SELECT hash_id FROM shape_perceptual_hash_map)
+                UNION
+                SELECT file_hash FROM phashed_file_queue
+            )
+        """
+        cursor = self.execute(query)
+        row = cursor.fetchone()
+        return row[0] if row else 0
+
     """
     Misc
     """
@@ -410,8 +424,20 @@ class DedupeDb:
         dedupe_version = SemanticVersion(__version__)
         return db_version < dedupe_version
 
-    def upgrade_db(self):
-        """Upgrade the db."""
+    def vacuum(self):
+        """
+        Vacuum the db.
+
+        Note: Can't vacuum within a transaction.
+        """
+        self.execute("VACUUM")
+
+    def upgrade_db(self) -> bool:
+        """
+        Upgrade the db.
+
+        Returns true if the DB needed to be upgraded and was upgraded.
+        """
 
         # WARNING:
         # If any functions change then upgrades may not work! We need to be careful about updating them and what we call. # noqa: E501
@@ -421,7 +447,7 @@ class DedupeDb:
             print(f"Upgrading db from {version} to version {new_version}")
 
         version = self.get_version()
-        if __version__ < version:
+        if SemanticVersion(__version__) < SemanticVersion(version):
             raise DedupeDbException(
                 f"""
 Database version {version} is newer than the installed hydrusvideodeduplicator version {__version__}.\
@@ -431,7 +457,7 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
             )
 
         if not self.does_need_upgrade():
-            return
+            return False
 
         if SemanticVersion(version) < SemanticVersion("0.7.0"):
             print_upgrade(version, "0.7.0")
@@ -500,9 +526,21 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
         if SemanticVersion(version) < SemanticVersion("0.10.0"):
             print_upgrade(version, "0.10.0")
 
-            # TODO: Update phashes in phashed_file_queue
-            # TODO: Update phashes in shape_perceptual_hashes
+            # Update phashes in phashed_file_queue
+            for phash_id, phash in self.execute("SELECT phash_id, phash FROM shape_perceptual_hashes").fetchall():
+                self.execute(
+                    "REPLACE INTO shape_perceptual_hashes ( phash_id, phash ) VALUES ( :phash_id, :phash )",
+                    {"phash_id": phash_id, "phash": convert_old_vpdq_to_new(phash)},
+                )
 
+            # Update phashes in shape_perceptual_hashes
+            for file_hash, phash in self.execute("SELECT file_hash, phash FROM phashed_file_queue").fetchall():
+                self.execute(
+                    "REPLACE INTO phashed_file_queue ( file_hash, phash ) VALUES ( :file_hash, :phash )",
+                    {"file_hash": file_hash, "phash": convert_old_vpdq_to_new(phash)},
+                )
+
+            # Note: We need to keep re-running get_version so that we can progressively upgrade.
             version = self.get_version()
 
         # No db changes in this case, just print a nice message that your DB is upgraded.
@@ -510,6 +548,7 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
             print_upgrade(version, __version__)
 
         self.set_version(__version__)
+        return True
 
 
 class SemanticVersion:

@@ -242,7 +242,7 @@ class DedupeDb:
         """Add a file to the db. If it already exists, do nothing."""
         self.execute("INSERT OR IGNORE INTO files ( file_hash ) VALUES ( :file_hash )", {"file_hash": file_hash})
 
-    def add_perceptual_hash(self, perceptual_hash: str) -> int:
+    def add_perceptual_hash(self, perceptual_hash: bytes) -> int:
         """
         Add a perceptual hash to the db.
         If it already exists, do nothing.

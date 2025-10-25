@@ -28,7 +28,6 @@ def batched(iterable: Iterable, batch_size: int) -> Generator[tuple, Any, None]:
 
 
 # Given a lexicographically SORTED list of tags, find the tag given a namespace
-# TODO: Do binary search since the tags are sorted
 def find_tag_in_tags(target_tag_namespace: str, tags: list) -> str:
     namespace_len = len(target_tag_namespace)
     for tag in tags:

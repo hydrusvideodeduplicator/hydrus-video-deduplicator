@@ -21,6 +21,7 @@ from .client import HVDClient
 from .db import DedupeDB, vptree
 from .hashing import compute_phash
 from .page_logger import HydrusPageLogger
+from hvdaccelerators import vpdq
 
 
 @dataclass
@@ -77,8 +78,7 @@ class FileHasher:
 
         # sanity check
         # Note: Hashes may have 0 bytes if there was no frames that were high enough quality to be used.
-        # Note: Using 32 here because each pdq hash is 32 bytes, and there must be at least one pdq hash.
-        if phash_bytes is None or (len(phash_bytes) % 32 != 0):
+        if phash_bytes is None or (len(phash_bytes) % vpdq.VpdqHash.bytesPerPdqHash != 0):
             raise FailedPerceptualHashException("", "phash_str was None or len not multiple of 32.")
 
         return phash_bytes
@@ -185,6 +185,7 @@ class HydrusVideoDeduplicator:
             self.hydlog.info("Starting perceptual hash processing")
             self.db.begin_transaction()
             with self.db.conn:
+                stats = PerceptualHashingStats()
                 try:
                     stats = self.add_perceptual_hashes_to_db(video_hashes)
                 except CancelledPerceptualHashException as exc:

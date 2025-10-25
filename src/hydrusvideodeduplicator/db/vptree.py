@@ -6,7 +6,6 @@ import random
 import sqlite3
 from typing import TYPE_CHECKING
 
-from hydrusvideodeduplicator import hashing
 from hvdaccelerators import vpdq
 
 if TYPE_CHECKING:
@@ -29,15 +28,7 @@ def fix_vpdq_similarity(similarity: float) -> int:
 # NOTE: This is the equivalent of HydrusData.Get64BitHammingDistance
 def calculate_distance(phash_a: bytes, phash_b: bytes) -> int:
     """Get the distance between two perceptual hashes, from [1, 101], where 1 is very similar and 100 is not similar."""
-
-    # TODO: Why even go back to Python for this? Passing raw bytes to C++ functions
-    # will probably be faster and may avoid copying bytes.
-    return fix_vpdq_similarity(
-        hashing.get_phash_similarity(
-            vpdq.VpdqHash.from_bytes(phash_a),
-            vpdq.VpdqHash.from_bytes(phash_b),
-        )
-    )
+    return fix_vpdq_similarity(vpdq.matchHashBytes(phash_a, phash_b, 31))
 
 
 class TemporaryIntegerTableNameCache:

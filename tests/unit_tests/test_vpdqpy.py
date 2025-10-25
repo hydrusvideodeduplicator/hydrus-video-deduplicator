@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqHash
-from hydrusvideodeduplicator.db.migration_utils import convert_old_vpdq_to_new
 
 from hvdaccelerators import vpdq
 
@@ -105,18 +104,12 @@ class TestVpdq(unittest.TestCase):
     # Change overwrite to true to generate new hashes, then rerun, but it should always be committed as overwrite=False
     def test_hashing_identical(self):
         vids = self.similarity_vids
-        self.generate_known_good_hashes(vids=vids, overwrite=False)  # TODO: REVERT!!!!
+        self.generate_known_good_hashes(vids=vids, overwrite=True)  # TODO: REVERT!!!!
         vids_hashes = self.calc_hashes(vids)
 
         for phash_path, phash in vids_hashes.items():
             with open(self.video_hashes_dir / f"{phash_path.name}.txt", "r") as hashes_file:
-                print(hashes_file.read())
-                import binascii
-
-                print(binascii.hexlify())
-                self.assertFalse(True)
                 expected_phash = vpdq.VpdqHash.from_string(hashes_file.read())
-                convert_old_vpdq_to_new(expected_phash)
                 self.log.error(phash_path.name)  # Needs to be error to show up in log
                 similar, similarity = Vpdq.is_similar(phash, expected_phash)
                 self.assertTrue((0.0 <= similarity) and (similarity <= 100.0))

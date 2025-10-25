@@ -166,7 +166,7 @@ def main(
         if db_upgraded:
             print_and_log(
                 logger,
-                f"Database upgraded, vacuuming to save space.",
+                "Database upgraded, vacuuming to save space.",
             )
             db_stats = DedupeDB.get_db_stats(db)
             print_and_log(

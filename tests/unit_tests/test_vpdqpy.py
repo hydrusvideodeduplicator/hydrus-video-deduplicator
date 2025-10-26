@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING
 
 from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqHash
 
+from hvdaccelerators import vpdq
+
 from ..check_testdb import check_testdb_exists
 
 if TYPE_CHECKING:
@@ -66,9 +68,9 @@ class TestVpdq(unittest.TestCase):
                 vids_to_be_hashed.append(vid)
 
         vids_hashes = self.calc_hashes(vids_to_be_hashed)
-        for vid in vids_hashes.items():
-            with open(self.video_hashes_dir / f"{vid[0].name}.txt", "w") as hashes_file:
-                hashes_file.write(Vpdq.vpdq_to_json(vid[1]))
+        for file, phash in vids_hashes.items():
+            with open(self.video_hashes_dir / f"{file.name}.txt", "w") as hashes_file:
+                hashes_file.write(str(phash))
 
     # Return if two videos are supposed to be similar
     # This uses the prefix SXX where XX is an arbitrary group number.
@@ -91,9 +93,6 @@ class TestVpdq(unittest.TestCase):
             perceptual_hash = Vpdq.computeHash(vid)
             vids_hashes[vid] = perceptual_hash
             self.assertTrue(len(perceptual_hash) > 0)
-
-            perceptual_hash_json = Vpdq.vpdq_to_json(perceptual_hash)
-            self.assertTrue(perceptual_hash_json != "[]")
         return vids_hashes
 
     # Hash all videos. They should all have hashes.
@@ -110,17 +109,16 @@ class TestVpdq(unittest.TestCase):
 
         for phash_path, phash in vids_hashes.items():
             with open(self.video_hashes_dir / f"{phash_path.name}.txt", "r") as hashes_file:
-                phash_str = Vpdq.vpdq_to_json(phash)
-                expected_hash = hashes_file.readline()
+                expected_phash = vpdq.VpdqHash.from_string(hashes_file.read())
                 self.log.error(phash_path.name)  # Needs to be error to show up in log
-                similar, similarity = Vpdq.is_similar(phash, Vpdq.json_to_vpdq(expected_hash))
+                similar, similarity = Vpdq.is_similar(phash, expected_phash)
                 self.assertTrue((0.0 <= similarity) and (similarity <= 100.0))
-                if expected_hash != phash_str:
+                if expected_phash != phash:
                     # Hashes must be within similarity of 1, even if environmental factors differ (ex. FFmpeg version)
                     # This heuristic of course depends on similarity to be fully working.
                     SIMILARITY_DIFFERENCE_THRESHOLD = 1.0
                     self.log.warning(
-                        f"Video hashes not identical for file {phash_path.name}. \n {expected_hash} \n {phash_str}. \
+                        f"Video hashes not identical for file {phash_path.name}. \n {expected_phash} \n {phash}. \
                         Similarity: {similarity}"
                     )
                     self.assertGreater(

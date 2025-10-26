@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqHash
+from hvdaccelerators import vpdq
 
 if TYPE_CHECKING:
     pass
@@ -40,7 +41,7 @@ def profile_vpdq_similarity():
     video_phashes: list[VpdqHash] = list()
     for video_hash_file in video_hashes_paths:
         with open(video_hash_file) as file:
-            video_hash = Vpdq.json_to_vpdq(file.readline())
+            video_hash = vpdq.VpdqHash.from_string(file.readline())
             video_phashes.append(video_hash)
     assert len(video_phashes) > 0
 

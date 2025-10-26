@@ -19,8 +19,9 @@ import hydrusvideodeduplicator.hydrus_api as hydrus_api
 
 from .client import HVDClient
 from .db import DedupeDB, vptree
-from .hashing import compute_phash, encode_phash_to_str
+from .hashing import compute_phash
 from .page_logger import HydrusPageLogger
+from hvdaccelerators import vpdq
 
 
 @dataclass
@@ -28,7 +29,7 @@ class PerceptuallyHashedFile:
     """Class for perceptually hashed files."""
 
     file_hash: FileHash
-    perceptual_hash: str
+    perceptual_hash: bytes
 
 
 @dataclass
@@ -68,18 +69,19 @@ class FileHasher:
             raise HydrusApiException(exc)
         return response.content
 
-    def _phash_file(self, file: bytes) -> str:
+    def _phash_file(self, file: bytes) -> bytes:
         try:
             phash = compute_phash(file, self.num_threads)
-            phash_str: str = encode_phash_to_str(phash)
+            phash_bytes: bytes = phash.bytes
         except Exception as exc:
             raise FailedPerceptualHashException("", str(exc))
 
         # sanity check
-        if phash_str is None or phash_str == "[]" or phash_str == "":
-            raise FailedPerceptualHashException("", "phash_str was None or empty or [].")
+        # Note: Hashes may have 0 bytes if there was no frames that were high enough quality to be used.
+        if phash_bytes is None or (len(phash_bytes) % vpdq.VpdqHash.bytesPerPdqHash != 0):
+            raise FailedPerceptualHashException("", "phash_str was None or len not multiple of 32.")
 
-        return phash_str
+        return phash_bytes
 
     def fetch_and_phash_file(self, file_hash: str) -> PerceptuallyHashedFile | FailedPerceptuallyHashedFile:
         """
@@ -183,6 +185,7 @@ class HydrusVideoDeduplicator:
             self.hydlog.info("Starting perceptual hash processing")
             self.db.begin_transaction()
             with self.db.conn:
+                stats = PerceptualHashingStats()
                 try:
                     stats = self.add_perceptual_hashes_to_db(video_hashes)
                 except CancelledPerceptualHashException as exc:

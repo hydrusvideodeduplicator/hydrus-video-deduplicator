@@ -158,8 +158,27 @@ def main(
         db.init_connection()
         # Upgrade the database before doing anything.
         db.begin_transaction()
+        db_upgraded = False
         with db.conn:
-            db.upgrade_db()
+            db_upgraded = db.upgrade_db()
+        # Vacuum DB after a successful database upgrade. This can reduce space by 1/2 in cases of large
+        # db migrations.
+        if db_upgraded:
+            print_and_log(
+                logger,
+                "Database upgraded, vacuuming to save space.",
+            )
+            db_stats = DedupeDB.get_db_stats(db)
+            print_and_log(
+                logger,
+                f"Database filesize before vacuum: {db_stats.file_size} bytes.",
+            )
+            db.vacuum()
+            db_stats = DedupeDB.get_db_stats(db)
+            print_and_log(
+                logger,
+                f"Database filesize after vacuum: {db_stats.file_size} bytes.",
+            )
         db_stats = DedupeDB.get_db_stats(db)
 
         print_and_log(

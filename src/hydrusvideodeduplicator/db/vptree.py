@@ -6,14 +6,10 @@ import random
 import sqlite3
 from typing import TYPE_CHECKING
 
-from hydrusvideodeduplicator import hashing
+from hvdaccelerators import vpdq
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
-    from typing import TypeAlias
-
-    FileServiceKeys: TypeAlias = list[str]
-    FileHashes: TypeAlias = Iterable[str]
 
     from hydrusvideodeduplicator.db import DedupeDB
 
@@ -30,15 +26,9 @@ def fix_vpdq_similarity(similarity: float) -> int:
 
 
 # NOTE: This is the equivalent of HydrusData.Get64BitHammingDistance
-def calculate_distance(phash_a: str, phash_b: str) -> int:
+def calculate_distance(phash_a: bytes, phash_b: bytes) -> int:
     """Get the distance between two perceptual hashes, from [1, 101], where 1 is very similar and 100 is not similar."""
-
-    return fix_vpdq_similarity(
-        hashing.get_phash_similarity(
-            hashing.decode_phash_from_str(phash_a),
-            hashing.decode_phash_from_str(phash_b),
-        )
-    )
+    return fix_vpdq_similarity(vpdq.matchHashBytes(phash_a, phash_b, 31))
 
 
 class TemporaryIntegerTableNameCache:
@@ -311,7 +301,7 @@ class VpTreeManager:
 
             all_nodes = self.db.execute("SELECT phash_id, phash FROM shape_perceptual_hashes;").fetchall()
 
-            log.info(f"{len( all_nodes )} leaves found, now regenerating")
+            log.info(f"{len(all_nodes)} leaves found, now regenerating")
 
             (root_id, root_perceptual_hash) = self.pop_best_root_node(all_nodes)  # HydrusData.RandomPop( all_nodes )
 
@@ -559,7 +549,7 @@ class VpTreeManager:
 
         # removal of old branch, maintenance schedule, and orphan perceptual_hashes
 
-        log.info(f"{len( unbalanced_nodes )} leaves found--now clearing out old branch")
+        log.info(f"{len(unbalanced_nodes)} leaves found--now clearing out old branch")
 
         unbalanced_perceptual_hash_ids = {p_id for (p_id, p_h) in unbalanced_nodes}
 

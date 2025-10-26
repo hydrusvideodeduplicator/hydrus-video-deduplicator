@@ -33,8 +33,13 @@ dependencies = [
     # vpdqpy dependencies
     "pillow",
     "av",
-    "hvdaccelerators>=0.3.1",
+    # REVERT THIS:
+    "hvdaccelerators @ git+https://github.com/hydrusvideodeduplicator/hvdaccelerators.git@remove-quality-framenum",
 ]
+
+# REVERT THIS:
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [project.urls]
 Documentation = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator#readme"
@@ -91,9 +96,9 @@ dependencies = [
 ]
 
 [tool.hatch.envs.test.scripts]
-all = "python -m pytest tests/unit_tests/test_db.py tests/acceptance_tests/test_dedupe.py tests/unit_tests/test_vpdqpy.py tests/acceptance_tests/test_main_vcr.py --verbose {args}"
-vpdq = "python -m pytest tests/unit_tests/test_vpdqpy.py --verbose {args}"
+all = "python -m pytest tests/unit_tests/test_db.py tests/unit_tests/test_vpdqpy.py tests/acceptance_tests/test_dedupe.py tests/acceptance_tests/test_main_vcr.py --verbose {args}"
 db = "python -m pytest tests/unit_tests/test_db.py --verbose {args}"
+vpdq = "python -m pytest tests/unit_tests/test_vpdqpy.py --verbose {args}"
 vcr = "python -m pytest tests/acceptance_tests/test_main_vcr.py --verbose {args}"
 
 # Format environment

@@ -64,8 +64,7 @@ class DatabaseStats:
 
 def get_db_stats(db: DedupeDb) -> DatabaseStats:
     """Get some database stats."""
-    # TODO: We don't need to get the file hashes. We just need the length.
-    num_videos = len(db.get_phashed_files())
+    num_videos = db.get_num_phashed_files()
     file_size = os.path.getsize(get_db_file_path())
     return DatabaseStats(num_videos, file_size)
 
@@ -243,7 +242,7 @@ class DedupeDb:
         """Add a file to the db. If it already exists, do nothing."""
         self.execute("INSERT OR IGNORE INTO files ( file_hash ) VALUES ( :file_hash )", {"file_hash": file_hash})
 
-    def add_perceptual_hash(self, perceptual_hash: str) -> int:
+    def add_perceptual_hash(self, perceptual_hash: bytes) -> int:
         """
         Add a perceptual hash to the db.
         If it already exists, do nothing.
@@ -271,7 +270,7 @@ class DedupeDb:
         assert isinstance(result, int)
         return result
 
-    def add_to_phashed_files_queue(self, file_hash: str, perceptual_hash: str):
+    def add_to_phashed_files_queue(self, file_hash: str, perceptual_hash: bytes):
         """
         Add a file and its corresponding perceptual hash to the queue to be inserted into the vptree.
 
@@ -285,7 +284,7 @@ class DedupeDb:
             {"file_hash": file_hash, "phash": perceptual_hash},
         )
 
-    def associate_file_with_perceptual_hash(self, file_hash: str, perceptual_hash: str):
+    def associate_file_with_perceptual_hash(self, file_hash: str, perceptual_hash: bytes):
         """
         Associate a file with a perceptual hash in the database.
         This will insert the file into the VpTree.
@@ -341,7 +340,7 @@ class DedupeDb:
         res = self.execute(f"SELECT * FROM pragma_table_list WHERE name='{table}'")
         return bool(res.fetchall())
 
-    def get_phash_id(self, perceptual_hash: str) -> str | None:
+    def get_phash_id(self, perceptual_hash: bytes) -> str | None:
         """Get the perceptual hash id from the phash, or None if not found."""
         result = self.execute(
             "SELECT phash_id FROM shape_perceptual_hashes WHERE phash = :phash", {"phash": perceptual_hash}
@@ -371,7 +370,7 @@ class DedupeDb:
             (hash_id,) = result
         return hash_id
 
-    def get_phash(self, phash_id: str) -> str | None:
+    def get_phash(self, phash_id: str) -> bytes | None:
         """Get the perceptual hash from its phash_id, or None if not found."""
         result = self.execute(
             "SELECT phash FROM shape_perceptual_hashes WHERE phash_id = :phash_id", {"phash_id": phash_id}
@@ -401,6 +400,20 @@ class DedupeDb:
         all_phashed_files = [row[0] for row in all_phashed_files]
         return all_phashed_files
 
+    def get_num_phashed_files(self) -> int:
+        """Get total number of all files that are phashed.  This includes the files in the phashed_file_queue."""
+        query = """
+            SELECT COUNT(*) FROM (
+                SELECT file_hash FROM files
+                WHERE hash_id IN (SELECT hash_id FROM shape_perceptual_hash_map)
+                UNION
+                SELECT file_hash FROM phashed_file_queue
+            )
+        """
+        cursor = self.execute(query)
+        row = cursor.fetchone()
+        return row[0] if row else 0
+
     """
     Misc
     """
@@ -410,14 +423,30 @@ class DedupeDb:
         dedupe_version = SemanticVersion(__version__)
         return db_version < dedupe_version
 
-    def upgrade_db(self):
-        """Upgrade the db."""
+    def vacuum(self):
+        """
+        Vacuum the db.
+
+        Note: Can't vacuum within a transaction.
+        """
+        self.execute("VACUUM")
+
+    def upgrade_db(self) -> bool:
+        """
+        Upgrade the db.
+
+        Returns true if the DB needed to be upgraded and was upgraded.
+        """
+
+        # WARNING:
+        # If any functions change then upgrades may not work! We need to be careful about updating them and what we call. # noqa: E501
+        # An upgrade cutoff at some point to prevent bitrot is a good idea, which is what Hydrus does.
 
         def print_upgrade(version: str, new_version: str):
             print(f"Upgrading db from {version} to version {new_version}")
 
         version = self.get_version()
-        if __version__ < version:
+        if SemanticVersion(__version__) < SemanticVersion(version):
             raise DedupeDbException(
                 f"""
 Database version {version} is newer than the installed hydrusvideodeduplicator version {__version__}.\
@@ -427,7 +456,7 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
             )
 
         if not self.does_need_upgrade():
-            return
+            return False
 
         if SemanticVersion(version) < SemanticVersion("0.7.0"):
             print_upgrade(version, "0.7.0")
@@ -483,11 +512,67 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
                     # The farthest search index will not be moved.
 
             for video_hash, perceptual_hash in old_videos_data:
-                # TODO: If these functions change this upgrade may not work! We need to be careful about updating them. # noqa: E501
-                #       An upgrade cutoff at some point to prevent bitrot is a good idea, which is what Hydrus does.
-                self.add_to_phashed_files_queue(video_hash, perceptual_hash)
+                # Add to phashed file queue
+                self.execute(
+                    "REPLACE INTO phashed_file_queue ( file_hash, phash ) VALUES ( :file_hash, :phash )",
+                    {"file_hash": video_hash, "phash": str(perceptual_hash)},
+                )
 
-            self.set_version("0.7.0")
+            self.execute("UPDATE version SET version = :version", {"version": "0.7.0"})
+            # Note: We need to keep re-running get_version so that we can progressively upgrade.
+            version = self.get_version()
+
+        if SemanticVersion(version) < SemanticVersion("0.10.0"):
+            print_upgrade(version, "0.10.0")
+
+            print(
+                "Migrating perceptually hashed videos from the old format.\n"
+                "This may take a bit, depending your db length."
+            )
+
+            import json
+
+            def convert_old_vpdq_to_new(old_vpdq_phash_json: str) -> bytes:
+                """Convert <0.9.0 full vpdq hash (json) to 0.10.0 hash"""
+
+                # The old vpdq converted the hashes in reverse order. This has no effect on the similarity
+                # or anything, but it complicates code in the vpdq implementation, so I changed the order
+                # to the native byte order of the PDQ hash.
+                def reverse_byte_order(s: str):
+                    bytes_obj = bytes.fromhex(s)
+                    reversed_bytes = bytes_obj[::-1]
+                    return reversed_bytes.hex()
+
+                j = json.loads(old_vpdq_phash_json)
+                new_vpdq_hash_str = ""
+                for vpdq_feature in j:
+                    phash, feature_quality, frame_num = vpdq_feature.split(",")
+                    # Filtering hash quality is done during hashing starting in 0.10.0 instead of during similarity
+                    # comparison because there's no reason to store hashes which will never be used.
+                    if int(feature_quality) >= 31:
+                        new_vpdq_hash_str += reverse_byte_order(phash)
+
+                # In the uncommon scenario that all hashes have all been filtered out due to bad quality, then videos
+                # will compare as not similar to any other video (including itself, naturally). This matches the same
+                # behavior as the old algorithm where low quality hashes were filtered before similarity was calculated.
+
+                return bytes.fromhex(new_vpdq_hash_str)
+
+            # Update phashes in phashed_file_queue
+            for phash_id, phash in self.execute("SELECT phash_id, phash FROM shape_perceptual_hashes").fetchall():
+                self.execute(
+                    "REPLACE INTO shape_perceptual_hashes ( phash_id, phash ) VALUES ( :phash_id, :phash )",
+                    {"phash_id": phash_id, "phash": convert_old_vpdq_to_new(phash)},
+                )
+
+            # Update phashes in shape_perceptual_hashes
+            for file_hash, phash in self.execute("SELECT file_hash, phash FROM phashed_file_queue").fetchall():
+                self.execute(
+                    "REPLACE INTO phashed_file_queue ( file_hash, phash ) VALUES ( :file_hash, :phash )",
+                    {"file_hash": file_hash, "phash": convert_old_vpdq_to_new(phash)},
+                )
+
+            self.execute("UPDATE version SET version = :version", {"version": "0.10.0"})
             # Note: We need to keep re-running get_version so that we can progressively upgrade.
             version = self.get_version()
 
@@ -496,6 +581,7 @@ Database version {version} is newer than the installed hydrusvideodeduplicator v
             print_upgrade(version, __version__)
 
         self.set_version(__version__)
+        return True
 
 
 class SemanticVersion:

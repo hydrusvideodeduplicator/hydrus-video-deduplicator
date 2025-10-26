@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -23,7 +22,7 @@ log.setLevel(logging.CRITICAL)
 # The dimensions of the image after downscaling for pdq
 DOWNSCALE_DIMENSIONS = 512
 
-VpdqHash: TypeAlias = list[vpdq.vpdqFeature]
+VpdqHash: TypeAlias = vpdq.VpdqHash
 
 
 class Vpdq:
@@ -51,11 +50,10 @@ class Vpdq:
     def match_hash(
         query_features: VpdqHash,
         target_features: VpdqHash,
-        quality_tolerance: float = 50.0,
         distance_tolerance: float = 31.0,
     ):
         """Get the similarity of two videos by comparing their list of features"""
-        return vpdq.matchHash(query_features, target_features, int(distance_tolerance), int(quality_tolerance))
+        return vpdq.matchHash(query_features, target_features, int(distance_tolerance))
 
     @staticmethod
     def frame_extract_pyav(video_bytes: bytes) -> Iterator[Image.Image]:
@@ -109,8 +107,6 @@ class Vpdq:
         if video is None:
             raise ValueError
 
-        features: VpdqHash = []
-
         # Average FPS is used by vpdq to calculate the timestamp, but we completely discard
         # the timestamp so this value doesn't matter.
         average_fps = 1
@@ -120,8 +116,7 @@ class Vpdq:
             # otherwise if hashing gets too far behind decoding there will be an insane amount of memory
             # used to hold the raw frames.
             hasher.hash_frame(bytes(frame.planes[0]))
-        features = hasher.finish()
-        return features
+        return hasher.finish()
 
     @staticmethod
     def is_similar(
@@ -134,13 +129,3 @@ class Vpdq:
         """
         similarity = Vpdq.match_hash(query_features=vpdq_features1, target_features=vpdq_features2)
         return similarity >= threshold, similarity
-
-    @staticmethod
-    def vpdq_to_json(vpdq_features: VpdqHash, *, indent: int | None = None) -> str:
-        """Convert from VPDQ features to json object and return the json object as a str"""
-        return json.dumps([str(f) for f in vpdq_features], indent=indent)
-
-    @staticmethod
-    def json_to_vpdq(json_str: str) -> VpdqHash:
-        """Load a str as a json object and convert from json object to VPDQ features"""
-        return [vpdq.vpdqFeature.from_str(s) for s in json.loads(json_str or "[]")]

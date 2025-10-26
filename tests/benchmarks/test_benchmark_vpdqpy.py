@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from hydrusvideodeduplicator.vpdqpy.vpdqpy import Vpdq, VpdqHash
+from hvdaccelerators import vpdq
 
 from ..check_testdb import check_testdb_exists
 
@@ -55,7 +56,7 @@ def test_vpdq_similarity(benchmark):
     video_phashes: list[VpdqHash] = list()
     for video_hash_file in video_hashes_paths:
         with open(video_hash_file) as file:
-            video_hash = Vpdq.json_to_vpdq(file.readline())
+            video_hash = vpdq.VpdqHash.from_string(file.readline())
             video_phashes.append(video_hash)
 
     pairs = []

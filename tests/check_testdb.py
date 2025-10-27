@@ -9,4 +9,6 @@ def check_testdb_exists():
     """
     testdb_dir = Path(__file__).parent / "testdb"
     if len(os.listdir(testdb_dir)) == 0:
-        raise RuntimeError("Video hashes dir is missing. Is the testdb submodule pulled?")
+        raise RuntimeError(
+            "Video hashes dir is missing. Is the testdb submodule pulled? hint: git submodule update --init --recursive"
+        )

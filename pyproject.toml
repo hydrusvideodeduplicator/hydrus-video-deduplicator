@@ -36,6 +36,11 @@ dependencies = [
     "hvdaccelerators>=0.4.0",
 ]
 
+[project.optional-dependencies]
+gui = [
+  "pyside6",
+]
+
 [project.urls]
 Documentation = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator#readme"
 Issues = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/issues"

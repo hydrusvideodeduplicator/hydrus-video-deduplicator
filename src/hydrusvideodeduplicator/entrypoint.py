@@ -26,6 +26,7 @@ from hydrusvideodeduplicator.config import (
     HYDRUS_LOCAL_FILE_SERVICE_KEYS,
     HYDRUS_QUERY,
     REQUESTS_CA_BUNDLE,
+    GUI,
     is_windows_exe,
 )
 from hydrusvideodeduplicator.db import DedupeDB
@@ -235,20 +236,24 @@ def main(
     return num_similar_pairs
 
 
-def run_main():
+def run_main(gui: bool):
     print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
-    try:
-        typer.run(main)
-    except KeyboardInterrupt as exc:
-        raise typer.Exit(-1) from exc
-    finally:
-        if is_windows_exe():
-            # Hang the console window for the Windows exe, because 99% of users will be running this
-            # interactively and will want this pause to see errors/the final results. The other 1% should file
-            # a Github issue if this causes them issues and they want some --no-interactive option, or they should just
-            # run the Python install.
-            input("Press ENTER to exit...")
+    if gui or bool(int(GUI)):
+        from hydrusvideodeduplicator.gui import gui_main
+        gui_main()
+    else:
+        try:
+            typer.run(main)
+        except KeyboardInterrupt as exc:
+            raise typer.Exit(-1) from exc
+        finally:
+            if is_windows_exe():
+                # Hang the console window for the Windows exe, because 99% of users will be running this
+                # interactively and will want this pause to see errors/the final results. The other 1% should file
+                # a Github issue if this causes them issues and they want some --no-interactive option, or they should just # noqa: E501
+                # run the Python install.
+                input("Press ENTER to exit...")
 
 
 if __name__ == "__main__":
-    run_main()
+    run_main(gui=False)

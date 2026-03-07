@@ -182,6 +182,7 @@ class HydrusVideoDeduplicator:
         failed_page_name: str | None = None,
         custom_query: Sequence[str] | None = None,
         update_progress_callback: UpdateDedupeProgressCallback | None = None,
+        should_skip_step_fn: Callable[[], bool] | None = None,
     ):
         self.db = db
         self.client = client
@@ -191,6 +192,7 @@ class HydrusVideoDeduplicator:
         self.update_progress_callback = update_progress_callback
         if self.update_progress_callback:
             self.update_progress_callback(NoneProgress(placeholder=None))
+        self.should_skip_step_fn = should_skip_step_fn
 
     def get_search_tags(self, custom_query: Sequence[str] | None) -> list[str]:
         # system:filetype tags are really inconsistent
@@ -343,6 +345,9 @@ class HydrusVideoDeduplicator:
                 for video_hash in video_hashes:
                     if self.update_progress_callback:
                         self.update_progress_callback(HashingProgress(complete=pbar.n + 1, total=pbar.total))
+                    if self.should_skip_step_fn and self.should_skip_step_fn():
+                        return stats
+
                     result = filehasher.fetch_and_phash_file(video_hash)
                     if isinstance(result, FailedPerceptuallyHashedFile):
                         # We only want to add the failure to the page if the file was the actual cause of failure.
@@ -398,6 +403,9 @@ class HydrusVideoDeduplicator:
             for file_hash, perceptual_hash in results:
                 if self.update_progress_callback:
                     self.update_progress_callback(BuildingSearchTreeProgress(complete=pbar.n, total=pbar.total))
+                if self.should_skip_step_fn and self.should_skip_step_fn():
+                    return
+
                 self.db.add_file(file_hash)
                 self.db.add_perceptual_hash(perceptual_hash)
                 self.db.associate_file_with_perceptual_hash(file_hash, perceptual_hash)
@@ -447,6 +455,9 @@ class HydrusVideoDeduplicator:
             for hash_id in files:
                 if self.update_progress_callback:
                     self.update_progress_callback(SearchingForDuplicatesProgress(complete=pbar.n, total=pbar.total))
+                if self.should_skip_step_fn and self.should_skip_step_fn():
+                    return
+
                 hash_id = hash_id[0]
                 result = tree.search_file(hash_id, max_hamming_distance=search_threshold)
                 file_hash_a = self.db.get_file_hash(hash_id)

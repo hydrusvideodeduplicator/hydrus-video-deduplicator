@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
 )
-from PySide6.QtCore import Qt, Signal, QObject, Slot, QThread
+from PySide6.QtCore import Qt, Signal, QObject, Slot, QThread, QSemaphore
 from PySide6.QtGui import QFont
 from dataclasses import dataclass
 
@@ -138,13 +138,15 @@ class Worker(QObject):
     logger: logging.Logger
 
     @Slot(logging.Logger)
-    def init(self, logger: logging.Logger):
+    def init(self, logger: logging.Logger, should_skip_step_semaphore: QSemaphore):
         self.logger = logger
-        print_and_log(self.logger, f"Initializing DB...")
-        print_and_log(self.logger, f"Initialized DB.")
+        self.should_skip_step_semaphore = should_skip_step_semaphore
 
     def update_progress(self, progress: DedupeProgress):
         self.progress_updated.emit(progress)
+
+    def should_skip_step(self) -> bool:
+        return self.should_skip_step_semaphore.available() == 0
 
     @Slot(int)
     def dedupe_connection(self, request_params: HydrusRequestParameters, dedupe_params: DedupeParameters):
@@ -169,6 +171,7 @@ class Worker(QObject):
                 failed_page_name=dedupe_params.failed_page_name,
                 custom_query=dedupe_params.custom_query,
                 update_progress_callback=self.update_progress,
+                should_skip_step_fn=self.should_skip_step,
             )
 
             if dedupe_params.debug:
@@ -353,7 +356,7 @@ class Worker(QObject):
 class MainWindow(QWidget):
     dedupe_requested = Signal(HydrusRequestParameters, DedupeParameters)
     test_api_connection_requested = Signal(HydrusRequestParameters)
-    init_requested = Signal(logging.Logger)
+    init_requested = Signal(logging.Logger, QSemaphore)
     init_db_requested = Signal()
     clear_search_tree_requested = Signal()
     clear_search_cache_requested = Signal()
@@ -373,6 +376,8 @@ class MainWindow(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(14)
         layout.setContentsMargins(26, 26, 26, 26)
+
+        self.should_skip_step_semaphore = QSemaphore(n=1)
 
         self.version_label = QLabel(f"Hydrus Video Deduplicator v{__version__}", self)
         self.version_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
@@ -420,6 +425,10 @@ class MainWindow(QWidget):
         self.test_api_connection_btn = QPushButton("Test API Connection")
         self.test_api_connection_btn.setFixedHeight(42)
         self.test_api_connection_btn.clicked.connect(self.test_api_connection_callback)
+
+        self.skip_progress_btn = QPushButton("Skip Step")
+        self.skip_progress_btn.setFixedHeight(42)
+        self.skip_progress_btn.clicked.connect(self.skip_progress_callback)
 
         self.reset_hydrus_potential_duplicates_btn = QPushButton("Reset Potential Duplicates Video Pairs")
         self.reset_hydrus_potential_duplicates_btn.setToolTip(
@@ -471,6 +480,7 @@ class MainWindow(QWidget):
         widgets = (
             self.version_label,
             self.deduplicate_btn,
+            self.skip_progress_btn,
             self.progress_label,
             self.api_key_textbox,
             self.api_url_textbox,
@@ -497,7 +507,7 @@ class MainWindow(QWidget):
             self.reset_hydrus_potential_duplicates_completed
         )
         self.worker.run_db_maintenance_completed.connect(self.run_db_maintenance_completed)
-        self.worker.progress_updated.connect(self.update_progress_callback)
+        self.worker.progress_updated.connect(self.progress_updated_callback)
 
         self.dedupe_requested.connect(self.worker.dedupe_connection)
         self.test_api_connection_requested.connect(self.worker.test_api_connection)
@@ -513,7 +523,9 @@ class MainWindow(QWidget):
 
         self.worker_thread.start()
 
-        self.init_requested.emit(self.logger)
+        self.current_progress = NoneProgress(None)
+
+        self.init_requested.emit(self.logger, self.should_skip_step_semaphore)
         self.init_db_requested.emit()
 
     def __del__(self):
@@ -525,7 +537,11 @@ class MainWindow(QWidget):
                 # Thread may have already been deleted.
                 pass
 
-    def update_progress_callback(self, progress: DedupeProgress):
+    def progress_updated_callback(self, progress: DedupeProgress):
+        self.current_progress = progress
+        if not self.skip_progress_btn.isEnabled():
+            self.should_skip_step_semaphore.release()
+            self.skip_progress_btn.setEnabled(True)
         if isinstance(progress, NoneProgress):
             self.progress_label.setText("Progress: Not running.")
         elif isinstance(progress, HashingProgress):
@@ -696,6 +712,13 @@ class MainWindow(QWidget):
             return
 
         self.test_api_connection_requested.emit(request_params)
+
+    def skip_progress_callback(self):
+        if isinstance(self.current_progress, NoneProgress) or isinstance(self.current_progress, DoneProgress):
+            return
+        if self.skip_progress_btn.isEnabled():
+            self.skip_progress_btn.setEnabled(False)
+            self.should_skip_step_semaphore.acquire()
 
     def qt_about_callback(self):
         QMessageBox.aboutQt(

@@ -240,6 +240,7 @@ def run_main(gui: bool):
     print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
     if gui or bool(int(GUI)):
         from hydrusvideodeduplicator.gui import gui_main
+
         gui_main()
     else:
         try:

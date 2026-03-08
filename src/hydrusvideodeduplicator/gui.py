@@ -676,6 +676,8 @@ class MainWindow(QWidget):
         before_stats: DedupeDB.DatabaseStats | None,
         after_stats: DedupeDB.DatabaseStats | None,
     ):
+        self.run_db_maintenance_dialog.close()
+        self.run_db_maintenance_dialog = None
         self.run_db_maintenance_btn.setEnabled(True)
         result_msg = (
             f"Database maintenance was successful!\n\nBefore Stats:\n{self.stats_to_string(before_stats)}\n\nAfter Stats:\n{self.stats_to_string(after_stats)}"
@@ -784,6 +786,13 @@ class MainWindow(QWidget):
         )
 
         if confirm_btn == QMessageBox.StandardButton.Yes:
+            self.run_db_maintenance_dialog = QMessageBox(
+                windowTitle="Running database maintenance.",
+                text="Running database maintenance. This may take up to a few minutes, depending on your DB size.",
+            )
+            self.run_db_maintenance_dialog.setStandardButtons(QMessageBox.NoButton)
+            self.run_db_maintenance_dialog.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+            self.run_db_maintenance_dialog.show()
             self.run_db_maintenance_btn.setEnabled(False)
             self.run_db_maintenance_requested.emit()
 

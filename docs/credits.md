@@ -9,3 +9,5 @@
 [vpdq](https://github.com/facebook/ThreatExchange/tree/main/vpdq) (BSD) by Meta
 
 [Big Buck Bunny](https://peach.blender.org/about), [Sintel](https://durian.blender.org/about/)  (CC BY 3.0) clips by Blender Foundation
+
+[PySide6](https://pypi.org/project/PySide6/) (LGPL-3.0) by Qt

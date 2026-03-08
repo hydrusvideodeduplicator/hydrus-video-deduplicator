@@ -126,7 +126,7 @@ class APITestResult:
 
 class Worker(QObject):
     progress = Signal(int)
-    completed = Signal()
+    dedupe_completed = Signal(str, Exception)
     test_api_connection_completed = Signal(APITestResult, Exception)
     db_stats_completed = Signal(DedupeDB.DatabaseStats)
     reset_hydrus_potential_duplicates_completed = Signal(Exception)
@@ -186,12 +186,11 @@ class Worker(QObject):
             num_similar_pairs = deduper.deduplicate(
                 skip_hashing=dedupe_params.skip_hashing,
             )
-            self.completed.emit()
+            self.dedupe_completed.emit(f"{num_similar_pairs}", None)
         except (FailedHVDClientConnection, ClientAPIException, Exception) as exc:
             print_and_log(self.logger, str(exc), logging.ERROR)
             # print_and_log(logger, exc.pretty_msg, logging.ERROR)
-        finally:
-            self.completed.emit()
+            self.dedupe_completed.emit(None, exc)
 
     @Slot()
     def test_api_connection(self, request_params: HydrusRequestParameters):
@@ -209,7 +208,7 @@ class Worker(QObject):
             print_and_log(self.logger, f"Dedupe API version: 'v{api_version}'")
             print_and_log(self.logger, f"Hydrus API version: 'v{hydrus_api_version}'")
             hvdclient.verify_permissions()
-            self.test_api_connection_completed.emit(APITestResult, None)
+            self.test_api_connection_completed.emit(APITestResult(api_version, hydrus_api_version), None)
         except (FailedHVDClientConnection, ClientAPIException, Exception) as exc:
             print_and_log(self.logger, str(exc), logging.ERROR)
             self.test_api_connection_completed.emit(None, exc)
@@ -500,7 +499,7 @@ class MainWindow(QWidget):
         self.worker = Worker()
         self.worker_thread = QThread()
 
-        self.worker.completed.connect(self.dedupe_finished)
+        self.worker.dedupe_completed.connect(self.dedupe_completed_callback)
         self.worker.test_api_connection_completed.connect(self.test_api_connection_completed)
         self.worker.db_stats_completed.connect(self.db_stats_completed)
         self.worker.reset_hydrus_potential_duplicates_completed.connect(
@@ -583,13 +582,25 @@ class MainWindow(QWidget):
 
         self.dedupe_requested.emit(request_params, dedupe_params)
 
-    def dedupe_finished(self):
+    def dedupe_completed_callback(self, dedupe_completed_result: str | None, exc: Exception | None):
         self.deduplicate_btn.setEnabled(True)
+        result_msg = (
+            f"Deduplication was successful!\nNumber of similar pairs found: {dedupe_completed_result}\nOpen the Hydrus duplicates processing page to process any potential duplicate pairs."
+            if dedupe_completed_result
+            else f"Deduplication failed.\nError: {exc}"
+        )
+        QMessageBox.information(
+            self,
+            "Deduplication Result",
+            result_msg,
+        )
 
     def test_api_connection_completed(self, api_test_result: APITestResult | None, exc: Exception | None):
         self.test_api_connection_btn.setEnabled(True)
         result_msg = (
-            "API connection was successful!" if api_test_result is not None else f"API connection failed.\nError: {exc}"
+            f"API connection was successful!\nHydrus API Version: v{api_test_result.hydrus_api_version}\nDedupe API version: v{api_test_result.dedupe_api_version}"
+            if api_test_result
+            else f"API connection failed.\nError: {exc}"
         )
         QMessageBox.information(
             self,

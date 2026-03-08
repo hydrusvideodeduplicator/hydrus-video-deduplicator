@@ -134,6 +134,9 @@ class Worker(QObject):
 
     progress_updated = Signal(DedupeProgress)
 
+    db_upgrade_started = Signal()
+    db_upgrade_completed = Signal(Exception)
+
     db: DedupeDB.DedupeDb | None = None
     logger: logging.Logger
 
@@ -224,42 +227,49 @@ class Worker(QObject):
         # the CLI this will be print, for the GUI this will update the GUI msg.
         DedupeDB.set_db_dir(DEDUP_DATABASE_DIR)
         if DedupeDB.does_db_exist():
-            print_and_log(self.logger, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
-            self.db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
-            self.db.init_connection()
-            # Upgrade the database before doing anything.
-            self.db.begin_transaction()
-            db_upgraded = False
-            with self.db.conn:
-                db_upgraded = self.db.upgrade_db()
-            # Vacuum DB after a successful database upgrade. This can reduce space by 1/2 in cases of large
-            # db migrations.
-            if db_upgraded:
-                print_and_log(
-                    self.logger,
-                    "Database upgraded, vacuuming to save space.",
-                )
+            try:
+                print_and_log(self.logger, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
+                self.db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
+                self.db.init_connection()
+                # Upgrade the database before doing anything.
+                self.db.begin_transaction()
+                db_upgraded = False
+                if self.db.does_need_upgrade():
+                    self.db_upgrade_started.emit()
+                with self.db.conn:
+                    db_upgraded = self.db.upgrade_db()
+                # Vacuum DB after a successful database upgrade. This can reduce space by 1/2 in cases of large
+                # db migrations.
+                if db_upgraded:
+                    print_and_log(
+                        self.logger,
+                        "Database upgraded, vacuuming to save space.",
+                    )
+                    db_stats = DedupeDB.get_db_stats(self.db)
+                    print_and_log(
+                        self.logger,
+                        f"Database filesize before vacuum: {db_stats.file_size} bytes.",
+                    )
+                    self.db.vacuum()
+                    db_stats = DedupeDB.get_db_stats(self.db)
+                    print_and_log(
+                        self.logger,
+                        f"Database filesize after vacuum: {db_stats.file_size} bytes.",
+                    )
+                    self.db_upgrade_completed.emit(None)
                 db_stats = DedupeDB.get_db_stats(self.db)
-                print_and_log(
-                    self.logger,
-                    f"Database filesize before vacuum: {db_stats.file_size} bytes.",
-                )
-                self.db.vacuum()
-                db_stats = DedupeDB.get_db_stats(self.db)
-                print_and_log(
-                    self.logger,
-                    f"Database filesize after vacuum: {db_stats.file_size} bytes.",
-                )
-            db_stats = DedupeDB.get_db_stats(self.db)
 
-            print_and_log(
-                self.logger,
-                f"Database has {db_stats.num_videos} videos already perceptually hashed.",
-            )
-            print_and_log(
-                self.logger,
-                f"Database filesize: {db_stats.file_size} bytes.",
-            )
+                print_and_log(
+                    self.logger,
+                    f"Database has {db_stats.num_videos} videos already perceptually hashed.",
+                )
+                print_and_log(
+                    self.logger,
+                    f"Database filesize: {db_stats.file_size} bytes.",
+                )
+            except Exception as exc:
+                self.db = None
+                self.db_upgrade_completed.emit(exc)
         else:
             print_and_log(
                 self.logger, f"Database not found. Creating one at '{DedupeDB.get_db_file_path()}'", logging.INFO
@@ -449,9 +459,10 @@ class MainWindow(QWidget):
 
         self.progress_label = QLabel(f"Progress: Not Running.")
 
-        self.dedupe_config_options_label = QLabel(f"Dedupe Config Options")
+        self.dedupe_config_options_label = QLabel(f"Advanced Options")
         self.dedupe_config_options_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
+        # TODO: Expose hydrus query feature to GUI.
         self.hydrus_query_label = QLabel(f"Custom Hydrus Query")
         self.job_count_label = QLabel(f"Hashing Thread Count")
 
@@ -462,9 +473,10 @@ class MainWindow(QWidget):
         x = 0
         self.config_layout.addWidget(self.dedupe_config_options_label, x, 0)
         x += 1
-        self.config_layout.addWidget(self.hydrus_query_label, x, 0)
-        self.config_layout.addWidget(self.hydrus_query_textbox, x, 1)
-        x += 1
+        # TODO: Expose hydrus query feature to GUI.
+        # self.config_layout.addWidget(self.hydrus_query_label, x, 0)
+        # self.config_layout.addWidget(self.hydrus_query_textbox, x, 1)
+        # x += 1
         self.config_layout.addWidget(self.job_count_label, x, 0)
         self.config_layout.addWidget(self.job_count_textbox, x, 1)
         x += 1
@@ -507,6 +519,8 @@ class MainWindow(QWidget):
         )
         self.worker.run_db_maintenance_completed.connect(self.run_db_maintenance_completed)
         self.worker.progress_updated.connect(self.progress_updated_callback)
+        self.worker.db_upgrade_started.connect(self.db_upgrade_started_callback)
+        self.worker.db_upgrade_completed.connect(self.db_upgrade_completed_callback)
 
         self.dedupe_requested.connect(self.worker.dedupe_connection)
         self.test_api_connection_requested.connect(self.worker.test_api_connection)
@@ -523,6 +537,8 @@ class MainWindow(QWidget):
         self.worker_thread.start()
 
         self.current_progress = NoneProgress(None)
+
+        self.db_upgrade_dialog = None
 
         self.init_requested.emit(self.logger, self.should_skip_step_semaphore)
         self.init_db_requested.emit()
@@ -556,6 +572,27 @@ class MainWindow(QWidget):
         else:
             self.progress_label.setText("Unknown progress state.")
             assert False, f"Unknown progress state{type(progress)}"
+
+    def db_upgrade_started_callback(self):
+        db_upgrade_dialog = QMessageBox(
+            windowTitle="Upgrading database.",
+            text="Upgrading database. This may take up to a few minutes, depending on your DB size.",
+        )
+        db_upgrade_dialog.setStandardButtons(QMessageBox.NoButton)
+        db_upgrade_dialog.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+        db_upgrade_dialog.show()
+        self.db_upgrade_dialog = db_upgrade_dialog
+
+    def db_upgrade_completed_callback(self, exc: Exception | None):
+        if exc is None:
+            self.db_upgrade_dialog.close()
+            self.db_upgrade_dialog = None
+        else:
+            self.db_upgrade_dialog.setText(
+                f"An error occurred while upgrading your DB.\nThis should not have happened, but your DB is very likely still intact. If this error was NOT caused by running out of storage space during the migration, please see the Contact section in README.md on the github repo to report this issue.\nError: {exc}"
+            )
+            abort_button = self.db_upgrade_dialog.addButton(QMessageBox.Abort)
+            abort_button.clicked.connect(lambda: sys.exit(1))
 
     def dedupe_callback(self):
         self.deduplicate_btn.setEnabled(False)

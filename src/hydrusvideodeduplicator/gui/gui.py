@@ -408,6 +408,11 @@ class MainWindow(QWidget):
         )
         self.hydrus_query_textbox.setToolTip("TODO")
 
+        self.failed_page_name_textbox = QLineEdit(placeholderText="OPTIONAL: Failed Page Name")
+        self.failed_page_name_textbox.setToolTip(
+            "Name of the Hydrus page that will be populated with files that fail to be perceptually hashed. You must manually create this in Hydrus."
+        )
+
         self.job_count_textbox = QLineEdit(
             text="-2", placeholderText="REQUIRED: Number of CPU Threads to use for perceptual hashing"
         )
@@ -459,53 +464,60 @@ class MainWindow(QWidget):
 
         self.progress_label = QLabel(f"Progress: Not Running.")
 
+        self.db_database_dir_textbox = QLineEdit(
+            text=str(DEDUP_DATABASE_DIR),
+            readOnly=True,
+        )
+        self.job_count_textbox.setToolTip(str(DEDUP_DATABASE_DIR))
+
         self.dedupe_config_options_label = QLabel(f"Advanced Options")
-        self.dedupe_config_options_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         # TODO: Expose hydrus query feature to GUI.
-        self.hydrus_query_label = QLabel(f"Custom Hydrus Query")
-        self.job_count_label = QLabel(f"Hashing Thread Count")
+        # self.hydrus_query_label = QLabel(f"Custom Hydrus Query")
 
         self.config_layout = QGridLayout()
         self.config_layout.setSpacing(14)
         self.config_layout.setContentsMargins(26, 26, 26, 26)
 
-        x = 0
-        self.config_layout.addWidget(self.dedupe_config_options_label, x, 0)
-        x += 1
-        # TODO: Expose hydrus query feature to GUI.
-        # self.config_layout.addWidget(self.hydrus_query_label, x, 0)
-        # self.config_layout.addWidget(self.hydrus_query_textbox, x, 1)
-        # x += 1
-        self.config_layout.addWidget(self.job_count_label, x, 0)
-        self.config_layout.addWidget(self.job_count_textbox, x, 1)
-        x += 1
+        config_layout_widgets = (
+            self.dedupe_config_options_label,
+            (QLabel(f"Hashing Thread Count"), self.job_count_textbox),
+            (QLabel(f"Failed Page Name"), self.failed_page_name_textbox),
+        )
+        for i, widget in enumerate(config_layout_widgets):
+            if isinstance(widget, tuple):
+                for j, widget in enumerate(widget):
+                    self.config_layout.addWidget(widget, i, j)
+            else:
+                self.config_layout.addWidget(widget, i, 0, 1, 2)
 
-        self.top_layout = QVBoxLayout(self)
-        self.top_layout.setSpacing(14)
-        self.top_layout.setContentsMargins(26, 26, 26, 26)
+        self.top_layout = QGridLayout(self)
 
         layout.addLayout(self.top_layout)
         layout.addLayout(self.config_layout)
 
         widgets = (
             self.version_label,
+            self.progress_label,
             self.deduplicate_btn,
             self.skip_progress_btn,
-            self.progress_label,
-            self.api_key_textbox,
-            self.api_url_textbox,
+            (QLabel("API Key"), self.api_key_textbox),
+            (QLabel("API URL"), self.api_url_textbox),
             self.clear_search_cache_btn,
             self.clear_search_tree_btn,
             self.db_stats_btn,
             self.test_api_connection_btn,
             self.reset_hydrus_potential_duplicates_btn,
             self.run_db_maintenance_btn,
+            (QLabel("DB Dir"), self.db_database_dir_textbox),
             self.about_qt_btn,
         )
-        for widget in widgets:
-            self.top_layout.addWidget(widget)
-        self.top_layout.addStretch()
+        for i, widget in enumerate(widgets):
+            if isinstance(widget, tuple):
+                for j, widget in enumerate(widget):
+                    self.top_layout.addWidget(widget, i, j)
+            else:
+                self.top_layout.addWidget(widget, i, 0, 1, 2)
         layout.addStretch()
 
         self.worker = Worker()
@@ -825,17 +837,21 @@ class MainWindow(QWidget):
         if len(custom_query) == 0:
             custom_query = None
 
+        failed_page_name = self.failed_page_name_textbox.text()
+        if len(failed_page_name) == 0:
+            failed_page_name = None
+
         threshold = 50.0  # TODO: Expose to GUI
         if threshold < 0.0 or threshold > 100.0:
             raise RuntimeError("Invalid similarity threshold. Must be between 0 and 100.")
 
         return DedupeParameters(
             job_count=job_count,
-            failed_page_name=None,  # TODO: Expose to GUI
+            failed_page_name=failed_page_name,
             custom_query=custom_query,
             debug=True,  # TODO: Expose to GUI?
             threshold=threshold,
-            skip_hashing=False,  # TODO: Expose to GUI
+            skip_hashing=False,
         )
 
 

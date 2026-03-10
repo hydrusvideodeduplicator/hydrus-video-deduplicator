@@ -26,7 +26,7 @@ from hydrusvideodeduplicator.config import (
     HYDRUS_LOCAL_FILE_SERVICE_KEYS,
     HYDRUS_QUERY,
     REQUESTS_CA_BUNDLE,
-    GUI,
+    HVD_GUI,
     is_windows_exe,
 )
 from hydrusvideodeduplicator.db import DedupeDB
@@ -238,7 +238,7 @@ def main(
 
 def run_main(gui: bool):
     print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
-    if gui or bool(int(GUI)):
+    if gui or bool(int(HVD_GUI)):
         from hydrusvideodeduplicator.gui import gui_main
 
         gui_main()

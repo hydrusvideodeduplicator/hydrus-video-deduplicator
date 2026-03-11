@@ -49,14 +49,68 @@ from hydrusvideodeduplicator.dedup import (
 
 DARK_STYLESHEET = """
 QWidget {
-    background-color: #1e1e1e;
-    color: #e6e6e6;
+    background-color: #1a1a1a;
+    color: #e8e8e8;
     font-family: "Segoe UI";
-    font-size: 14pt;
+    font-size: 13pt;
+}
+
+QLabel {
+    color: #e8e8e8;
+    font-weight: 450;
+}
+
+QLineEdit {
+    background-color: #2a2a2a;
+    color: #e8e8e8;
+    border: 1.5px solid #3a3a3a;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 12pt;
+    selection-background-color: #0d47a1;
+}
+
+QLineEdit:focus {
+    border: 1.5px solid #4a9eff;
+    background-color: #2e2e2e;
+}
+
+QLineEdit::placeholder {
+    color: #888888;
+}
+
+QLineEdit:read-only {
+    background-color: #242424;
+    color: #a8a8a8;
+    border: 1.5px solid #333333;
+}
+
+QPushButton {
+    background-color: #0d47a1;
+    color: #ffffff;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 12pt;
+}
+
+QPushButton:hover {
+    background-color: #1565c0;
+}
+
+QPushButton:pressed {
+    background-color: #0a3d91;
+}
+
+QPushButton:disabled {
+    background-color: #2a2a2a;
+    color: #737373;
 }
 
 QCheckBox {
     spacing: 8px;
+    color: #e8e8e8;
 }
 
 QCheckBox::indicator {
@@ -65,37 +119,23 @@ QCheckBox::indicator {
 }
 
 QCheckBox::indicator:unchecked {
-    border: 1px solid #555;
-    background-color: #2b2b2b;
+    border: 1.5px solid #555555;
+    background-color: #2a2a2a;
+    border-radius: 2px;
 }
 
 QCheckBox::indicator:checked {
-    border: 1px solid #3a7afe;
-    background-color: #3a7afe;
-}
-
-QPushButton {
-    background-color: #2d6cdf;
-    border: none;
-    border-radius: 6px;
-    padding: 8px 14px;
-    font-weight: 500;
-}
-
-QPushButton:hover {
-    background-color: #3a7afe;
-}
-
-QPushButton:pressed {
-    background-color: #2558b8;
-}
-
-QPushButton:disabled {
-    background-color: #2b2b2b;
+    border: 1.5px solid #4a9eff;
+    background-color: #0d47a1;
+    border-radius: 2px;
 }
 
 QMessageBox {
-    background-color: #1e1e1e;
+    background-color: #1a1a1a;
+}
+
+QMessageBox QLabel {
+    color: #e8e8e8;
 }
 """
 
@@ -378,40 +418,84 @@ class MainWindow(QWidget):
         self.logger = logger
 
         self.setWindowTitle("Hydrus Video Deduplicator")
-        self.setFixedSize(800, 800)
+        self.setFixedSize(900, 950)
 
         # TODO: Add change db dir button.
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(14)
-        layout.setContentsMargins(26, 26, 26, 26)
+        layout.setSpacing(16)
+        layout.setContentsMargins(28, 28, 28, 28)
 
         self.should_skip_step_semaphore = QSemaphore(n=1)
 
+        # Version label with enhanced styling
         self.version_label = QLabel(f"Hydrus Video Deduplicator v{__version__}", self)
         self.version_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        version_font = QFont("Segoe UI", 14)
+        version_font.setWeight(QFont.Weight.Bold)
+        self.version_label.setFont(version_font)
+        self.version_label.setStyleSheet("color: #4a9eff; margin-bottom: 10px;")
 
-        self.test_hydrus_api_access = QPushButton("Test Hydrus API Access")
+        # Input fields section
+        self.required_inputs_label = QLabel("Hydrus Connection")
+        required_inputs_font = QFont("Segoe UI", 11)
+        required_inputs_font.setWeight(QFont.Weight.Bold)
+        self.required_inputs_label.setFont(required_inputs_font)
+        self.required_inputs_label.setStyleSheet("color: #4a9eff; margin-top: 8px; margin-bottom: 8px;")
 
         self.api_key_textbox = QLineEdit(placeholderText="REQUIRED: Hydrus API Key")
         self.api_key_textbox.setToolTip("Hydrus API key.")
         self.api_key_textbox.setText(HYDRUS_API_KEY)
         self.api_key_textbox.setEchoMode(QLineEdit.EchoMode.Password)
+        self.api_key_textbox.setMaximumHeight(38)
 
         self.api_url_textbox = QLineEdit(HYDRUS_API_URL, placeholderText="REQUIRED: Hydrus API URL")
         self.api_url_textbox.setToolTip(
             'Hydrus API URL. Ensure the http/https matches the option in your Hydrus client in "manage services -> client api -> use https"'
         )
+        self.api_url_textbox.setMaximumHeight(38)
 
+        # Main action buttons
+        self.test_hydrus_api_access = QPushButton("Test Hydrus API Access")
+
+        self.deduplicate_btn = QPushButton("Run Deduplicator")
+        self.deduplicate_btn.setFixedHeight(42)
+        self.deduplicate_btn.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self.deduplicate_btn.clicked.connect(self.dedupe_callback)
+
+        self.skip_progress_btn = QPushButton("Skip Step")
+        self.skip_progress_btn.setFixedHeight(42)
+        self.skip_progress_btn.clicked.connect(self.skip_progress_callback)
+
+        # Progress display
+        self.progress_label = QLabel(f"Progress: Not Running.")
+        progress_font = QFont("Segoe UI", 11)
+        progress_font.setWeight(QFont.Weight.Bold)
+        self.progress_label.setFont(progress_font)
+        progress_stylesheet = """
+            QLabel {
+                color: #4a9eff;
+                background-color: #242424;
+                border: 1px solid #3a3a3a;
+                border-radius: 4px;
+                padding: 12px;
+                font-weight: 600;
+            }
+        """
+        self.progress_label.setStyleSheet(progress_stylesheet)
+
+        # Advanced options section
         self.hydrus_query_textbox = QLineEdit(
             placeholderText="OPTIONAL: Hydrus Query (leave empty to deduplicate all videos)"
         )
         self.hydrus_query_textbox.setToolTip("TODO")
+        self.hydrus_query_textbox.setMaximumHeight(38)
 
         self.failed_page_name_textbox = QLineEdit(placeholderText="OPTIONAL: Failed Page Name")
         self.failed_page_name_textbox.setToolTip(
             "Name of the Hydrus page that will be populated with files that fail to be perceptually hashed. You must manually create this in Hydrus."
         )
+        self.failed_page_name_textbox.setMaximumHeight(38)
 
         self.job_count_textbox = QLineEdit(
             text="-2", placeholderText="REQUIRED: Number of CPU Threads to use for perceptual hashing"
@@ -419,105 +503,127 @@ class MainWindow(QWidget):
         self.job_count_textbox.setToolTip(
             "Number of CPU threads to use for perceptual hashing. Default is all but one core.\nYou can use all CPUs/threads on your machine by setting to -1. If you set it to -2, all CPUs but one are used."
         )
+        self.job_count_textbox.setMaximumHeight(38)
 
-        self.deduplicate_btn = QPushButton("Run Deduplicator")
-        self.deduplicate_btn.setFixedHeight(42)
-        self.deduplicate_btn.clicked.connect(self.dedupe_callback)
+        # Advanced options header
+        self.dedupe_config_options_label = QLabel("Advanced Options")
+        config_font = QFont("Segoe UI", 11)
+        config_font.setWeight(QFont.Weight.Bold)
+        self.dedupe_config_options_label.setFont(config_font)
+        self.dedupe_config_options_label.setStyleSheet("color: #4a9eff; margin-top: 12px; margin-bottom: 8px;")
+
+        # Database operations section
+        self.db_operations_label = QLabel("Database Operations")
+        db_ops_font = QFont("Segoe UI", 11)
+        db_ops_font.setWeight(QFont.Weight.Bold)
+        self.db_operations_label.setFont(db_ops_font)
+        self.db_operations_label.setStyleSheet("color: #4a9eff; margin-top: 12px; margin-bottom: 8px;")
 
         self.db_stats_btn = QPushButton("Database Statistics")
-        self.db_stats_btn.setFixedHeight(42)
+        self.db_stats_btn.setFixedHeight(40)
         self.db_stats_btn.clicked.connect(self.db_stats_callback)
 
         self.clear_search_cache_btn = QPushButton("Clear Search Cache")
-        self.clear_search_cache_btn.setFixedHeight(42)
+        self.clear_search_cache_btn.setFixedHeight(40)
         self.clear_search_cache_btn.clicked.connect(self.clear_search_cache_callback)
 
         self.clear_search_tree_btn = QPushButton("Clear Search Tree")
-        self.clear_search_tree_btn.setFixedHeight(42)
+        self.clear_search_tree_btn.setFixedHeight(40)
         self.clear_search_tree_btn.clicked.connect(self.clear_search_tree_callback)
-
-        self.test_api_connection_btn = QPushButton("Test API Connection")
-        self.test_api_connection_btn.setFixedHeight(42)
-        self.test_api_connection_btn.clicked.connect(self.test_api_connection_callback)
-
-        self.skip_progress_btn = QPushButton("Skip Step")
-        self.skip_progress_btn.setFixedHeight(42)
-        self.skip_progress_btn.clicked.connect(self.skip_progress_callback)
 
         self.reset_hydrus_potential_duplicates_btn = QPushButton("Reset Potential Duplicates Video Pairs")
         self.reset_hydrus_potential_duplicates_btn.setToolTip(
             "Reset potential duplicates video pairs in Hydrus. This will also clear your local video dedupe search cache."
         )
-        self.reset_hydrus_potential_duplicates_btn.setFixedHeight(42)
+        self.reset_hydrus_potential_duplicates_btn.setFixedHeight(40)
         self.reset_hydrus_potential_duplicates_btn.clicked.connect(self.reset_hydrus_potential_duplicates_btn_callback)
 
         self.run_db_maintenance_btn = QPushButton("Run Database Maintenance")
         self.run_db_maintenance_btn.setToolTip(
             "Run video dedupe database maintenance, including vacuuming your database to reduce its filesize.\nThis will temporarily require ~2x the disk space of the current db to complete.\nYou can view the db file size in the db stats"
         )
-        self.run_db_maintenance_btn.setFixedHeight(42)
+        self.run_db_maintenance_btn.setFixedHeight(40)
         self.run_db_maintenance_btn.clicked.connect(self.run_db_maintenance_callback)
 
-        self.about_qt_btn = QPushButton("About Qt")
-        self.about_qt_btn.setFixedHeight(42)
-        self.about_qt_btn.clicked.connect(self.qt_about_callback)
+        self.test_api_connection_btn = QPushButton("Test API Connection")
+        self.test_api_connection_btn.setFixedHeight(40)
+        self.test_api_connection_btn.clicked.connect(self.test_api_connection_callback)
 
-        self.progress_label = QLabel(f"Progress: Not Running.")
-
+        # Database info section
         self.db_database_dir_textbox = QLineEdit(
             text=str(DEDUP_DATABASE_DIR),
             readOnly=True,
         )
+        self.db_database_dir_textbox.setMaximumHeight(38)
         self.job_count_textbox.setToolTip(str(DEDUP_DATABASE_DIR))
 
-        self.dedupe_config_options_label = QLabel(f"Advanced Options")
+        # About section
+        self.about_qt_btn = QPushButton("About Qt")
+        self.about_qt_btn.setFixedHeight(40)
+        self.about_qt_btn.clicked.connect(self.qt_about_callback)
 
-        # TODO: Expose hydrus query feature to GUI.
-        # self.hydrus_query_label = QLabel(f"Custom Hydrus Query")
+        # Main layout arrangement
+        layout.addWidget(self.version_label)
 
-        self.config_layout = QGridLayout()
-        self.config_layout.setSpacing(14)
-        self.config_layout.setContentsMargins(26, 26, 26, 26)
+        # Connection inputs
+        layout.addWidget(self.required_inputs_label)
+        api_layout = QGridLayout()
+        api_layout.setSpacing(10)
+        api_layout.addWidget(QLabel("API Key"), 0, 0)
+        api_layout.addWidget(self.api_key_textbox, 0, 1)
+        api_layout.addWidget(QLabel("API URL"), 1, 0)
+        api_layout.addWidget(self.api_url_textbox, 1, 1)
+        api_layout.setColumnStretch(1, 1)
+        layout.addLayout(api_layout)
 
-        config_layout_widgets = (
-            self.dedupe_config_options_label,
-            (QLabel(f"Hashing Thread Count"), self.job_count_textbox),
-            (QLabel(f"Failed Page Name"), self.failed_page_name_textbox),
-        )
-        for i, widget in enumerate(config_layout_widgets):
-            if isinstance(widget, tuple):
-                for j, widget in enumerate(widget):
-                    self.config_layout.addWidget(widget, i, j)
-            else:
-                self.config_layout.addWidget(widget, i, 0, 1, 2)
+        # Main action buttons
+        main_buttons_layout = QGridLayout()
+        main_buttons_layout.setSpacing(10)
+        main_buttons_layout.addWidget(self.deduplicate_btn, 0, 0)
+        main_buttons_layout.addWidget(self.skip_progress_btn, 0, 1)
+        main_buttons_layout.setColumnStretch(0, 1)
+        main_buttons_layout.setColumnStretch(1, 1)
+        layout.addLayout(main_buttons_layout)
 
-        self.top_layout = QGridLayout(self)
+        # Progress display
+        layout.addWidget(self.progress_label)
 
-        layout.addLayout(self.top_layout)
-        layout.addLayout(self.config_layout)
+        # Advanced options
+        layout.addWidget(self.dedupe_config_options_label)
+        config_layout = QGridLayout()
+        config_layout.setSpacing(10)
+        config_layout.addWidget(QLabel("Hashing Thread Count"), 0, 0)
+        config_layout.addWidget(self.job_count_textbox, 0, 1)
+        config_layout.addWidget(QLabel("Failed Page Name"), 1, 0)
+        config_layout.addWidget(self.failed_page_name_textbox, 1, 1)
+        config_layout.setColumnStretch(1, 1)
+        layout.addLayout(config_layout)
 
-        widgets = (
-            self.version_label,
-            self.progress_label,
-            self.deduplicate_btn,
-            self.skip_progress_btn,
-            (QLabel("API Key"), self.api_key_textbox),
-            (QLabel("API URL"), self.api_url_textbox),
-            self.clear_search_cache_btn,
-            self.clear_search_tree_btn,
-            self.db_stats_btn,
-            self.test_api_connection_btn,
-            self.reset_hydrus_potential_duplicates_btn,
-            self.run_db_maintenance_btn,
-            (QLabel("DB Dir"), self.db_database_dir_textbox),
-            self.about_qt_btn,
-        )
-        for i, widget in enumerate(widgets):
-            if isinstance(widget, tuple):
-                for j, widget in enumerate(widget):
-                    self.top_layout.addWidget(widget, i, j)
-            else:
-                self.top_layout.addWidget(widget, i, 0, 1, 2)
+        # Database operations
+        layout.addWidget(self.db_operations_label)
+        db_buttons_layout = QGridLayout()
+        db_buttons_layout.setSpacing(10)
+        db_buttons_layout.addWidget(self.db_stats_btn, 0, 0)
+        db_buttons_layout.addWidget(self.test_api_connection_btn, 0, 1)
+        db_buttons_layout.addWidget(self.clear_search_cache_btn, 1, 0)
+        db_buttons_layout.addWidget(self.clear_search_tree_btn, 1, 1)
+        db_buttons_layout.addWidget(self.reset_hydrus_potential_duplicates_btn, 2, 0, 1, 2)
+        db_buttons_layout.addWidget(self.run_db_maintenance_btn, 3, 0, 1, 2)
+        db_buttons_layout.setColumnStretch(0, 1)
+        db_buttons_layout.setColumnStretch(1, 1)
+        layout.addLayout(db_buttons_layout)
+
+        # Database directory info
+        db_dir_layout = QGridLayout()
+        db_dir_layout.setSpacing(10)
+        db_dir_layout.addWidget(QLabel("DB Directory"), 0, 0)
+        db_dir_layout.addWidget(self.db_database_dir_textbox, 0, 1)
+        db_dir_layout.setColumnStretch(1, 1)
+        layout.addLayout(db_dir_layout)
+
+        # About button
+        layout.addWidget(self.about_qt_btn)
+
         layout.addStretch()
 
         self.worker = Worker()
@@ -572,15 +678,22 @@ class MainWindow(QWidget):
         if isinstance(progress, NoneProgress):
             self.progress_label.setText("Progress: Not running.")
         elif isinstance(progress, HashingProgress):
+            percentage = int((progress.complete / progress.total * 100) if progress.total > 0 else 0)
             self.progress_label.setText(
-                f"Progress: Perceptually hashing files: <b>{progress.complete} / {progress.total} files</b>"
+                f"Progress: <b>Perceptually hashing files</b><br/>{progress.complete} / {progress.total} files ({percentage}%)"
             )
         elif isinstance(progress, BuildingSearchTreeProgress):
-            self.progress_label.setText(f"Progress: Building search tree: {progress.complete} / {progress.total}")
+            percentage = int((progress.complete / progress.total * 100) if progress.total > 0 else 0)
+            self.progress_label.setText(
+                f"Progress: <b>Building search tree</b><br/>{progress.complete} / {progress.total} ({percentage}%)"
+            )
         elif isinstance(progress, SearchingForDuplicatesProgress):
-            self.progress_label.setText(f"Progress: Searching for duplicates: {progress.complete} / {progress.total}")
+            percentage = int((progress.complete / progress.total * 100) if progress.total > 0 else 0)
+            self.progress_label.setText(
+                f"Progress: <b>Searching for duplicates</b><br/>{progress.complete} / {progress.total} ({percentage}%)"
+            )
         elif isinstance(progress, DoneProgress):
-            self.progress_label.setText(f"Progress: Done.")
+            self.progress_label.setText(f"Progress: <b style='color: #4aff4a;'>Done!</b>")
         else:
             self.progress_label.setText("Unknown progress state.")
             assert False, f"Unknown progress state{type(progress)}"
@@ -592,6 +705,14 @@ class MainWindow(QWidget):
         )
         db_upgrade_dialog.setStandardButtons(QMessageBox.NoButton)
         db_upgrade_dialog.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+        db_upgrade_dialog.setStyleSheet("""
+            QMessageBox {
+                background-color: #1a1a1a;
+            }
+            QMessageBox QLabel {
+                color: #e8e8e8;
+            }
+        """)
         db_upgrade_dialog.show()
         self.db_upgrade_dialog = db_upgrade_dialog
 
@@ -804,6 +925,14 @@ class MainWindow(QWidget):
             )
             self.run_db_maintenance_dialog.setStandardButtons(QMessageBox.NoButton)
             self.run_db_maintenance_dialog.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+            self.run_db_maintenance_dialog.setStyleSheet("""
+                QMessageBox {
+                    background-color: #1a1a1a;
+                }
+                QMessageBox QLabel {
+                    color: #e8e8e8;
+                }
+            """)
             self.run_db_maintenance_dialog.show()
             self.run_db_maintenance_btn.setEnabled(False)
             self.run_db_maintenance_requested.emit()

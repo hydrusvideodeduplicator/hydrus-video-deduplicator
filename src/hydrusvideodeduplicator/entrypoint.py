@@ -244,7 +244,15 @@ def main(
 def run_main(gui: bool):
     print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
     if gui or bool(int(HVD_GUI)):
-        from hydrusvideodeduplicator.gui.gui import gui_main
+        try:
+            from hydrusvideodeduplicator.gui.gui import gui_main
+        except ImportError as exc:
+            print_and_log(
+                logging.getLogger("main"),
+                f"Failed to import GUI dependencies. Did you install the GUI dependencies? Error: {exc}",  # noqa: E501
+                logging.FATAL,
+            )
+            raise typer.Exit(code=1) from exc
 
         gui_main()
     else:
@@ -252,10 +260,17 @@ def run_main(gui: bool):
         # because the typer checks if arguments exist, but we don't need any of the args for the GUI
         # to run.
         if len(sys.argv) > 1 and sys.argv[1] == "--gui":
-            from hydrusvideodeduplicator.gui.gui import gui_main
+            try:
+                from hydrusvideodeduplicator.gui.gui import gui_main
+            except ImportError as exc:
+                print_and_log(
+                    logging.getLogger("main"),
+                    f"Failed to import GUI dependencies. Did you install the GUI dependencies? Error: {exc}",  # noqa: E501
+                    logging.FATAL,
+                )
+                raise typer.Exit(code=1) from exc
 
             gui_main()
-
         else:
             try:
                 typer.run(main)

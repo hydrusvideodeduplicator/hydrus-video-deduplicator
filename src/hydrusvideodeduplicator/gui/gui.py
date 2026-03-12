@@ -493,7 +493,7 @@ class MainWindow(QWidget):
 
         self.failed_page_name_textbox = QLineEdit(placeholderText="OPTIONAL: Failed Page Name")
         self.failed_page_name_textbox.setToolTip(
-            "Name of the Hydrus page that will be populated with files that fail to be perceptually hashed. You must manually create this in Hydrus."
+            "Name of the Hydrus page that will be populated with files that fail to be perceptually hashed. You must manually create this in Hydrus."  # noqa: E501
         )
         self.failed_page_name_textbox.setMaximumHeight(38)
 
@@ -501,7 +501,7 @@ class MainWindow(QWidget):
             text="-2", placeholderText="REQUIRED: Number of CPU Threads to use for perceptual hashing"
         )
         self.job_count_textbox.setToolTip(
-            "Number of CPU threads to use for perceptual hashing. Default is all but one core.\nYou can use all CPUs/threads on your machine by setting to -1. If you set it to -2, all CPUs but one are used." # noqa: E501
+            "Number of CPU threads to use for perceptual hashing. Default is all but one core.\nYou can use all CPUs/threads on your machine by setting to -1. If you set it to -2, all CPUs but one are used."  # noqa: E501
         )
         self.job_count_textbox.setMaximumHeight(38)
 
@@ -540,7 +540,7 @@ class MainWindow(QWidget):
 
         self.run_db_maintenance_btn = QPushButton("Run Database Maintenance")
         self.run_db_maintenance_btn.setToolTip(
-            "Run video dedupe database maintenance, including vacuuming your database to reduce its filesize.\nThis will temporarily require ~2x the disk space of the current db to complete.\nYou can view the db file size in the db stats" # noqa: E501
+            "Run video dedupe database maintenance, including vacuuming your database to reduce its filesize.\nThis will temporarily require ~2x the disk space of the current db to complete.\nYou can view the db file size in the db stats"  # noqa: E501
         )
         self.run_db_maintenance_btn.setFixedHeight(40)
         self.run_db_maintenance_btn.clicked.connect(self.run_db_maintenance_callback)
@@ -680,7 +680,7 @@ class MainWindow(QWidget):
         elif isinstance(progress, HashingProgress):
             percentage = int((progress.complete / progress.total * 100) if progress.total > 0 else 0)
             self.progress_label.setText(
-                f"Progress: <b>Perceptually hashing files</b><br/>{progress.complete} / {progress.total} files ({percentage}%)"
+                f"Progress: <b>Perceptually hashing files</b><br/>{progress.complete} / {progress.total} files ({percentage}%)"  # noqa: E501
             )
         elif isinstance(progress, BuildingSearchTreeProgress):
             percentage = int((progress.complete / progress.total * 100) if progress.total > 0 else 0)
@@ -693,7 +693,7 @@ class MainWindow(QWidget):
                 f"Progress: <b>Searching for duplicates</b><br/>{progress.complete} / {progress.total} ({percentage}%)"
             )
         elif isinstance(progress, DoneProgress):
-            self.progress_label.setText(f"Progress: <b style='color: #4aff4a;'>Done!</b>")
+            self.progress_label.setText("Progress: <b style='color: #4aff4a;'>Done!</b>")
         else:
             self.progress_label.setText("Unknown progress state.")
             assert False, f"Unknown progress state{type(progress)}"
@@ -722,7 +722,7 @@ class MainWindow(QWidget):
             self.db_upgrade_dialog = None
         else:
             self.db_upgrade_dialog.setText(
-                f"An error occurred while upgrading your DB.\nThis should not have happened, but your DB is very likely still intact. If this error was NOT caused by running out of storage space during the migration, please see the Contact section in README.md on the github repo to report this issue.\nError: {exc}" # noqa: E501
+                f"An error occurred while upgrading your DB.\nThis should not have happened, but your DB is very likely still intact. If this error was NOT caused by running out of storage space during the migration, please see the Contact section in README.md on the github repo to report this issue.\nError: {exc}"  # noqa: E501
             )
             abort_button = self.db_upgrade_dialog.addButton(QMessageBox.Abort)
             abort_button.clicked.connect(lambda: sys.exit(1))
@@ -768,7 +768,7 @@ class MainWindow(QWidget):
     def test_api_connection_completed(self, api_test_result: APITestResult | None, exc: Exception | None):
         self.test_api_connection_btn.setEnabled(True)
         result_msg = (
-            f"API connection was successful!\nHydrus API Version: v{api_test_result.hydrus_api_version}\nDedupe API version: v{api_test_result.dedupe_api_version}"
+            f"API connection was successful!\nHydrus API Version: v{api_test_result.hydrus_api_version}\nDedupe API version: v{api_test_result.dedupe_api_version}"  # noqa: E501
             if api_test_result
             else f"API connection failed.\nError: {exc}"
         )
@@ -813,7 +813,7 @@ class MainWindow(QWidget):
         self.run_db_maintenance_dialog = None
         self.run_db_maintenance_btn.setEnabled(True)
         result_msg = (
-            f"Database maintenance was successful!\n\nBefore Stats:\n{self.stats_to_string(before_stats)}\n\nAfter Stats:\n{self.stats_to_string(after_stats)}"
+            f"Database maintenance was successful!\n\nBefore Stats:\n{self.stats_to_string(before_stats)}\n\nAfter Stats:\n{self.stats_to_string(after_stats)}"  # noqa: E501
             if result is None
             else f"Database maintenance failed.\nError: {result}"
         )
@@ -864,7 +864,7 @@ class MainWindow(QWidget):
         confirm_btn = QMessageBox.question(
             self,
             "Confirm Reset Potential Duplicates",
-            "Are you sure you want to reset your potential duplicates?\nThis will clear all pairs of videos marked as potential duplicates in Hydrus, and it will also clear your Hydrus Video Deduplicator search cache.",
+            "Are you sure you want to reset your potential duplicates?\nThis will clear all pairs of videos marked as potential duplicates in Hydrus, and it will also clear your Hydrus Video Deduplicator search cache.",  # noqa: E501
             buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             defaultButton=QMessageBox.StandardButton.No,
         )
@@ -913,7 +913,7 @@ class MainWindow(QWidget):
         confirm_btn = QMessageBox.question(
             self,
             "Confirm Run Database Maintenance",
-            "Are you sure you want to run database maintenance?\nThis will temporarily require ~2x the disk space of the current db to complete.\nYou can view the db file size in the db stats.",
+            "Are you sure you want to run database maintenance?\nThis will temporarily require ~2x the disk space of the current db to complete.\nYou can view the db file size in the db stats.",  # noqa: E501
             buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             defaultButton=QMessageBox.StandardButton.No,
         )

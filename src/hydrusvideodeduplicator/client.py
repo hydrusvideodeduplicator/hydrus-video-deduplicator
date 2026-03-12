@@ -153,6 +153,12 @@ class HVDClient:
 
         return result
 
+    def reset_potential_duplicates(self, file_hashes: Iterable[str]):
+        """
+        Remove the potential duplicate status for the provided file hashes in Hydrus.
+        """
+        self.client.remove_potentials(hashes=file_hashes)
+
 
 def create_client(*args) -> HVDClient:
     """

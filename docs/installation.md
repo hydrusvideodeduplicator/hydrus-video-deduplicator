@@ -35,7 +35,7 @@ The following instructions are written for Ubuntu, but should be similar for mos
 1. Create and activate a virtual environment:
 
     ```sh
-    pip install uv 
+    pip install uv
     uv venv # Create a virtual environment somewhere to avoid system dependency conflicts
     .venv/bin/activate # Activate the virtual environment (run the command uv suggests after running uv venv)
     ```
@@ -45,6 +45,8 @@ The following instructions are written for Ubuntu, but should be similar for mos
     ```sh
     uv pip install hydrusvideodeduplicator
     ```
+
+    To install the GUI, run `uv pip install hydrusvideodeduplicator[gui]`.
 
 You should now be good to go. Proceed to [usage.](./usage.md)
 

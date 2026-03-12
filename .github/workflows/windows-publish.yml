@@ -23,15 +23,29 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Install dependencies
+      - name: Install uv
         run : |
           python -m pip install uv
-          uv venv
+
+      - name: Install CLI dependencies
+        run : |
+          uv venv --clear
           uv pip install pyinstaller
           uv pip install .
 
-      - name: Build
+      - name: Build CLI
         run: uv run pyinstaller build_files/windows/hydrusvideodeduplicator.spec
+
+      # Install the GUI dependencies after the CLI build to avoid bundling unnecessary
+      # GUI dependencies in the CLI build. Pyinstaller bundles all dependencies by default.
+      - name: Install GUI dependencies
+        run : |
+          uv venv --clear
+          uv pip install pyinstaller
+          uv pip install .[gui]
+
+      - name: Build GUI
+        run: uv run pyinstaller build_files/windows/hydrusvideodeduplicator-gui.spec
 
       - name: Upload
         uses: softprops/action-gh-release@37fd9d0351a2df198244c8ef9f56d02d1f921e20
@@ -39,5 +53,6 @@ jobs:
         with:
           files: |
             dist/hydrusvideodeduplicator.exe
+            dist/hydrusvideodeduplicator-gui.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}

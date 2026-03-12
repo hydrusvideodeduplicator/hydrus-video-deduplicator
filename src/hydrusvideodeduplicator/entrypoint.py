@@ -26,11 +26,14 @@ from hydrusvideodeduplicator.config import (
     HYDRUS_LOCAL_FILE_SERVICE_KEYS,
     HYDRUS_QUERY,
     REQUESTS_CA_BUNDLE,
+    HVD_GUI,
     is_windows_exe,
 )
 from hydrusvideodeduplicator.db import DedupeDB
 from hydrusvideodeduplicator.dedup import HydrusVideoDeduplicator
 from hydrusvideodeduplicator.dedup_util import print_and_log
+
+import sys
 
 """
 Parameters:
@@ -82,6 +85,9 @@ def main(
     ] = DEDUP_DATABASE_DIR,
     verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
+    gui: Annotated[  # This gui arg is unused, it's only here to show on --help. See run_main() for more info.
+        Optional[bool], typer.Option(help="Launch the GUI. This ignores all other CLI arguments.")
+    ] = HVD_GUI,
 ):
     # Fix mypy errors from optional parameters
     assert threshold is not None and skip_hashing is not None and job_count is not None
@@ -235,20 +241,49 @@ def main(
     return num_similar_pairs
 
 
-def run_main():
+def run_main(gui: bool):
     print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
-    try:
-        typer.run(main)
-    except KeyboardInterrupt as exc:
-        raise typer.Exit(-1) from exc
-    finally:
-        if is_windows_exe():
-            # Hang the console window for the Windows exe, because 99% of users will be running this
-            # interactively and will want this pause to see errors/the final results. The other 1% should file
-            # a Github issue if this causes them issues and they want some --no-interactive option, or they should just
-            # run the Python install.
-            input("Press ENTER to exit...")
+    if gui or bool(int(HVD_GUI)):
+        try:
+            from hydrusvideodeduplicator.gui.gui import gui_main
+        except ImportError as exc:
+            print_and_log(
+                logging.getLogger("main"),
+                f"Failed to import GUI dependencies. Did you install the GUI dependencies? Error: {exc}",  # noqa: E501
+                logging.FATAL,
+            )
+            raise typer.Exit(code=1) from exc
+
+        gui_main()
+    else:
+        # Allow launching the GUI via CLI using --gui. This is required before the typer.run()
+        # because the typer checks if arguments exist, but we don't need any of the args for the GUI
+        # to run.
+        if len(sys.argv) > 1 and sys.argv[1] == "--gui":
+            try:
+                from hydrusvideodeduplicator.gui.gui import gui_main
+            except ImportError as exc:
+                print_and_log(
+                    logging.getLogger("main"),
+                    f"Failed to import GUI dependencies. Did you install the GUI dependencies? Error: {exc}",  # noqa: E501
+                    logging.FATAL,
+                )
+                raise typer.Exit(code=1) from exc
+
+            gui_main()
+        else:
+            try:
+                typer.run(main)
+            except KeyboardInterrupt as exc:
+                raise typer.Exit(-1) from exc
+            finally:
+                if is_windows_exe():
+                    # Hang the console window for the Windows exe, because 99% of users will be running this
+                    # interactively and will want this pause to see errors/the final results. The other 1% should file
+                    # a Github issue if this causes them issues and they want some --no-interactive option, or they should just # noqa: E501
+                    # run the Python install.
+                    input("Press ENTER to exit...")
 
 
 if __name__ == "__main__":
-    run_main()
+    run_main(gui=False)

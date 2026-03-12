@@ -71,6 +71,8 @@ HYDRUS_LOCAL_FILE_SERVICE_KEYS = validate_json_array_env_var(
     _HYDRUS_LOCAL_FILE_SERVICE_KEYS_ENV, err_msg="Ensure HYDRUS_LOCAL_FILE_SERVICE_KEYS is a JSON formatted array"
 )
 
+HVD_GUI = os.getenv("HVD_GUI", False)
+
 _IS_WINDOWS_EXE = False
 
 

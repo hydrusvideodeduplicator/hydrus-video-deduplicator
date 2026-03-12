@@ -62,7 +62,7 @@ Benchmark vpdq:
 hatch run benchmark:vpdq
 ```
 
-### Developing without Hatch (not recommended)
+### Developing without Hatch
 
 Alternatively, if you don't want to use hatch and you know what you're doing, you can install and do development the general way.
 
@@ -81,6 +81,8 @@ Alternatively, if you don't want to use hatch and you know what you're doing, yo
     source .venv/bin/activate # or .venv\Scripts\activate on Windows
     uv pip install -e .
     ```
+
+    To install the GUI, run `uv pip install -e .[gui]`.
 
 1. Now if you run `python -m hydrusvideodeduplicator` there should be no errors.
 

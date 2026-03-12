@@ -46,6 +46,8 @@ Example:
 python -m hydrusvideodeduplicator --api-key="78d2fcc9fe1f43c5008959ed1abfe38ffedcfa127d4f051a1038e068d3e32656"
 ```
 
+To run the gui, add `--gui` to the command above. Ensure you have the GUI dependenices installed.
+
 </details>
 
 <br>

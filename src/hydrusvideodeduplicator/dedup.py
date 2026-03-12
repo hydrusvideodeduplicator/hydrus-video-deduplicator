@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from enum import Enum
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -9,7 +10,8 @@ from rich import print
 from tqdm import tqdm
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
+    from typing import TypeAlias
 
     FileHash = str
 
@@ -122,6 +124,50 @@ class CancelledPerceptualHashException(Exception):
         self.stats = stats
 
 
+class DedupeState(Enum):
+    NONE = 0
+    HASHING = 1
+    BUILDING_SEARCH_TREE = 1
+    SEARCHING_FOR_DUPLICATES = 2
+
+
+@dataclass
+class NoneProgress:
+    placeholder: None
+
+
+@dataclass
+class HashingProgress:
+    complete: int
+    total: int
+
+
+@dataclass
+class BuildingSearchTreeProgress:
+    complete: int
+    total: int
+
+
+@dataclass
+class SearchingForDuplicatesProgress:
+    complete: int
+    total: int
+
+
+@dataclass
+class DoneProgress:
+    placeholder: None
+
+
+@dataclass
+class DedupeProgress:
+    progress: NoneProgress | HashingProgress | BuildingSearchTreeProgress | SearchingForDuplicatesProgress
+
+
+if TYPE_CHECKING:
+    UpdateDedupeProgressCallback: TypeAlias = Callable[[DedupeProgress], None]
+
+
 class HydrusVideoDeduplicator:
     hydlog = logging.getLogger("hvd")
     hydlog.setLevel(logging.INFO)
@@ -135,12 +181,18 @@ class HydrusVideoDeduplicator:
         job_count: int = -2,
         failed_page_name: str | None = None,
         custom_query: Sequence[str] | None = None,
+        update_progress_callback: UpdateDedupeProgressCallback | None = None,
+        should_skip_step_fn: Callable[[], bool] | None = None,
     ):
         self.db = db
         self.client = client
         self.job_count = job_count
         self.page_logger = None if failed_page_name is None else HydrusPageLogger(self.client, failed_page_name)
         self.search_tags = self.get_search_tags(custom_query)
+        self.update_progress_callback = update_progress_callback
+        if self.update_progress_callback:
+            self.update_progress_callback(NoneProgress(placeholder=None))
+        self.should_skip_step_fn = should_skip_step_fn
 
     def get_search_tags(self, custom_query: Sequence[str] | None) -> list[str]:
         # system:filetype tags are really inconsistent
@@ -195,6 +247,8 @@ class HydrusVideoDeduplicator:
                 else:
                     print("[green] Finished perceptual hash processing.")
                 finally:
+                    if self.update_progress_callback:
+                        self.update_progress_callback(NoneProgress(None))
                     # Print some useful stats and info for users
                     total_failures = stats.failed_from_api_errors_count + stats.failed_from_phash_count
                     if total_failures > 0:
@@ -260,6 +314,8 @@ class HydrusVideoDeduplicator:
 
         self.hydlog.info(f"{num_similar_pairs} similar file pairs found.")
         self.hydlog.info("Deduplication done.")
+        if self.update_progress_callback:
+            self.update_progress_callback(DoneProgress(None))
 
         return num_similar_pairs
 
@@ -287,6 +343,11 @@ class HydrusVideoDeduplicator:
             ) as pbar:
                 filehasher = FileHasher(self.client, self.job_count)
                 for video_hash in video_hashes:
+                    if self.update_progress_callback:
+                        self.update_progress_callback(HashingProgress(complete=pbar.n + 1, total=pbar.total))
+                    if self.should_skip_step_fn and self.should_skip_step_fn():
+                        return stats
+
                     result = filehasher.fetch_and_phash_file(video_hash)
                     if isinstance(result, FailedPerceptuallyHashedFile):
                         # We only want to add the failure to the page if the file was the actual cause of failure.
@@ -308,6 +369,8 @@ class HydrusVideoDeduplicator:
                     # Collect garbage now to avoid huge memory usage from the video files and frames.
                     gc.collect()
                     pbar.update(1)
+                    if self.update_progress_callback:
+                        self.update_progress_callback(HashingProgress(complete=pbar.n, total=pbar.total))
         except KeyboardInterrupt:
             raise CancelledPerceptualHashException(stats)
         gc.collect()
@@ -330,16 +393,31 @@ class HydrusVideoDeduplicator:
         This inserts the queue entries into their respective tables and then inserts the file into the vptree.
         """
         results = self.db.execute("SELECT file_hash, phash FROM phashed_file_queue").fetchall()
-        for file_hash, perceptual_hash in tqdm(
-            results, dynamic_ncols=True, total=len(results), desc="Building search tree", unit="file", colour="BLUE"
-        ):
-            self.db.add_file(file_hash)
-            self.db.add_perceptual_hash(perceptual_hash)
-            self.db.associate_file_with_perceptual_hash(file_hash, perceptual_hash)
-            self.db.execute(
-                "DELETE FROM phashed_file_queue WHERE file_hash = :file_hash AND phash = :phash",
-                {"file_hash": file_hash, "phash": perceptual_hash},
-            )
+        with tqdm(
+            total=len(results),
+            desc="Building search tree",
+            dynamic_ncols=True,
+            unit="file",
+            colour="BLUE",
+        ) as pbar:
+            for file_hash, perceptual_hash in results:
+                if self.update_progress_callback:
+                    self.update_progress_callback(BuildingSearchTreeProgress(complete=pbar.n, total=pbar.total))
+                if self.should_skip_step_fn and self.should_skip_step_fn():
+                    return
+
+                self.db.add_file(file_hash)
+                self.db.add_perceptual_hash(perceptual_hash)
+                self.db.associate_file_with_perceptual_hash(file_hash, perceptual_hash)
+                self.db.execute(
+                    "DELETE FROM phashed_file_queue WHERE file_hash = :file_hash AND phash = :phash",
+                    {"file_hash": file_hash, "phash": perceptual_hash},
+                )
+                pbar.update(1)
+                if self.update_progress_callback:
+                    self.update_progress_callback(BuildingSearchTreeProgress(complete=pbar.n, total=pbar.total))
+            if self.update_progress_callback:
+                self.update_progress_callback(BuildingSearchTreeProgress(complete=len(results), total=len(results)))
 
     def run_maintenance(self):
         """Run maintenance, if needed."""
@@ -375,6 +453,11 @@ class HydrusVideoDeduplicator:
             dynamic_ncols=True, total=len(files), desc="Finding potential duplicates", unit="file", colour="BLUE"
         ) as pbar:
             for hash_id in files:
+                if self.update_progress_callback:
+                    self.update_progress_callback(SearchingForDuplicatesProgress(complete=pbar.n, total=pbar.total))
+                if self.should_skip_step_fn and self.should_skip_step_fn():
+                    return
+
                 hash_id = hash_id[0]
                 result = tree.search_file(hash_id, max_hamming_distance=search_threshold)
                 file_hash_a = self.db.get_file_hash(hash_id)
@@ -395,4 +478,6 @@ class HydrusVideoDeduplicator:
                 )
 
                 pbar.update(1)
+                if self.update_progress_callback:
+                    self.update_progress_callback(SearchingForDuplicatesProgress(complete=pbar.n, total=pbar.total))
         return num_similar_pairs // 2

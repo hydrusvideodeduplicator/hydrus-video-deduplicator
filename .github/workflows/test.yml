@@ -31,9 +31,9 @@ jobs:
     - name: Lint with Ruff
       run: uv run hatch run lint:lint
 
-    - name: Format check with black
+    - name: Format check
       run: uv run hatch run lint:format
-  
+
   unittest:
     name: Unit Test
     strategy:

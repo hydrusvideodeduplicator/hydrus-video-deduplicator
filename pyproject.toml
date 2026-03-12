@@ -106,28 +106,22 @@ vcr = "python -m pytest tests/acceptance_tests/test_main_vcr.py --verbose {args}
 [tool.hatch.envs.format]
 skip-install = true # Don't install dedupe. We just need to format.
 dependencies = [
-  "black",
+  "ruff",
 ]
 
 [tool.hatch.envs.format.scripts]
-format = "black src tests {args}"
+format = "ruff format src tests {args}"
 
 # Lint environment
 
 [tool.hatch.envs.lint]
 dependencies = [
-  "black",
   "ruff",
 ]
 
 [tool.hatch.envs.lint.scripts]
-format = "black --check src tests {args}"
+format = "ruff format --check src tests {args}"
 lint = "ruff check src tests {args}"
-
-[tool.black]
-target-version = ["py310", "py311", "py312", "py313"]
-line-length = 150
-skip-string-normalization = true
 
 [tool.ruff]
 # Enable the pycodestyle (`E`) and Pyflakes (`F`) rules by default.
@@ -175,3 +169,8 @@ lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 # Assume Python 3.12.
 target-version = "py312"
+
+[tool.ruff.format]
+target-version = ["py310", "py311", "py312", "py313"]
+line-length = 150
+skip-string-normalization = true

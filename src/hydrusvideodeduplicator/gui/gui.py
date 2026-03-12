@@ -451,7 +451,7 @@ class MainWindow(QWidget):
 
         self.api_url_textbox = QLineEdit(HYDRUS_API_URL, placeholderText="REQUIRED: Hydrus API URL")
         self.api_url_textbox.setToolTip(
-            'Hydrus API URL. Ensure the http/https matches the option in your Hydrus client in "manage services -> client api -> use https"'
+            'Hydrus API URL. Ensure the http/https matches the option in your Hydrus client in "manage services -> client api -> use https"'  # noqa: E501
         )
         self.api_url_textbox.setMaximumHeight(38)
 
@@ -533,7 +533,7 @@ class MainWindow(QWidget):
 
         self.reset_hydrus_potential_duplicates_btn = QPushButton("Reset Potential Duplicates Video Pairs")
         self.reset_hydrus_potential_duplicates_btn.setToolTip(
-            "Reset potential duplicates video pairs in Hydrus. This will also clear your local video dedupe search cache."
+            "Reset potential duplicates video pairs in Hydrus. This will also clear your local video dedupe search cache."  # noqa: E501
         )
         self.reset_hydrus_potential_duplicates_btn.setFixedHeight(40)
         self.reset_hydrus_potential_duplicates_btn.clicked.connect(self.reset_hydrus_potential_duplicates_btn_callback)
@@ -755,7 +755,7 @@ class MainWindow(QWidget):
     def dedupe_completed_callback(self, dedupe_completed_result: str | None, exc: Exception | None):
         self.deduplicate_btn.setEnabled(True)
         result_msg = (
-            f"Deduplication was successful!\nNumber of similar pairs found: {dedupe_completed_result}\nOpen the Hydrus duplicates processing page to process any potential duplicate pairs."
+            f"Deduplication was successful!\nNumber of similar pairs found: {dedupe_completed_result}\nOpen the Hydrus duplicates processing page to process any potential duplicate pairs."  # noqa: E501
             if dedupe_completed_result
             else f"Deduplication failed.\nError: {exc}"
         )

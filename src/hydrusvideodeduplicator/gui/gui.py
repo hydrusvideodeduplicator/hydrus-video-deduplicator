@@ -468,7 +468,7 @@ class MainWindow(QWidget):
         self.skip_progress_btn.clicked.connect(self.skip_progress_callback)
 
         # Progress display
-        self.progress_label = QLabel(f"Progress: Not Running.")
+        self.progress_label = QLabel("Progress: Not Running.")
         progress_font = QFont("Segoe UI", 11)
         progress_font.setWeight(QFont.Weight.Bold)
         self.progress_label.setFont(progress_font)
@@ -501,7 +501,7 @@ class MainWindow(QWidget):
             text="-2", placeholderText="REQUIRED: Number of CPU Threads to use for perceptual hashing"
         )
         self.job_count_textbox.setToolTip(
-            "Number of CPU threads to use for perceptual hashing. Default is all but one core.\nYou can use all CPUs/threads on your machine by setting to -1. If you set it to -2, all CPUs but one are used."
+            "Number of CPU threads to use for perceptual hashing. Default is all but one core.\nYou can use all CPUs/threads on your machine by setting to -1. If you set it to -2, all CPUs but one are used." # noqa: E501
         )
         self.job_count_textbox.setMaximumHeight(38)
 
@@ -540,7 +540,7 @@ class MainWindow(QWidget):
 
         self.run_db_maintenance_btn = QPushButton("Run Database Maintenance")
         self.run_db_maintenance_btn.setToolTip(
-            "Run video dedupe database maintenance, including vacuuming your database to reduce its filesize.\nThis will temporarily require ~2x the disk space of the current db to complete.\nYou can view the db file size in the db stats"
+            "Run video dedupe database maintenance, including vacuuming your database to reduce its filesize.\nThis will temporarily require ~2x the disk space of the current db to complete.\nYou can view the db file size in the db stats" # noqa: E501
         )
         self.run_db_maintenance_btn.setFixedHeight(40)
         self.run_db_maintenance_btn.clicked.connect(self.run_db_maintenance_callback)
@@ -722,7 +722,7 @@ class MainWindow(QWidget):
             self.db_upgrade_dialog = None
         else:
             self.db_upgrade_dialog.setText(
-                f"An error occurred while upgrading your DB.\nThis should not have happened, but your DB is very likely still intact. If this error was NOT caused by running out of storage space during the migration, please see the Contact section in README.md on the github repo to report this issue.\nError: {exc}"
+                f"An error occurred while upgrading your DB.\nThis should not have happened, but your DB is very likely still intact. If this error was NOT caused by running out of storage space during the migration, please see the Contact section in README.md on the github repo to report this issue.\nError: {exc}" # noqa: E501
             )
             abort_button = self.db_upgrade_dialog.addButton(QMessageBox.Abort)
             abort_button.clicked.connect(lambda: sys.exit(1))

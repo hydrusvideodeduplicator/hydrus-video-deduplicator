@@ -126,7 +126,7 @@ lint = "ruff check src tests {args}"
 
 [tool.black]
 target-version = ["py310", "py311", "py312", "py313"]
-line-length = 120
+line-length = 150
 skip-string-normalization = true
 
 [tool.ruff]

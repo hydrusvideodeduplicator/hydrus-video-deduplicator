@@ -46,7 +46,7 @@ The following instructions are written for Ubuntu, but should be similar for mos
     uv pip install hydrusvideodeduplicator
     ```
 
-    To install the GUI, run `uv pip install hydrusvideodeduplicator[gui]`.
+    To install the GUI, run `uv pip install "hydrusvideodeduplicator[gui]"`.
 
 You should now be good to go. Proceed to [usage.](./usage.md)
 

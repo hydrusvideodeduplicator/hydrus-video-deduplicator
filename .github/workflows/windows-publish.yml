@@ -42,7 +42,7 @@ jobs:
         run : |
           uv venv --clear
           uv pip install pyinstaller
-          uv pip install .[gui]
+          uv pip install ".[gui]"
 
       - name: Build GUI
         run: uv run pyinstaller build_files/windows/hydrusvideodeduplicator-gui.spec

@@ -82,7 +82,7 @@ Alternatively, if you don't want to use hatch and you know what you're doing, yo
     uv pip install -e .
     ```
 
-    To install the GUI, run `uv pip install -e .[gui]`.
+    To install the GUI, run `uv pip install -e ".[gui]"`.
 
 1. Now if you run `python -m hydrusvideodeduplicator` there should be no errors.
 

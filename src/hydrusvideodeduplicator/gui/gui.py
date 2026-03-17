@@ -308,6 +308,7 @@ class Worker(QObject):
                     f"Database filesize: {db_stats.file_size} bytes.",
                 )
             except Exception as exc:
+                print_and_log(self.logger, f"Database upgrade failed: {exc}")
                 self.db = None
                 self.db_upgrade_completed.emit(exc)
         else:
@@ -713,17 +714,36 @@ class MainWindow(QWidget):
                 color: #e8e8e8;
             }
         """)
-        db_upgrade_dialog.show()
         self.db_upgrade_dialog = db_upgrade_dialog
+        self.db_upgrade_dialog.show()
 
     def db_upgrade_completed_callback(self, exc: Exception | None):
         if exc is None:
             self.db_upgrade_dialog.close()
             self.db_upgrade_dialog = None
         else:
-            self.db_upgrade_dialog.setText(
-                f"An error occurred while upgrading your DB.\nThis should not have happened, but your DB is very likely still intact. If this error was NOT caused by running out of storage space during the migration, please see the Contact section in README.md on the github repo to report this issue.\nError: {exc}"  # noqa: E501
-            )
+            if self.db_upgrade_dialog is None:
+                db_upgrade_dialog = QMessageBox(
+                    windowTitle="Upgrading database.",
+                    text="Upgrading database. This may take up to a few minutes, depending on your DB size.",
+                )
+                db_upgrade_dialog.setStandardButtons(QMessageBox.NoButton)
+                db_upgrade_dialog.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+                db_upgrade_dialog.setStyleSheet("""
+                    QMessageBox {
+                        background-color: #1a1a1a;
+                    }
+                    QMessageBox QLabel {
+                        color: #e8e8e8;
+                    }
+                """)
+                self.db_upgrade_dialog = db_upgrade_dialog
+
+                self.db_upgrade_dialog.setText(
+                    f"An error occurred while upgrading your DB.\nThis should not have happened, but your DB is very likely still intact. If this error was NOT caused by running out of storage space during the migration, please see the Contact section in README.md on the github repo to report this issue.\nError: {exc}"  # noqa: E501
+                )
+                self.db_upgrade_dialog.show()
+
             abort_button = self.db_upgrade_dialog.addButton(QMessageBox.Abort)
             abort_button.clicked.connect(lambda: sys.exit(1))
 

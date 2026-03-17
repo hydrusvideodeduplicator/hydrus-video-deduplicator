@@ -29,7 +29,7 @@ jobs:
 
       - name: Install CLI dependencies
         run : |
-          uv venv --clear
+          uv venv --clear --python=3.14
           uv pip install pyinstaller
           uv pip install .
 
@@ -40,7 +40,7 @@ jobs:
       # GUI dependencies in the CLI build. Pyinstaller bundles all dependencies by default.
       - name: Install GUI dependencies
         run : |
-          uv venv --clear
+          uv venv --clear --python=3.14
           uv pip install pyinstaller
           uv pip install ".[gui]"
 

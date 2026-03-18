@@ -532,6 +532,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#maintainer-release-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maintainer Release Process
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -698,6 +709,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#maintainer-release-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maintainer Release Process
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -786,6 +808,34 @@ uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </s
 <p><code>main</code> is for releases. It must be committed to through a PR from <code>develop</code> by the project maintainer.</p>
 <p><code>develop</code> should have the same history as main unless it has newer commits that have not been merged. When a PR is approved to develop, changes should be squash-merged.</p>
 <p>Create PRs for <code>develop</code> if you want to submit changes.</p>
+<h2 id="maintainer-release-process">Maintainer Release Process</h2>
+<p>This release process section is for the maintainer.</p>
+<p>Use the <code>develop</code> branch for development. Do not rewrite history on <code>develop</code> because others may be branched from it.
+During development, if you think you might need to rewrite history, then create a branch off of <code>develop</code> and use that.
+Commits to <code>develop</code> should be "clean"; do not add "WIP" commits to develop, because they will not be squashed when
+released to main.</p>
+<p>Once <code>develop</code> has all the changes you want to publish, follow the steps below.</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>switch<span class="w"> </span>main
+git<span class="w"> </span>rebase<span class="w"> </span>develop
+</code></pre></div>
+<p>Then, following semantic versioning rules, increment set the new version in <code>src/hydrusvideodeduplicator/__about__.py</code>.</p>
+<p>After incrementing the version, do another test run locally on the CLI and GUI to ensure the DB upgrades as expected.
+There should be no problem if the DB hasn't had changes since the last version and DB migration code wasn't touched.
+There is no automated tests for testing DB migrations, so this <strong>must</strong> be done manually.</p>
+<p>Add a commit with only the new version:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>src/hydrusvideodeduplicator/__about__.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Release X.Y.Z&quot;</span>
+</code></pre></div>
+<p>Add a git tag to the new commit:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span><span class="s2">&quot;vX.Y.Z&quot;</span><span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;vX.Y.Z&quot;</span>
+</code></pre></div>
+<p>Push the changes from develop and the tag:</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>push
+git<span class="w"> </span>push<span class="w"> </span>tag<span class="w"> </span><span class="s2">&quot;vX.Y.Z&quot;</span>
+</code></pre></div>
+<p>Once the GitHub Actions for main are done running and everything passes, a release needs to be made on the GitHub Release page.
+Follow the formatting from previous releases. A GitHub release will trigger a PyPI publish for the new package build and a GitHub
+publish for the built executables to the new release.</p>
 
 
 
@@ -806,7 +856,7 @@ uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </s
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 15, 2026 19:42:04 UTC">March 15, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 18, 2026 06:26:32 UTC">March 18, 2026</span>
   </span>
 
     

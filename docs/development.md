@@ -113,3 +113,49 @@ TODO: Explain how to run Hydrus using this DB.
 `develop` should have the same history as main unless it has newer commits that have not been merged. When a PR is approved to develop, changes should be squash-merged.
 
 Create PRs for `develop` if you want to submit changes.
+
+## Maintainer Release Process
+
+This release process section is for the maintainer.
+
+Use the `develop` branch for development. Do not rewrite history on `develop` because others may be branched from it.
+During development, if you think you might need to rewrite history, then create a branch off of `develop` and use that.
+Commits to `develop` should be "clean"; do not add "WIP" commits to develop, because they will not be squashed when
+released to main.
+
+Once `develop` has all the changes you want to publish, follow the steps below.
+
+```sh
+git switch main
+git rebase develop
+```
+
+Then, following semantic versioning rules, increment set the new version in `src/hydrusvideodeduplicator/__about__.py`.
+
+After incrementing the version, do another test run locally on the CLI and GUI to ensure the DB upgrades as expected.
+There should be no problem if the DB hasn't had changes since the last version and DB migration code wasn't touched.
+There is no automated tests for testing DB migrations, so this **must** be done manually.
+
+Add a commit with only the new version:
+
+```sh
+git add src/hydrusvideodeduplicator/__about__.py
+git commit -m "Release X.Y.Z"
+```
+
+Add a git tag to the new commit:
+
+```sh
+git tag -a "vX.Y.Z" -m "vX.Y.Z"
+```
+
+Push the changes from develop and the tag:
+
+```sh
+git push
+git push origin tag "vX.Y.Z"
+```
+
+Once the GitHub Actions for main are done running and everything passes, a release needs to be made on the GitHub Release page.
+Follow the formatting from previous releases. A GitHub release will trigger a PyPI publish for the new package build and a GitHub
+publish for the built executables to the new release.

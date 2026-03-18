@@ -342,6 +342,7 @@ class HydrusVideoDeduplicator:
                 colour="BLUE",
             ) as pbar:
                 filehasher = FileHasher(self.client, self.job_count)
+                successful_phashed_count = 0
                 for video_hash in video_hashes:
                     if self.update_progress_callback:
                         self.update_progress_callback(HashingProgress(complete=pbar.n + 1, total=pbar.total))
@@ -363,8 +364,13 @@ class HydrusVideoDeduplicator:
                             if self.page_logger:
                                 self.page_logger.add_failed_video(result.file_hash)
                     else:
-                        stats.success_hash_count += 1
                         self.db.add_to_phashed_files_queue(result.file_hash, result.perceptual_hash)
+                        stats.success_hash_count += 1
+                        successful_phashed_count += 1
+                        # Commit periodically to save progress in case something fails.
+                        COMMIT_BATCH_SIZE = 4
+                        if successful_phashed_count % COMMIT_BATCH_SIZE == 0:
+                            self.db.commit()
 
                     # Collect garbage now to avoid huge memory usage from the video files and frames.
                     gc.collect()
@@ -400,6 +406,7 @@ class HydrusVideoDeduplicator:
             unit="file",
             colour="BLUE",
         ) as pbar:
+            processed_count = 0
             for file_hash, perceptual_hash in results:
                 if self.update_progress_callback:
                     self.update_progress_callback(BuildingSearchTreeProgress(complete=pbar.n, total=pbar.total))
@@ -413,6 +420,11 @@ class HydrusVideoDeduplicator:
                     "DELETE FROM phashed_file_queue WHERE file_hash = :file_hash AND phash = :phash",
                     {"file_hash": file_hash, "phash": perceptual_hash},
                 )
+                processed_count += 1
+                # Commit periodically to save progress in case something fails.
+                COMMIT_BATCH_SIZE = 64
+                if processed_count % COMMIT_BATCH_SIZE == 0:
+                    self.db.commit()
                 pbar.update(1)
                 if self.update_progress_callback:
                     self.update_progress_callback(BuildingSearchTreeProgress(complete=pbar.n, total=pbar.total))
@@ -452,6 +464,7 @@ class HydrusVideoDeduplicator:
         with tqdm(
             dynamic_ncols=True, total=len(files), desc="Finding potential duplicates", unit="file", colour="BLUE"
         ) as pbar:
+            processed_count = 0
             for hash_id in files:
                 if self.update_progress_callback:
                     self.update_progress_callback(SearchingForDuplicatesProgress(complete=pbar.n, total=pbar.total))
@@ -476,6 +489,12 @@ class HydrusVideoDeduplicator:
                     "UPDATE shape_search_cache SET searched_distance = ? WHERE hash_id = ?;",
                     (search_threshold, hash_id),
                 )
+
+                processed_count += 1
+                # Commit periodically to save progress in case something fails.
+                COMMIT_BATCH_SIZE = 64
+                if processed_count % COMMIT_BATCH_SIZE == 0:
+                    self.db.commit()
 
                 pbar.update(1)
                 if self.update_progress_callback:

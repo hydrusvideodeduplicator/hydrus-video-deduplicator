@@ -14,12 +14,12 @@ jobs:
     runs-on: windows-2025
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.14"
 
@@ -29,7 +29,7 @@ jobs:
 
       - name: Install CLI dependencies
         run : |
-          uv venv --clear --python=3.14
+          uv venv --clear
           uv pip install pyinstaller
           uv pip install .
 
@@ -40,7 +40,7 @@ jobs:
       # GUI dependencies in the CLI build. Pyinstaller bundles all dependencies by default.
       - name: Install GUI dependencies
         run : |
-          uv venv --clear --python=3.14
+          uv venv --clear
           uv pip install pyinstaller
           uv pip install ".[gui]"
 

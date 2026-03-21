@@ -18,20 +18,11 @@ from hydrusvideodeduplicator.client import (
     HVDClient,
     create_client,
 )
-from hydrusvideodeduplicator.config import (
-    DEDUP_DATABASE_DIR,
-    FAILED_PAGE_NAME,
-    HYDRUS_API_KEY,
-    HYDRUS_API_URL,
-    HYDRUS_LOCAL_FILE_SERVICE_KEYS,
-    HYDRUS_QUERY,
-    REQUESTS_CA_BUNDLE,
-    HVD_GUI,
-    is_windows_exe,
-)
+from hydrusvideodeduplicator.config import Config
 from hydrusvideodeduplicator.db import DedupeDB
 from hydrusvideodeduplicator.dedup import HydrusVideoDeduplicator
 from hydrusvideodeduplicator.dedup_util import print_and_log
+from dotenv import load_dotenv
 
 import sys
 
@@ -46,12 +37,15 @@ Parameters:
 - debug turns on logging and sets the logging level to debug
 """
 
+load_dotenv()
+config = Config.load_from_env()
+
 
 def main(
     api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key", prompt=True)] = None,
-    api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = HYDRUS_API_URL,
+    api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = config.hydrus_api_url,
     overwrite: Annotated[Optional[Optional[bool]], typer.Option(hidden=True)] = None,  # deprecated
-    query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = HYDRUS_QUERY,
+    query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = config.hydrus_query,
     threshold: Annotated[
         Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")
     ] = 50.0,
@@ -60,10 +54,10 @@ def main(
     ] = False,
     file_service_key: Annotated[
         Optional[List[str]], typer.Option(help="Local file service key")
-    ] = HYDRUS_LOCAL_FILE_SERVICE_KEYS,
+    ] = config.hydrus_local_file_service_keys,
     verify_cert: Annotated[
         Optional[str], typer.Option(help="Path to TLS cert. This forces verification.")
-    ] = REQUESTS_CA_BUNDLE,
+    ] = config.requests_ca_bundle,
     clear_search_tree: Annotated[
         Optional[bool], typer.Option(help="Clear the search tree that tracks what files have already been compared.")
     ] = False,
@@ -75,19 +69,19 @@ def main(
     ] = False,
     failed_page_name: Annotated[
         Optional[str], typer.Option(help="The name of the Hydrus page to add failed files to.")
-    ] = FAILED_PAGE_NAME,
+    ] = config.failed_page_name,
     job_count: Annotated[
         Optional[int],
         typer.Option(help="Number of CPU threads to use for perceptual hashing. Default is all but one core."),
     ] = -2,
     dedup_database_dir: Annotated[
         Optional[Path], typer.Option(help="The directory to store the database used for dedupe.")
-    ] = DEDUP_DATABASE_DIR,
+    ] = config.dedupe_database_dir,
     verbose: Annotated[Optional[bool], typer.Option(help="Verbose logging")] = False,
     debug: Annotated[Optional[bool], typer.Option(hidden=True)] = False,
     gui: Annotated[  # This gui arg is unused, it's only here to show on --help. See run_main() for more info.
         Optional[bool], typer.Option(help="Launch the GUI. This ignores all other CLI arguments.")
-    ] = HVD_GUI,
+    ] = config.hvd_gui,
 ):
     # Fix mypy errors from optional parameters
     assert threshold is not None and skip_hashing is not None and job_count is not None
@@ -123,7 +117,7 @@ def main(
 
     # CLI overwrites env vars with no default value
     if not api_key:
-        api_key = HYDRUS_API_KEY
+        api_key = config.hydrus_api_key
 
     # Check for necessary variables
     if not api_key:
@@ -241,9 +235,9 @@ def main(
     return num_similar_pairs
 
 
-def run_main(gui: bool):
+def run_main(gui: bool, is_windows_exe: bool):
     print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
-    if gui or bool(int(HVD_GUI)):
+    if gui or bool(int(config.hvd_gui)):
         try:
             from hydrusvideodeduplicator.gui.gui import gui_main
         except ImportError as exc:
@@ -270,14 +264,14 @@ def run_main(gui: bool):
                 )
                 raise typer.Exit(code=1) from exc
 
-            gui_main()
+            gui_main(config)
         else:
             try:
                 typer.run(main)
             except KeyboardInterrupt as exc:
                 raise typer.Exit(-1) from exc
             finally:
-                if is_windows_exe():
+                if is_windows_exe:
                     # Hang the console window for the Windows exe, because 99% of users will be running this
                     # interactively and will want this pause to see errors/the final results. The other 1% should file
                     # a Github issue if this causes them issues and they want some --no-interactive option, or they should just # noqa: E501

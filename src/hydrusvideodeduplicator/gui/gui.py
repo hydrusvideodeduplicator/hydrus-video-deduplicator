@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QObject, Slot, QThread, QSemaphore
 from PySide6.QtGui import QFont
 from dataclasses import dataclass
+from pathlib import Path
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -30,11 +31,7 @@ import logging
 from hydrusvideodeduplicator.db import DedupeDB
 from hydrusvideodeduplicator.__about__ import __version__
 from hydrusvideodeduplicator.config import (
-    HYDRUS_API_URL,
-    HYDRUS_API_KEY,
-    HYDRUS_LOCAL_FILE_SERVICE_KEYS,
-    REQUESTS_CA_BUNDLE,
-    DEDUP_DATABASE_DIR,
+    Config,
 )
 from hydrusvideodeduplicator.dedup_util import print_and_log
 from hydrusvideodeduplicator.dedup import (
@@ -257,7 +254,7 @@ class Worker(QObject):
             self.test_api_connection_completed.emit(None, exc)
 
     @Slot()
-    def init_db_connection(self):
+    def init_db_connection(self, db_dir: Path):
         if self.db is not None:
             # TODO: Check if transaction is in progress before closing?
             self.db.close()
@@ -265,7 +262,7 @@ class Worker(QObject):
         # TODO: Show the upgrade on the GUI. Probably pass a callback to db.upgrade_db()
         # for the print msg between upgrades to show an upgrade sequence similar to Hydrus. For
         # the CLI this will be print, for the GUI this will update the GUI msg.
-        DedupeDB.set_db_dir(DEDUP_DATABASE_DIR)
+        DedupeDB.set_db_dir(db_dir)
         if DedupeDB.does_db_exist():
             try:
                 print_and_log(self.logger, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
@@ -407,16 +404,17 @@ class MainWindow(QWidget):
     dedupe_requested = Signal(HydrusRequestParameters, DedupeParameters)
     test_api_connection_requested = Signal(HydrusRequestParameters)
     init_requested = Signal(logging.Logger, QSemaphore)
-    init_db_requested = Signal()
+    init_db_requested = Signal(Path)
     clear_search_tree_requested = Signal()
     clear_search_cache_requested = Signal()
     reset_hydrus_potential_duplicates_requested = Signal(HydrusRequestParameters)
     db_stats_requested = Signal()
     run_db_maintenance_requested = Signal()
 
-    def __init__(self, logger: logging.Logger):
+    def __init__(self, logger: logging.Logger, config: Config):
         super().__init__()
         self.logger = logger
+        self.config = config
 
         self.setWindowTitle("Hydrus Video Deduplicator")
         self.setFixedSize(900, 950)
@@ -446,11 +444,11 @@ class MainWindow(QWidget):
 
         self.api_key_textbox = QLineEdit(placeholderText="REQUIRED: Hydrus API Key")
         self.api_key_textbox.setToolTip("Hydrus API key.")
-        self.api_key_textbox.setText(HYDRUS_API_KEY)
+        self.api_key_textbox.setText(self.config.hydrus_api_key)
         self.api_key_textbox.setEchoMode(QLineEdit.EchoMode.Password)
         self.api_key_textbox.setMaximumHeight(38)
 
-        self.api_url_textbox = QLineEdit(HYDRUS_API_URL, placeholderText="REQUIRED: Hydrus API URL")
+        self.api_url_textbox = QLineEdit(self.config.hydrus_api_url, placeholderText="REQUIRED: Hydrus API URL")
         self.api_url_textbox.setToolTip(
             'Hydrus API URL. Ensure the http/https matches the option in your Hydrus client in "manage services -> client api -> use https"'  # noqa: E501
         )
@@ -552,11 +550,11 @@ class MainWindow(QWidget):
 
         # Database info section
         self.db_database_dir_textbox = QLineEdit(
-            text=str(DEDUP_DATABASE_DIR),
+            text=str(self.config.dedupe_database_dir),
             readOnly=True,
         )
         self.db_database_dir_textbox.setMaximumHeight(38)
-        self.job_count_textbox.setToolTip(str(DEDUP_DATABASE_DIR))
+        self.job_count_textbox.setToolTip(str(self.config.dedupe_database_dir))
 
         # About section
         self.about_qt_btn = QPushButton("About Qt")
@@ -660,7 +658,7 @@ class MainWindow(QWidget):
         self.db_upgrade_dialog = None
 
         self.init_requested.emit(self.logger, self.should_skip_step_semaphore)
-        self.init_db_requested.emit()
+        self.init_db_requested.emit(self.config.dedupe_database_dir)
 
     def __del__(self):
         if self.worker_thread and self.worker_thread.isRunning():
@@ -966,8 +964,8 @@ class MainWindow(QWidget):
         return HydrusRequestParameters(
             api_key=api_key,
             api_url=api_url,
-            local_file_service_keys=HYDRUS_LOCAL_FILE_SERVICE_KEYS,
-            requests_ca_bundle=REQUESTS_CA_BUNDLE,
+            local_file_service_keys=self.config.hydrus_local_file_service_keys,
+            requests_ca_bundle=self.config.requests_ca_bundle,
         )
 
     def get_dedupe_params(self) -> DedupeParameters:
@@ -1004,7 +1002,7 @@ class MainWindow(QWidget):
         )
 
 
-def gui_main():
+def gui_main(config: Config):
     debug = True
 
     # CLI debug parameter sets log level to info or debug
@@ -1023,6 +1021,6 @@ def gui_main():
     app.setFont(QFont("Segoe UI", 12))
     app.setStyleSheet(DARK_STYLESHEET)
 
-    window = MainWindow(logger)
+    window = MainWindow(logger, config)
     window.show()
     sys.exit(app.exec())

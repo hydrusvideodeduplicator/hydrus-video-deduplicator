@@ -4,12 +4,14 @@
 
 1. [Enable the Hydrus Client API service](https://hydrusnetwork.github.io/hydrus/client_api.html#enabling_the_api). Ensure `use https` is enabled for the client api service.
 
-    - If you need http for some reason instead of https, you must specify your Hydrus API URL directly with `--api-url`
-        - Ex. `python -m hydrusvideodeduplicator --api-url=http://localhost:45869`
+    - If you need https instead of http, you must specify this in the Hydrus API URL.
+        - Ex. For the CLI, use `python -m hydrusvideodeduplicator --api-url=https://localhost:45869`
 
     - Enable `allow non-local connections` in `manage services->client api` if you are running under [Windows Subsystem for Linux](https://learn.microsoft.com/en-us/windows/wsl/), or the connection will fail.
 
-    - ⚠️ For https, SSL cert is **not verified** by default unless you enter the cert's file path with `--verify-cert`
+    - ⚠️ For https, SSL cert is **not verified** by default unless you enter the cert's file path.
+      - Ex. For the CLI, use `--verify-cert`
+      - For the GUI, this is only supported through the `REQUESTS_CA_BUNDLE` environment variable.
 
 2. Create a client api service key with `permits everything` enabled.
 
@@ -46,7 +48,7 @@ Example:
 python -m hydrusvideodeduplicator --api-key="78d2fcc9fe1f43c5008959ed1abfe38ffedcfa127d4f051a1038e068d3e32656"
 ```
 
-To run the gui, add `--gui` to the command above. Ensure you have the GUI dependenices installed.
+To run the gui, add `--gui` to the command above. Ensure you have the GUI dependencies installed.
 
 </details>
 

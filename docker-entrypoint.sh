@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 Command="python -m hydrusvideodeduplicator"
-[[ -n "${API_KEY}" ]] && Command="${Command} --api-key='${API_KEY}'"
-[[ -n "${API_URL}" ]] && Command="${Command} --api-url='${API_URL}'"
+[[ -n "${HYDRUS_API_KEY}" ]] && Command="${Command} --api-key='${HYDRUS_API_KEY}'"
+[[ -n "${HYDRUS_API_URL}" ]] && Command="${Command} --api-url='${HYDRUS_API_URL}'"
 [[ -n "${THRESHOLD}" ]] && Command="${Command} --threshold=${THRESHOLD}"
 [[ -n "${JOB_COUNT}" ]] && Command="${Command} --job-count=${JOB_COUNT}"
 [[ -n "${FAILED_PAGE_NAME}" ]] && Command="${Command} --failed-page-name=${FAILED_PAGE_NAME}"

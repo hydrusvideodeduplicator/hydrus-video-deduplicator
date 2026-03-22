@@ -62,7 +62,7 @@ class Config:
                 default_ip = f"{gethostname()}.local"
             return default_ip
 
-        config.hydrus_api_url = config_map.get("HYDRUS_API_URL", f"https://{_get_default_ip()}:45869")
+        config.hydrus_api_url = config_map.get("HYDRUS_API_URL", f"http://{_get_default_ip()}:45869")
         config.hydrus_api_key = config_map.get("HYDRUS_API_KEY", "")
 
         # Default is ~/.local/share/hydrusvideodeduplicator/ on Linux

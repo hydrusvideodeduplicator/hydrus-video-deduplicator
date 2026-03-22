@@ -29,7 +29,6 @@ dependencies = [
     "python-dotenv",
     "typer",
     "requests",
-    "psutil",
     # vpdqpy dependencies
     "pillow",
     "av",

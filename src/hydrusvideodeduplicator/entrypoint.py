@@ -48,7 +48,7 @@ def main(
     query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = config.hydrus_query,
     threshold: Annotated[
         Optional[float], typer.Option(help="Similarity threshold for a pair of videos where 100 is identical")
-    ] = 50.0,
+    ] = config.similarity_threshold,
     skip_hashing: Annotated[
         Optional[bool], typer.Option(help="Skip perceptual hashing and just search for duplicates")
     ] = False,
@@ -73,7 +73,7 @@ def main(
     job_count: Annotated[
         Optional[int],
         typer.Option(help="Number of CPU threads to use for perceptual hashing. Default is all but one core."),
-    ] = -2,
+    ] = config.job_count,
     dedup_database_dir: Annotated[
         Optional[Path], typer.Option(help="The directory to store the database used for dedupe.")
     ] = config.dedupe_database_dir,
@@ -143,8 +143,7 @@ def main(
         print_and_log(logger, f"Hydrus API version: 'v{hydrus_api_version}'")
         hvdclient.verify_permissions()
     except (FailedHVDClientConnection, ClientAPIException) as exc:
-        print_and_log(logger, str(exc), logging.FATAL)
-        print_and_log(logger, exc.pretty_msg, logging.FATAL)
+        print_and_log(logger, f"{exc.pretty_msg} \nException: {exc}", logging.FATAL)
         exit_from_failure()
 
     if debug:

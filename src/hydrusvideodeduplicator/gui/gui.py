@@ -127,18 +127,13 @@ class Worker(QObject):
                 deduper.hydlog.setLevel(logging.DEBUG)
                 deduper._DEBUG = True
 
-            if dedupe_params.threshold < 0.0 or dedupe_params.threshold > 100.0:
-                print("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
-                raise
             HydrusVideoDeduplicator.threshold = dedupe_params.threshold
 
             num_similar_pairs = deduper.deduplicate(
                 skip_hashing=dedupe_params.skip_hashing,
             )
             self.dedupe_completed.emit(f"{num_similar_pairs}", None)
-        except (FailedHVDClientConnection, ClientAPIException, Exception) as exc:
-            print_and_log(self.logger, str(exc), logging.ERROR)
-            # print_and_log(logger, exc.pretty_msg, logging.ERROR)
+        except Exception as exc:
             self.dedupe_completed.emit(None, exc)
 
     @Slot()
@@ -158,8 +153,7 @@ class Worker(QObject):
             print_and_log(self.logger, f"Hydrus API version: 'v{hydrus_api_version}'")
             hvdclient.verify_permissions()
             self.test_api_connection_completed.emit(APITestResult(api_version, hydrus_api_version), None)
-        except (FailedHVDClientConnection, ClientAPIException, Exception) as exc:
-            print_and_log(self.logger, str(exc), logging.ERROR)
+        except Exception as exc:
             self.test_api_connection_completed.emit(None, exc)
 
     @Slot()
@@ -405,11 +399,21 @@ class MainWindow(QWidget):
         )
         self.failed_page_name_textbox.setMaximumHeight(38)
 
+        self.similarity_threshold_textbox = QLineEdit(
+            text=str(self.config.similarity_threshold), placeholderText="REQUIRED: Similarity Threshold"
+        )
+        self.similarity_threshold_textbox.setToolTip(
+            """Approximately the percent similarity that two videos must be to be considered similar/duplicate.\n100% means videos must be extremely similar to be considered duplicates.\nMust be between 1 and 100.\n
+If you change this value you should clear the search cache. This isn't cleared automatically because the threshold of previous runs are not saved."""  # noqa: E501
+        )
+        self.similarity_threshold_textbox.setMaximumHeight(38)
+
         self.job_count_textbox = QLineEdit(
-            text="-2", placeholderText="REQUIRED: Number of CPU Threads to use for perceptual hashing"
+            text=str(self.config.job_count),
+            placeholderText="REQUIRED: Number of CPU Threads to use for perceptual hashing",
         )
         self.job_count_textbox.setToolTip(
-            "Number of CPU threads to use for perceptual hashing. Default is all but one core.\nYou can use all CPUs/threads on your machine by setting to -1. If you set it to -2, all CPUs but one are used."  # noqa: E501
+            "Number of CPU cores to use for perceptual hashing. Default is all but one core.\nYou can use all CPUs/threads on your machine by setting to -1. If you set it to -2, all CPUs but one are used."  # noqa: E501
         )
         self.job_count_textbox.setMaximumHeight(38)
 
@@ -463,7 +467,7 @@ class MainWindow(QWidget):
             readOnly=True,
         )
         self.db_database_dir_textbox.setMaximumHeight(38)
-        self.job_count_textbox.setToolTip(str(self.config.dedupe_database_dir))
+        self.db_database_dir_textbox.setToolTip(str(self.config.dedupe_database_dir))
 
         # About section
         self.about_qt_btn = QPushButton("About Qt")
@@ -502,8 +506,10 @@ class MainWindow(QWidget):
         config_layout.setSpacing(10)
         config_layout.addWidget(QLabel("Hashing Thread Count"), 0, 0)
         config_layout.addWidget(self.job_count_textbox, 0, 1)
-        config_layout.addWidget(QLabel("Failed Page Name"), 1, 0)
-        config_layout.addWidget(self.failed_page_name_textbox, 1, 1)
+        config_layout.addWidget(QLabel("Similarity Threshold %"), 1, 0)
+        config_layout.addWidget(self.similarity_threshold_textbox, 1, 1)
+        config_layout.addWidget(QLabel("Failed Page Name"), 2, 0)
+        config_layout.addWidget(self.failed_page_name_textbox, 2, 1)
         config_layout.setColumnStretch(1, 1)
         layout.addLayout(config_layout)
 
@@ -613,14 +619,7 @@ class MainWindow(QWidget):
         )
         db_upgrade_dialog.setStandardButtons(QMessageBox.NoButton)
         db_upgrade_dialog.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
-        db_upgrade_dialog.setStyleSheet("""
-            QMessageBox {
-                background-color: #1a1a1a;
-            }
-            QMessageBox QLabel {
-                color: #e8e8e8;
-            }
-        """)
+        db_upgrade_dialog.setStyleSheet(stylesheet.DARK_STYLESHEET)
         self.db_upgrade_dialog = db_upgrade_dialog
         self.db_upgrade_dialog.show()
 
@@ -636,14 +635,7 @@ class MainWindow(QWidget):
                 )
                 db_upgrade_dialog.setStandardButtons(QMessageBox.NoButton)
                 db_upgrade_dialog.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
-                db_upgrade_dialog.setStyleSheet("""
-                    QMessageBox {
-                        background-color: #1a1a1a;
-                    }
-                    QMessageBox QLabel {
-                        color: #e8e8e8;
-                    }
-                """)
+                db_upgrade_dialog.setStyleSheet(stylesheet.DARK_STYLESHEET)
                 self.db_upgrade_dialog = db_upgrade_dialog
 
                 self.db_upgrade_dialog.setText(
@@ -684,8 +676,10 @@ class MainWindow(QWidget):
         result_msg = (
             f"Deduplication was successful!\nNumber of similar pairs found: {dedupe_completed_result}\nOpen the Hydrus duplicates processing page to process any potential duplicate pairs."  # noqa: E501
             if dedupe_completed_result
-            else f"Deduplication failed.\nError: {exc}"
+            else f"Deduplication failed.\nError: {exc.pretty_msg + '\n\nException:\n' + str(exc) if isinstance(exc, ClientAPIException) else exc}"
         )
+        if not dedupe_completed_result:
+            print_and_log(self.logger, result_msg, logging.ERROR)
         QMessageBox.information(
             self,
             "Deduplication Result",
@@ -852,14 +846,7 @@ class MainWindow(QWidget):
             )
             self.run_db_maintenance_dialog.setStandardButtons(QMessageBox.NoButton)
             self.run_db_maintenance_dialog.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
-            self.run_db_maintenance_dialog.setStyleSheet("""
-                QMessageBox {
-                    background-color: #1a1a1a;
-                }
-                QMessageBox QLabel {
-                    color: #e8e8e8;
-                }
-            """)
+            self.run_db_maintenance_dialog.setStyleSheet(stylesheet.DARK_STYLESHEET)
             self.run_db_maintenance_dialog.show()
             self.run_db_maintenance_btn.setEnabled(False)
             self.run_db_maintenance_requested.emit()
@@ -888,6 +875,15 @@ class MainWindow(QWidget):
         except ValueError:
             raise RuntimeError(f"Invalid thread count: '{self.job_count_textbox.text()}'. Must be an integer.")
 
+        try:
+            similarity_threshold = float(self.similarity_threshold_textbox.text())
+        except ValueError:
+            raise RuntimeError(
+                f"Invalid similarity threshold: '{self.similarity_threshold_textbox.text()}'. Must be a number."
+            )
+        if similarity_threshold < 0.0 or similarity_threshold > 100.0:
+            raise RuntimeError(f"Invalid similarity threshold: '{similarity_threshold}'. Must be between 0 and 100.")
+
         # TODO: Validate the format of this. This should be a json string (or find a better UX way to input).
         custom_query = self.hydrus_query_textbox.text()
         if len(custom_query) == 0:
@@ -897,16 +893,12 @@ class MainWindow(QWidget):
         if len(failed_page_name) == 0:
             failed_page_name = None
 
-        threshold = 50.0  # TODO: Expose to GUI
-        if threshold < 0.0 or threshold > 100.0:
-            raise RuntimeError("Invalid similarity threshold. Must be between 0 and 100.")
-
         return DedupeParameters(
             job_count=job_count,
             failed_page_name=failed_page_name,
             custom_query=custom_query,
             debug=True,  # TODO: Expose to GUI?
-            threshold=threshold,
+            threshold=similarity_threshold,
             skip_hashing=False,
         )
 
@@ -926,7 +918,7 @@ def gui_main(config: Config):
     app = QApplication(sys.argv)
 
     # Native Windows widget metrics + dark theme
-    app.setStyle("windowsvista")
+    app.setStyle("fusion")
     app.setFont(QFont("Segoe UI", 12))
     app.setStyleSheet(stylesheet.DARK_STYLESHEET)
 

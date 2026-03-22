@@ -3,7 +3,7 @@
 Command="python -m hydrusvideodeduplicator"
 [[ -n "${HYDRUS_API_KEY}" ]] && Command="${Command} --api-key='${HYDRUS_API_KEY}'"
 [[ -n "${HYDRUS_API_URL}" ]] && Command="${Command} --api-url='${HYDRUS_API_URL}'"
-[[ -n "${THRESHOLD}" ]] && Command="${Command} --threshold=${THRESHOLD}"
+[[ -n "${SIMILARITY_THRESHOLD}" ]] && Command="${Command} --threshold=${SIMILARITY_THRESHOLD}"
 [[ -n "${JOB_COUNT}" ]] && Command="${Command} --job-count=${JOB_COUNT}"
 [[ -n "${FAILED_PAGE_NAME}" ]] && Command="${Command} --failed-page-name=${FAILED_PAGE_NAME}"
 [[ -n "${DEDUP_DATABASE_DIR}" ]] && Command="${Command} --dedup-database-dir=${DEDUP_DATABASE_DIR}" # you probably don't want to do this inside docker...

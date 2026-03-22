@@ -35,6 +35,8 @@ def validate_json_array_env_var(env_var: str | None, err_msg: str) -> list | Non
 
 
 class Config:
+    """Hydrus Video Deduplicator Config"""
+
     def __init__(self):
         self.hydrus_api_key = None
         self.hydrus_api_url = None
@@ -43,6 +45,8 @@ class Config:
         self.requests_ca_bundle = None
         self.hydrus_query = None
         self.hydrus_local_file_service_keys = None
+        self.similarity_threshold = None
+        self.job_count = None
         self.hvd_gui = None
 
     @staticmethod
@@ -65,7 +69,9 @@ class Config:
         config.hydrus_api_url = config_map.get("HYDRUS_API_URL", f"http://{_get_default_ip()}:45869")
         config.hydrus_api_key = config_map.get("HYDRUS_API_KEY", "")
 
-        # Default is ~/.local/share/hydrusvideodeduplicator/ on Linux
+        # Default is:
+        # Linux: ~/.local/share/hydrusvideodeduplicator/
+        # Windows: C:\Users\%username%\AppData\Local\hydrusvideodeduplicator\hydrusvideodeduplicator
         config.dedupe_database_dir = Path(
             config_map.get("DEDUP_DATABASE_DIR", PlatformDirs("hydrusvideodeduplicator").user_data_dir)
         )
@@ -85,6 +91,10 @@ class Config:
             config_map.get("HYDRUS_LOCAL_FILE_SERVICE_KEYS"),
             err_msg="Ensure HYDRUS_LOCAL_FILE_SERVICE_KEYS is a JSON formatted array",
         )
+
+        config.similarity_threshold = config_map.get("SIMILARITY_THRESHOLD", 50.0)
+
+        config.job_count = config_map.get("JOB_COUNT", -2)
 
         config.hvd_gui = config_map.get("HVD_GUI", False)
 
@@ -108,6 +118,8 @@ class Config:
             "REQUESTS_CA_BUNDLE",
             "HYDRUS_QUERY",
             "HYDRUS_LOCAL_FILE_SERVICE_KEYS",
+            "SIMILARITY_THRESHOLD",
+            "JOB_COUNT",
             "HVD_GUI",
         ]
         for option in config_options:

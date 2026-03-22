@@ -189,10 +189,8 @@ def create_client(*args) -> HVDClient:
             pretty_msg = "Failed to connect to Hydrus. SSL certificate verification failed."
         # Probably tried using http instead of https when client is https
         elif "Connection aborted" in str(exc):
-            pretty_msg = (
-                "Failed to connect to Hydrus.\nDoes your Hydrus Client API 'http/https' setting match your API URL?"
-            )
-        elif "Connection refused" in str(exc):
+            pretty_msg = "Failed to connect to Hydrus.\nDoes your Hydrus Client API 'use https' setting match your API URL? (hint: services -> manage services -> client api -> use https)"  # noqa: E501
+        elif "Connection refused" in str(exc) or "Max retries exceeded with url" in str(exc):
             pretty_msg = """Failed to connect to Hydrus.
 Is your Hydrus instance running?
 Is the client API enabled? (hint: services -> manage services -> client api)

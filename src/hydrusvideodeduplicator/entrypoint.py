@@ -131,6 +131,10 @@ def main(
         print_and_log(logger, "Hydrus API URL is not set. Please set with '--api-url'.")
         exit_from_failure()
 
+    if threshold < 0.0 or threshold > 100.0:
+        print_and_log(logger, f"Invalid similarity threshold: {threshold}. Must be between 0 and 100.", logging.ERROR)
+        exit_from_failure()
+
     # Client connection
     print_and_log(logger, f"Connecting to Hydrus at {api_url}")
     try:
@@ -216,17 +220,17 @@ def main(
         db_stats = DedupeDB.get_db_stats(db)
 
     deduper = HydrusVideoDeduplicator(
-        db, client=hvdclient, job_count=job_count, failed_page_name=failed_page_name, custom_query=query
+        db,
+        client=hvdclient,
+        similarity_threshold=threshold,
+        job_count=job_count,
+        failed_page_name=failed_page_name,
+        custom_query=query,
     )
 
     if debug:
         deduper.hydlog.setLevel(logging.DEBUG)
         deduper._DEBUG = True
-
-    if threshold < 0.0 or threshold > 100.0:
-        print("[red] ERROR: Invalid similarity threshold. Must be between 0 and 100.")
-        raise typer.Exit(code=1)
-    HydrusVideoDeduplicator.threshold = threshold
 
     num_similar_pairs = deduper.deduplicate(
         skip_hashing=skip_hashing,

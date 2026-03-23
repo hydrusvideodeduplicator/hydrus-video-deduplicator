@@ -22,7 +22,9 @@ log.setLevel(logging.INFO)
 def fix_vpdq_similarity(similarity: float) -> int:
     """Turn [100.0, 0.0] similarity to [1, 101]"""
     # TODO: We have to adjust to + 1 because phashes are rarely identical and there's some weird logic surrounding it.  # noqa: E501
-    return (100 - int(similarity)) + 1
+    result = (100 - int(similarity)) + 1
+    assert result > 0
+    return result
 
 
 # NOTE: This is the equivalent of HydrusData.Get64BitHammingDistance

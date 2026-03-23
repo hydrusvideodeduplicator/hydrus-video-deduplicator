@@ -60,7 +60,7 @@ class DedupeParameters:
     failed_page_name: str | None
     custom_query: Sequence[str] | None
     debug: bool
-    threshold: float
+    similarity_threshold: float
     skip_hashing: bool
 
 
@@ -116,6 +116,7 @@ class Worker(QObject):
             deduper = HydrusVideoDeduplicator(
                 self.db,
                 client=hvdclient,
+                similarity_threshold=dedupe_params.similarity_threshold,
                 job_count=dedupe_params.job_count,
                 failed_page_name=dedupe_params.failed_page_name,
                 custom_query=dedupe_params.custom_query,
@@ -126,8 +127,6 @@ class Worker(QObject):
             if dedupe_params.debug:
                 deduper.hydlog.setLevel(logging.DEBUG)
                 deduper._DEBUG = True
-
-            HydrusVideoDeduplicator.threshold = dedupe_params.threshold
 
             num_similar_pairs = deduper.deduplicate(
                 skip_hashing=dedupe_params.skip_hashing,
@@ -895,7 +894,7 @@ If you change this value you should clear the search cache. This isn't cleared a
             failed_page_name=failed_page_name,
             custom_query=custom_query,
             debug=True,  # TODO: Expose to GUI?
-            threshold=similarity_threshold,
+            similarity_threshold=similarity_threshold,
             skip_hashing=False,
         )
 

@@ -171,13 +171,13 @@ if TYPE_CHECKING:
 class HydrusVideoDeduplicator:
     hydlog = logging.getLogger("hvd")
     hydlog.setLevel(logging.INFO)
-    threshold: float = 75.0
     _DEBUG = False
 
     def __init__(
         self,
         db: DedupeDB.DedupeDb,
         client: HVDClient,
+        similarity_threshold: float = 50.0,
         job_count: int = -2,
         failed_page_name: str | None = None,
         custom_query: Sequence[str] | None = None,
@@ -186,6 +186,7 @@ class HydrusVideoDeduplicator:
     ):
         self.db = db
         self.client = client
+        self.similarity_threshold = similarity_threshold
         self.job_count = job_count
         self.page_logger = None if failed_page_name is None else HydrusPageLogger(self.client, failed_page_name)
         self.search_tags = self.get_search_tags(custom_query)
@@ -434,10 +435,9 @@ class HydrusVideoDeduplicator:
     def run_maintenance(self):
         """Run maintenance, if needed."""
         tree = vptree.VpTreeManager(self.db)
-        search_threshold = vptree.fix_vpdq_similarity((self.threshold))
-        assert search_threshold > 0 and isinstance(search_threshold, int)
+        search_threshold = vptree.fix_vpdq_similarity(self.similarity_threshold)
 
-        if tree.maintenance_due(search_threshold):
+        if tree.maintenance_due(vptree.fix_vpdq_similarity(search_threshold)):
             # TODO: Do further testing on this.
             print("[blue] Running search tree maintenance...")
             tree.maintain_tree()
@@ -450,10 +450,8 @@ class HydrusVideoDeduplicator:
 
         Returns the number of similar file pairs found.
         """
-        # TODO: Should we turn the inside of this function into a generator? It might make testing super easy.
         tree = vptree.VpTreeManager(self.db)
-        search_threshold = vptree.fix_vpdq_similarity((self.threshold))
-        assert search_threshold > 0 and isinstance(search_threshold, int)
+        search_threshold = vptree.fix_vpdq_similarity(self.similarity_threshold)
 
         files = self.db.execute(
             "SELECT hash_id FROM shape_search_cache WHERE searched_distance is NULL or searched_distance < :threshold",

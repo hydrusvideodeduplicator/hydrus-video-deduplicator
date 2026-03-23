@@ -162,9 +162,6 @@ class Worker(QObject):
             # TODO: Check if transaction is in progress before closing?
             self.db.close()
 
-        # TODO: Show the upgrade on the GUI. Probably pass a callback to db.upgrade_db()
-        # for the print msg between upgrades to show an upgrade sequence similar to Hydrus. For
-        # the CLI this will be print, for the GUI this will update the GUI msg.
         DedupeDB.set_db_dir(db_dir)
         if DedupeDB.does_db_exist():
             try:
@@ -390,7 +387,7 @@ class MainWindow(QWidget):
         self.hydrus_query_textbox = QLineEdit(
             placeholderText="OPTIONAL: Hydrus Query (leave empty to deduplicate all videos)"
         )
-        self.hydrus_query_textbox.setToolTip("TODO")
+        self.hydrus_query_textbox.setToolTip("JSON array of search parameters for what videos to hash.")
         self.hydrus_query_textbox.setMaximumHeight(38)
 
         self.failed_page_name_textbox = QLineEdit(placeholderText="OPTIONAL: Failed Page Name")

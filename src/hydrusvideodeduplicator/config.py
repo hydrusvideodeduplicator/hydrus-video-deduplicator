@@ -67,7 +67,7 @@ class Config:
             return default_ip
 
         config.hydrus_api_url = config_map.get("HYDRUS_API_URL", f"http://{_get_default_ip()}:45869")
-        config.hydrus_api_key = config_map.get("HYDRUS_API_KEY", "")
+        config.hydrus_api_key = config_map.get("HYDRUS_API_KEY", None)
 
         # Default is:
         # Linux: ~/.local/share/hydrusvideodeduplicator/
@@ -102,7 +102,7 @@ class Config:
 
     @staticmethod
     def load_from_dotenv():
-        """Load config options from dotenv file. This does not affect environment variables."""
+        """Load config options from dotenv file. This does not modify environment variables."""
         dotenv_config = dotenv_values()
         return Config._load(dotenv_config)
 

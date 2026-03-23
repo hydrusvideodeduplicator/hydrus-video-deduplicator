@@ -42,7 +42,10 @@ config = Config.load_from_env()
 
 
 def main(
-    api_key: Annotated[Optional[str], typer.Option(help="Hydrus API Key", prompt=True)] = None,
+    api_key: Annotated[
+        Optional[str],
+        typer.Option(help="Hydrus API Key", show_default=False, prompt=True if config.hydrus_api_key else False),
+    ] = config.hydrus_api_key,
     api_url: Annotated[Optional[str], typer.Option(help="Hydrus API URL")] = config.hydrus_api_url,
     overwrite: Annotated[Optional[Optional[bool]], typer.Option(hidden=True)] = None,  # deprecated
     query: Annotated[Optional[List[str]], typer.Option(help="Custom Hydrus tag query")] = config.hydrus_query,

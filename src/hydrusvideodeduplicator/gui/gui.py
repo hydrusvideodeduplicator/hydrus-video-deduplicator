@@ -676,7 +676,7 @@ If you change this value you should clear the search cache. This isn't cleared a
         result_msg = (
             f"Deduplication was successful!\nNumber of similar pairs found: {dedupe_completed_result}\nOpen the Hydrus duplicates processing page to process any potential duplicate pairs."  # noqa: E501
             if dedupe_completed_result
-            else f"Deduplication failed.\nError: {exc.pretty_msg + '\n\nException:\n' + str(exc) if isinstance(exc, ClientAPIException) else exc}"
+            else f"Deduplication failed.\nError: {exc.pretty_msg + '\n\nException:\n' + str(exc) if isinstance(exc, ClientAPIException) else exc}"  # noqa: E501
         )
         if not dedupe_completed_result:
             print_and_log(self.logger, result_msg, logging.ERROR)

@@ -32,7 +32,7 @@ dependencies = [
     # vpdqpy dependencies
     "pillow",
     "av",
-    "hvdaccelerators>=0.4.0",
+    "hvdaccelerators@git+https://github.com/hydrusvideodeduplicator/hvdaccelerators.git@stubs",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +44,9 @@ gui = [
 Documentation = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator#readme"
 Issues = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/issues"
 Source = "https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build]
 exclude = [

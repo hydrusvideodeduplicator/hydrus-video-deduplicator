@@ -22,7 +22,7 @@ from hydrusvideodeduplicator.config import Config
 from hydrusvideodeduplicator.db import DedupeDB
 from hydrusvideodeduplicator.dedup import HydrusVideoDeduplicator
 from hydrusvideodeduplicator.dedup_util import print_and_log
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 import sys
 
@@ -37,7 +37,7 @@ Parameters:
 - debug turns on logging and sets the logging level to debug
 """
 
-load_dotenv()
+loaded_dotenv = load_dotenv()
 config = Config.load_from_env()
 
 
@@ -159,7 +159,7 @@ def main(
     # Deduplication
 
     if DedupeDB.does_db_exist():
-        print_and_log(logger, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
+        print_and_log(logger, f"Found existing database at: '{DedupeDB.get_db_file_path()}'")
         db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
         db.init_connection()
         # Upgrade the database before doing anything.
@@ -242,7 +242,10 @@ def main(
 
 
 def run_main(gui: bool, is_windows_exe: bool):
-    print(f"[blue] Hydrus Video Deduplicator {__version__} [/]")
+    print(f"[blue]Hydrus Video Deduplicator {__version__} [/]\n")
+    if loaded_dotenv:
+        # Note: This doesn't mean any values were actually loaded from the .env file.
+        print(f"Config file found: '{find_dotenv()}'")
     if gui or bool(int(config.hvd_gui)):
         try:
             from hydrusvideodeduplicator.gui.gui import gui_main

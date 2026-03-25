@@ -164,7 +164,7 @@ class Worker(QObject):
         DedupeDB.set_db_dir(db_dir)
         if DedupeDB.does_db_exist():
             try:
-                print_and_log(self.logger, f"Found existing database at '{DedupeDB.get_db_file_path()}'")
+                print_and_log(self.logger, f"Found existing database at: '{DedupeDB.get_db_file_path()}'")
                 self.db = DedupeDB.DedupeDb(DedupeDB.get_db_dir(), DedupeDB.get_db_name())
                 self.db.init_connection()
                 # Upgrade the database before doing anything.

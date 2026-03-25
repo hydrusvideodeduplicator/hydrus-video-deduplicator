@@ -893,16 +893,15 @@ If you change this value you should clear the search cache. This isn't cleared a
             job_count=job_count,
             failed_page_name=failed_page_name,
             custom_query=custom_query,
-            debug=True,  # TODO: Expose to GUI?
+            debug=False,  # TODO: Expose to GUI?
             similarity_threshold=similarity_threshold,
             skip_hashing=False,
         )
 
 
 def gui_main(config: Config):
-    debug = True
+    debug = False
 
-    # CLI debug parameter sets log level to info or debug
     loglevel = logging.INFO
     if debug:
         loglevel = logging.DEBUG

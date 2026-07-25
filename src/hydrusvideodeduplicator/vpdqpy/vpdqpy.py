@@ -68,6 +68,14 @@ class Vpdq:
             video = container.streams.video[0]
             video.thread_type = "AUTO"
 
+            # For H.264, skip decoding non-reference frames (mostly B-frames). Since no other
+            # frames depend on them, skipping them is a pure decode-time saving. The decoder
+            # then no longer outputs frames at the nominal frame rate, so sampling is done by
+            # timestamp instead of frame index in that case.
+            skip_nonref = video.codec_context.name == "h264"
+            if skip_nonref:
+                video.codec_context.skip_frame = "NONREF"
+
             raw_average_fps: Fraction = video.average_rate
             average_fps: int = 1
             # Some videos, like small GIFs, will have a NoneType FPS
@@ -83,10 +91,19 @@ class Vpdq:
             # but to catch the exception I need to wrap the decode call with try/catch and iterate using next().
             frame_generator = container.decode(video)
             frame_index = 0
+            next_sample_time = 0.0
             while True:
                 try:
                     frame = next(frame_generator)
-                    if frame_index % average_fps == 0:
+                    if skip_nonref:
+                        # Sample roughly one frame per second by timestamp. Frames without a
+                        # timestamp are always sampled rather than silently dropped.
+                        should_sample = frame.time is None or frame.time >= next_sample_time
+                        if should_sample and frame.time is not None:
+                            next_sample_time = frame.time + 1.0
+                    else:
+                        should_sample = frame_index % average_fps == 0
+                    if should_sample:
                         yield frame.reformat(
                             width=DOWNSCALE_DIMENSIONS,
                             height=DOWNSCALE_DIMENSIONS,

@@ -910,17 +910,9 @@ class VpTreeManager:
 
         return similar_hash_ids_and_distances
 
-    def maintenance_due(self, search_distance: int) -> bool:
-        """Note: Unlike Hydrus, we don't have a search distance option in a menu. So we need to pass it as a parameter."""  # noqa: E501
-
-        # TODO: Is 100 a sane number for videos? Hydrus uses 100 for images.
-        #       I suppose there's no correct answer, though.
-        (count,) = self.db.execute(
-            "SELECT COUNT( * ) FROM ( SELECT 1 FROM shape_search_cache WHERE searched_distance IS NULL or searched_distance < ? LIMIT 100 );",  # noqa: E501
-            (search_distance,),
-        ).fetchone()  # noqa: E501
-
-        return count >= 100
+    def maintenance_due(self) -> bool:
+        """Whether there are unbalanced branches waiting to be rebuilt."""
+        return self.db.execute("SELECT phash_id FROM shape_maintenance_branch_regen LIMIT 1;").fetchone() is not None
 
     def reset_search(self, hash_ids: list[int]):
         """Clear the search cache for the given hash ids."""

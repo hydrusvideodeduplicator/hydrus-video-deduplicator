@@ -435,9 +435,8 @@ class HydrusVideoDeduplicator:
     def run_maintenance(self):
         """Run maintenance, if needed."""
         tree = vptree.VpTreeManager(self.db)
-        search_threshold = vptree.fix_vpdq_similarity(self.similarity_threshold)
 
-        if tree.maintenance_due(vptree.fix_vpdq_similarity(search_threshold)):
+        if tree.maintenance_due():
             # TODO: Do further testing on this.
             print("[blue]Running search tree maintenance...")
             tree.maintain_tree()

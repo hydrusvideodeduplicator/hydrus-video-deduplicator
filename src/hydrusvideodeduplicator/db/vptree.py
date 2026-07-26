@@ -155,6 +155,13 @@ class VpTreeManager:
         self._reported_on_a_broken_branch = False
 
     def add_leaf(self, perceptual_hash_id, perceptual_hash):
+        already_in_tree = self.db.execute(
+            "SELECT 1 FROM shape_vptree WHERE phash_id = ?;", (perceptual_hash_id,)
+        ).fetchone()
+
+        if already_in_tree is not None:
+            return
+
         result = self.db.execute("SELECT phash_id FROM shape_vptree WHERE parent_id IS NULL;").fetchone()
 
         parent_id = None

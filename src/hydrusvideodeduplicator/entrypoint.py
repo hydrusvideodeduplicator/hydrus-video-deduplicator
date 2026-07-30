@@ -257,7 +257,7 @@ def run_main(gui: bool, is_windows_exe: bool):
             )
             raise typer.Exit(code=1) from exc
 
-        gui_main()
+        gui_main(config)
     else:
         # Allow launching the GUI via CLI using --gui. This is required before the typer.run()
         # because the typer checks if arguments exist, but we don't need any of the args for the GUI

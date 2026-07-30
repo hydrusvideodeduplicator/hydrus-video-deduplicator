@@ -110,6 +110,5 @@ def print_and_log(logger: logging.Logger, msg: str, severity: Severity = logging
 
     The default logger uses the logging module.
     """
-    print(f"{severity_to_color(severity)}")
-    print(f"{msg}")
+    print(f"{severity_to_color(severity)}{msg}")
     logger.log(severity, msg)

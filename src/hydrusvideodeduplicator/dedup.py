@@ -49,9 +49,8 @@ class HydrusApiException(Exception):
 class FailedPerceptualHashException(Exception):
     """Exception for when files are failed to be perceptually hashed."""
 
-    def __init__(self, file_hash: FileHash, other_exc: str = ""):
-        super().__init__()
-        self.file_hash = file_hash
+    def __init__(self, other_exc: str = ""):
+        super().__init__(other_exc)
         self.other_exc = other_exc
 
 
@@ -76,12 +75,12 @@ class FileHasher:
             phash = compute_phash(file, self.num_threads)
             phash_bytes: bytes = phash.bytes
         except Exception as exc:
-            raise FailedPerceptualHashException("", str(exc))
+            raise FailedPerceptualHashException(str(exc))
 
         # sanity check
         # Note: Hashes may have 0 bytes if there was no frames that were high enough quality to be used.
         if phash_bytes is None or (len(phash_bytes) % vpdq.VpdqHash.bytesPerPdqHash != 0):
-            raise FailedPerceptualHashException("", "phash_str was None or len not multiple of 32.")
+            raise FailedPerceptualHashException("phash_str was None or len not multiple of 32.")
 
         return phash_bytes
 
@@ -434,6 +433,8 @@ class HydrusVideoDeduplicator:
 
     def run_maintenance(self):
         """Run maintenance, if needed."""
+        # TODO: Currently broken. If it's cancelled while running it will report all the branches as broken.
+        return
         tree = vptree.VpTreeManager(self.db)
 
         if tree.maintenance_due():
@@ -466,7 +467,8 @@ class HydrusVideoDeduplicator:
                 if self.update_progress_callback:
                     self.update_progress_callback(SearchingForDuplicatesProgress(complete=pbar.n, total=pbar.total))
                 if self.should_skip_step_fn and self.should_skip_step_fn():
-                    return
+                    # Stop searching, but still report the pairs found so far.
+                    break
 
                 hash_id = hash_id[0]
                 result = tree.search_file(hash_id, max_hamming_distance=search_threshold)

@@ -29,7 +29,7 @@ After getting your API key, continue to [Running Video Dedupe](#running-video-de
 <summary>Windows</summary>
 <br>
 
-Run hydrusvideodeduplicator.exe and enter the Hydrus API key you created previously when prompted.
+Run hydrusvideodeduplicator-windows-x86_64.exe and enter the Hydrus API key you created previously when prompted.
 
 </details>
 

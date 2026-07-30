@@ -1,0 +1,80 @@
+name: Linux publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build linux binaries
+    # Pinned to the oldest supported runner because the PyInstaller bootloader links against the
+    # glibc it was built on. Building on a newer runner makes the binaries unusable on older distros.
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Qt's xcb platform plugin needs these. PyInstaller can only bundle libraries that exist at
+      # build time, so without them the GUI fails to start with 'could not load the Qt platform
+      # plugin "xcb"' on machines that don't have them installed.
+      - name: Install Qt system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 \
+            libegl1 libgl1 libdbus-1-3 libtiff5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        run : |
+          python -m pip install uv
+
+      - name: Install CLI dependencies
+        run : |
+          uv venv --clear
+          uv pip install pyinstaller
+          uv pip install .
+
+      - name: Build CLI
+        run: uv run pyinstaller build_files/linux/hydrusvideodeduplicator.spec
+
+      # Install the GUI dependencies after the CLI build to avoid bundling unnecessary
+      # GUI dependencies in the CLI build. Pyinstaller bundles all dependencies by default.
+      - name: Install GUI dependencies
+        run : |
+          uv venv --clear
+          uv pip install pyinstaller
+          uv pip install ".[gui]"
+
+      - name: Build GUI
+        run: uv run pyinstaller build_files/linux/hydrusvideodeduplicator-gui.spec
+
+      # The offscreen platform needs no display server, so this checks that Qt starts and the
+      # window is created. Exit code 124 means timeout killed it which is good
+      - name: Smoke test
+        run: |
+          ./dist/hydrusvideodeduplicator-linux-x86_64 --help
+          QT_QPA_PLATFORM=offscreen timeout 30 ./dist/hydrusvideodeduplicator-gui-linux-x86_64 \
+            && (echo "GUI exited on its own, expected it to keep running" && exit 1) \
+            || test $? -eq 124
+
+      - name: Upload
+        uses: softprops/action-gh-release@37fd9d0351a2df198244c8ef9f56d02d1f921e20
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            dist/hydrusvideodeduplicator-linux-x86_64
+            dist/hydrusvideodeduplicator-gui-linux-x86_64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}

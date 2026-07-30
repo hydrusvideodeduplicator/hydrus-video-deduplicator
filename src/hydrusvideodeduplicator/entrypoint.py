@@ -241,7 +241,7 @@ def main(
     return num_similar_pairs
 
 
-def run_main(gui: bool, is_windows_exe: bool):
+def run_main(gui: bool, is_executable: bool):
     print(f"[blue]Hydrus Video Deduplicator {__version__} [/]\n")
     if loaded_dotenv:
         # Note: This doesn't mean any values were actually loaded from the .env file.
@@ -280,8 +280,8 @@ def run_main(gui: bool, is_windows_exe: bool):
             except KeyboardInterrupt as exc:
                 raise typer.Exit(-1) from exc
             finally:
-                if is_windows_exe:
-                    # Hang the console window for the Windows exe, because 99% of users will be running this
+                if is_executable:
+                    # Hang the console window for the CLI exe, because 99% of users will be running this
                     # interactively and will want this pause to see errors/the final results. The other 1% should file
                     # a Github issue if this causes them issues and they want some --no-interactive option, or they should just # noqa: E501
                     # run the Python install.

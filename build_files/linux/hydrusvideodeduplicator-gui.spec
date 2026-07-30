@@ -1,8 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
 
 a = Analysis(
-    ['..\\..\\src\\hydrusvideodeduplicator\\cli_exe_entrypoint.py'],
+    [os.path.join(SPECPATH, '..', '..', 'src', 'hydrusvideodeduplicator', 'gui_exe_entrypoint.py')],
     pathex=[],
     binaries=[],
     datas=[],
@@ -22,7 +23,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='hydrusvideodeduplicator-windows-x86_64',
+    name='hydrusvideodeduplicator-gui-linux-x86_64',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

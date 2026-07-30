@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['..\\..\\src\\hydrusvideodeduplicator\\winexe_gui_entrypoint.py'],
+    ['..\\..\\src\\hydrusvideodeduplicator\\gui_exe_entrypoint.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='hydrusvideodeduplicator-gui',
+    name='hydrusvideodeduplicator-gui-windows-x86_64',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

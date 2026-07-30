@@ -1,8 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
 
+# Use __main__.py rather than the CLI exe entrypoint. The CLI exe entrypoint waits for ENTER before
+# exiting, which is helpful when Windows closes the console window but just gets in the way here.
 a = Analysis(
-    ['..\\..\\src\\hydrusvideodeduplicator\\cli_exe_entrypoint.py'],
+    [os.path.join(SPECPATH, '..', '..', 'src', 'hydrusvideodeduplicator', '__main__.py')],
     pathex=[],
     binaries=[],
     datas=[],
@@ -22,7 +25,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='hydrusvideodeduplicator-windows-x86_64',
+    name='hydrusvideodeduplicator-linux-x86_64',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

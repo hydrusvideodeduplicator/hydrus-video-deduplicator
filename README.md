@@ -23,11 +23,11 @@ This program contains no telemetry. It only makes requests to the Hydrus API URL
 
 ## [Installation](./docs/installation.md)
 
-For Windows, you can get the [latest release directly from the github releases page](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/releases).
+For Windows and Linux, you can get the [latest release directly from the github releases page](https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/releases).
 
-For Linux and macos, see the [Python Install](#python-install).
+For macos, see the [Python Install](#python-install).
 
-> **Note**: Many instructions in this repo are written for the Python install instead of the Windows exe. If you're using the Windows exe, simply replace `python -m hydrusvideodeduplicator` with `hydrusvideodeduplicator.exe` and the instructions will work the same.
+> **Note**: Many instructions in this repo are written for the Python install instead of the Windows exe. If you're using the Windows exe, simply replace `python -m hydrusvideodeduplicator` with `hydrusvideodeduplicator-windows-x86_64.exe` and the instructions will work the same.
 
 ## [Usage](./docs/usage.md)
 

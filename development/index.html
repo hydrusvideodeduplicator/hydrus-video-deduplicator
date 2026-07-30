@@ -541,34 +541,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Maintainer Release Process">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#option-a-automatic-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Option A: Automatic Release
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#option-b-manual-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Option B: Manual Release
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
     </ul>
@@ -746,34 +718,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Maintainer Release Process">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#option-a-automatic-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Option A: Automatic Release
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#option-b-manual-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Option B: Manual Release
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
     </ul>
@@ -870,24 +814,14 @@ uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </s
 During development, if you think you might need to rewrite history, then create a branch off of <code>develop</code> and use that.
 Commits to <code>develop</code> should be "clean"; do not add "WIP" commits to develop, because they will not be squashed when
 released to main.</p>
-<p>Once <code>develop</code> has all the changes you want to publish, choose the new version following semantic versioning rules,
-then following one of the options below.</p>
-<p>Before either option, do a test run locally on the CLI and GUI to ensure the DB upgrades as expected.
-There should be no problem if the DB hasn't had changes since the last version and DB migration code wasn't touched.
-There is no automated tests for testing DB migrations, so this <strong>must</strong> be done manually.</p>
-<h3 id="option-a-automatic-release">Option A: Automatic Release</h3>
-<p>Run the <a href="https://github.com/hydrusvideodeduplicator/hydrus-video-deduplicator/actions/workflows/release.yml">Release workflow</a>
-from the Actions tab and provide the new version.</p>
-<blockquote>
-<p><strong>Note</strong>: The version is given without a leading <code>v</code>, e.g. <code>0.12.0</code></p>
-</blockquote>
-<p>This workflow rebases <code>main</code> onto <code>develop</code>, sets the new version in <code>src/hydrusvideodeduplicator/__about__.py</code>, adds the
-<code>Release X.Y.Z</code> commit, tags it <code>vX.Y.Z</code>, and pushes <code>main</code> and the tag.</p>
-<h3 id="option-b-manual-release">Option B: Manual Release</h3>
+<p>Once <code>develop</code> has all the changes you want to publish, follow the steps below.</p>
 <div class="highlight"><pre><span></span><code>git<span class="w"> </span>switch<span class="w"> </span>main
 git<span class="w"> </span>rebase<span class="w"> </span>develop
 </code></pre></div>
 <p>Then, following semantic versioning rules, increment set the new version in <code>src/hydrusvideodeduplicator/__about__.py</code>.</p>
+<p>After incrementing the version, do another test run locally on the CLI and GUI to ensure the DB upgrades as expected.
+There should be no problem if the DB hasn't had changes since the last version and DB migration code wasn't touched.
+There is no automated tests for testing DB migrations, so this <strong>must</strong> be done manually.</p>
 <p>Add a commit with only the new version:</p>
 <div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>src/hydrusvideodeduplicator/__about__.py
 git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Release X.Y.Z&quot;</span>
@@ -922,7 +856,7 @@ publish for the built executables to the new release.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 30, 2026 02:27:11 UTC">July 30, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="March 18, 2026 06:33:15 UTC">March 18, 2026</span>
   </span>
 
     

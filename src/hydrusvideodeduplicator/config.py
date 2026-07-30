@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 from platform import uname
 
-from dotenv import dotenv_values
 from platformdirs import PlatformDirs
 
 
@@ -99,12 +98,6 @@ class Config:
         config.hvd_gui = config_map.get("HVD_GUI", False)
 
         return config
-
-    @staticmethod
-    def load_from_dotenv():
-        """Load config options from dotenv file. This does not modify environment variables."""
-        dotenv_config = dotenv_values()
-        return Config._load(dotenv_config)
 
     @staticmethod
     def load_from_env():

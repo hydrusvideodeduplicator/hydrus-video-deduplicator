@@ -5,19 +5,11 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from rich import print
 
 from ..__about__ import __version__
 from .vptree import VpTreeManager
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from typing import TypeAlias
-
-    FileServiceKeys: TypeAlias = list[str]
-    FileHashes: TypeAlias = Iterable[str]
 
 
 dedupedblog = logging.getLogger("db")
@@ -124,12 +116,6 @@ class DedupeDb:
 
     def set_cursor(self, cur: sqlite3.Cursor):
         self.cur = cur
-
-    def close_cursor(self):
-        if self.cur is not None:
-            self.cur.close()
-            del self.cur
-            self.cur = None
 
     def init_connection(self):
         db_path = self.db_dir / self.db_name

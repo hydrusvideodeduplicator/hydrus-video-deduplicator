@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import time
-from enum import Enum
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -121,13 +120,6 @@ class CancelledPerceptualHashException(Exception):
     def __init__(self, stats: PerceptualHashingStats):
         super().__init__()
         self.stats = stats
-
-
-class DedupeState(Enum):
-    NONE = 0
-    HASHING = 1
-    BUILDING_SEARCH_TREE = 1
-    SEARCHING_FOR_DUPLICATES = 2
 
 
 @dataclass

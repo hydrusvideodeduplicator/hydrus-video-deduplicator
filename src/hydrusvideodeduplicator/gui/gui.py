@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QObject, Slot, QThread, QSemaphore
 from PySide6.QtGui import QFont
 from dataclasses import dataclass
+import functools
 from pathlib import Path
 
 if TYPE_CHECKING:
@@ -299,6 +300,18 @@ class Worker(QObject):
             self.run_db_maintenance_completed.emit(None, stats_before, stats_after)
 
 
+def ignore_after_close(callback):
+    """Decorator to drop a worker callback that arrives after the window has started closing."""
+
+    @functools.wraps(callback)
+    def wrapper(self, *args, **kwargs):
+        if self._shutting_down:
+            return None
+        return callback(self, *args, **kwargs)
+
+    return wrapper
+
+
 class MainWindow(QWidget):
     dedupe_requested = Signal(HydrusRequestParameters, DedupeParameters)
     test_api_connection_requested = Signal(HydrusRequestParameters)
@@ -312,6 +325,7 @@ class MainWindow(QWidget):
 
     def __init__(self, logger: logging.Logger, config: Config):
         super().__init__()
+        self._shutting_down = False
         self.logger = logger
         self.config = config
 
@@ -571,15 +585,30 @@ If you change this value you should clear the search cache. This isn't cleared a
         self.init_requested.emit(self.logger, self.should_skip_step_semaphore)
         self.init_db_requested.emit(self.config.dedupe_database_dir)
 
-    def __del__(self):
-        if self.worker_thread and self.worker_thread.isRunning():
-            self.worker_thread.wait(deadline=5)
-            try:
-                self.worker_thread.terminate()
-            except RuntimeError:
-                # Thread may have already been deleted.
-                pass
+    def closeEvent(self, event):
+        """Shut the worker thread down before the window goes away."""
+        self._shutting_down = True
 
+        available_skip_permits = self.should_skip_step_semaphore.available()
+        if available_skip_permits > 0:
+            self.should_skip_step_semaphore.tryAcquire(available_skip_permits)
+
+        try:
+            if self.worker_thread is not None and self.worker_thread.isRunning():
+                self.worker_thread.quit()
+                if not self.worker_thread.wait(10000):
+                    # Force stop.
+                    print_and_log(
+                        self.logger, "Worker thread did not stop in time. Forcing it to stop.", logging.WARNING
+                    )
+                    self.worker_thread.terminate()
+                    self.worker_thread.wait()
+        except RuntimeError:
+            # Thread may have already been deleted.
+            pass
+        super().closeEvent(event)
+
+    @ignore_after_close
     def progress_updated_callback(self, progress: DedupeProgress):
         self.current_progress = progress
         if not self.skip_progress_btn.isEnabled():
@@ -608,6 +637,7 @@ If you change this value you should clear the search cache. This isn't cleared a
             self.progress_label.setText("Unknown progress state.")
             assert False, f"Unknown progress state{type(progress)}"
 
+    @ignore_after_close
     def db_upgrade_started_callback(self):
         db_upgrade_dialog = QMessageBox(
             windowTitle="Upgrading database.",
@@ -619,6 +649,7 @@ If you change this value you should clear the search cache. This isn't cleared a
         self.db_upgrade_dialog = db_upgrade_dialog
         self.db_upgrade_dialog.show()
 
+    @ignore_after_close
     def db_upgrade_completed_callback(self, exc: Exception | None):
         if exc is None:
             self.db_upgrade_dialog.close()
@@ -640,7 +671,7 @@ If you change this value you should clear the search cache. This isn't cleared a
                 self.db_upgrade_dialog.show()
 
             abort_button = self.db_upgrade_dialog.addButton(QMessageBox.Abort)
-            abort_button.clicked.connect(lambda: sys.exit(1))
+            abort_button.clicked.connect(lambda: QApplication.instance().exit(1))
 
     def dedupe_callback(self):
         self.deduplicate_btn.setEnabled(False)
@@ -667,6 +698,7 @@ If you change this value you should clear the search cache. This isn't cleared a
 
         self.dedupe_requested.emit(request_params, dedupe_params)
 
+    @ignore_after_close
     def dedupe_completed_callback(self, dedupe_completed_result: str | None, exc: Exception | None):
         self.deduplicate_btn.setEnabled(True)
         result_msg = (
@@ -682,6 +714,7 @@ If you change this value you should clear the search cache. This isn't cleared a
             result_msg,
         )
 
+    @ignore_after_close
     def test_api_connection_completed(self, api_test_result: APITestResult | None, exc: Exception | None):
         self.test_api_connection_btn.setEnabled(True)
         result_msg = (
@@ -695,6 +728,7 @@ If you change this value you should clear the search cache. This isn't cleared a
             result_msg,
         )
 
+    @ignore_after_close
     def reset_hydrus_potential_duplicates_completed(self, result: Exception | None):
         self.reset_hydrus_potential_duplicates_btn.setEnabled(True)
         result_msg = (
@@ -720,6 +754,7 @@ If you change this value you should clear the search cache. This isn't cleared a
     def stats_to_string(self, db_stats: DedupeDB.DatabaseStats) -> str:
         return f"DB file size: {db_stats.file_size} bytes \nNumber of Perceptually Hashed Videos: {db_stats.num_videos}"
 
+    @ignore_after_close
     def run_db_maintenance_completed(
         self,
         result: Exception | None,
@@ -790,6 +825,7 @@ If you change this value you should clear the search cache. This isn't cleared a
             self.reset_hydrus_potential_duplicates_btn.setEnabled(False)
             self.reset_hydrus_potential_duplicates_requested.emit(request_params)
 
+    @ignore_after_close
     def db_stats_completed(self, db_stats: DedupeDB.DatabaseStats):
         QMessageBox.information(
             self,

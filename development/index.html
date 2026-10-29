@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -824,14 +824,14 @@ There should be no problem if the DB hasn't had changes since the last version a
 There is no automated tests for testing DB migrations, so this <strong>must</strong> be done manually.</p>
 <p>Add a commit with only the new version:</p>
 <div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>src/hydrusvideodeduplicator/__about__.py
-git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Release X.Y.Z&quot;</span>
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">"Release X.Y.Z"</span>
 </code></pre></div>
 <p>Add a git tag to the new commit:</p>
-<div class="highlight"><pre><span></span><code>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span><span class="s2">&quot;vX.Y.Z&quot;</span><span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;vX.Y.Z&quot;</span>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span><span class="s2">"vX.Y.Z"</span><span class="w"> </span>-m<span class="w"> </span><span class="s2">"vX.Y.Z"</span>
 </code></pre></div>
 <p>Push the changes from develop and the tag:</p>
 <div class="highlight"><pre><span></span><code>git<span class="w"> </span>push
-git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>tag<span class="w"> </span><span class="s2">&quot;vX.Y.Z&quot;</span>
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>tag<span class="w"> </span><span class="s2">"vX.Y.Z"</span>
 </code></pre></div>
 <p>Once the GitHub Actions for main are done running and everything passes, a release needs to be made on the GitHub Release page.
 Follow the formatting from previous releases. A GitHub release will trigger a PyPI publish for the new package build and a GitHub
@@ -906,10 +906,10 @@ publish for the built executables to the new release.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>

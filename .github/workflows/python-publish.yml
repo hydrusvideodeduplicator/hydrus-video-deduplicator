@@ -61,4 +61,4 @@ jobs:
       run: ls -R dist/
 
     - name: Publish package
-      uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e
+      uses: pypa/gh-action-pypi-publish@2442bad8f54b06a326f3030ef5e6a7a674118557

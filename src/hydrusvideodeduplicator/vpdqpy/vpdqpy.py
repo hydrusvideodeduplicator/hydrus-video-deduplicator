@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 import av
 from hvdaccelerators import vpdq
-from PIL import Image
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -55,7 +54,7 @@ class Vpdq:
         return vpdq.matchHash(query_features, target_features, int(distance_tolerance))
 
     @staticmethod
-    def frame_extract_pyav(video_bytes: bytes) -> Iterator[Image.Image]:
+    def frame_extract_pyav(video_bytes: bytes) -> Iterator[av.VideoFrame]:
         """Extract frames from video"""
         with av.open(io.BytesIO(video_bytes)) as container:
             # Check for video in video container
